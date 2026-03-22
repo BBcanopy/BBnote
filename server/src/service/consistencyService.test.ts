@@ -4,6 +4,8 @@ import path from "node:path";
 import type { FastifyInstance } from "fastify";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { buildApp } from "../app.js";
+import { ConsistencyService } from "./consistencyService.js";
+import type { AttachmentRecord, NoteRecord } from "./models.js";
 
 describe("consistencyService", () => {
   let app: FastifyInstance;
@@ -97,5 +99,64 @@ describe("consistencyService", () => {
     });
     expect(repaired.repaired.some((entry) => entry.includes(note.id))).toBe(true);
     expect(repaired.repaired.some((entry) => entry.includes(attachment.id))).toBe(true);
+  });
+
+  it("treats windows path casing differences as the same file", async () => {
+    if (process.platform !== "win32") {
+      return;
+    }
+
+    const notePath = "d:\\Code\\bbnote\\server\\data\\notes\\owner\\Inbox--folder\\2026-03-22--note--1.md";
+    const attachmentPath = "d:\\Code\\bbnote\\server\\data\\attachments\\owner\\attachment\\budget.txt";
+    const notes: NoteRecord[] = [
+      {
+        id: "note-1",
+        ownerId: "owner-1",
+        folderId: "folder-1",
+        title: "Case check",
+        filePath: notePath,
+        createdAt: "2026-03-22T00:00:00.000Z",
+        updatedAt: "2026-03-22T00:00:00.000Z",
+        lastOpenedAt: null,
+        sourceApp: null,
+        sourceId: null,
+        sourceTagsJson: "[]"
+      }
+    ];
+    const attachments: AttachmentRecord[] = [
+      {
+        id: "attachment-1",
+        ownerId: "owner-1",
+        noteId: "note-1",
+        originalName: "budget.txt",
+        storedPath: attachmentPath,
+        mimeType: "text/plain",
+        sizeBytes: 6,
+        sha256: "a665a45920422f9d417e4867efdc4fb8a04a1f3fff1fa07e998e86f7f7a27ae3",
+        createdAt: "2026-03-22T00:00:00.000Z"
+      }
+    ];
+    const service = new ConsistencyService(
+      {
+        listAll: () => notes,
+        listAllByOwner: () => notes,
+        getFtsRows: () => [{ noteId: "note-1", ownerId: "owner-1", folderId: "folder-1", title: "Case check", body: "body" }]
+      } as unknown as any,
+      {
+        listAll: () => attachments,
+        listByOwner: () => attachments
+      } as unknown as any,
+      {
+        readMarkdown: async () => "body",
+        listNoteFiles: async () => [notePath.replace(/^d:/, "D:")],
+        listAttachmentFiles: async () => [attachmentPath.replace(/^d:/, "D:")]
+      } as unknown as any
+    );
+
+    const report = await service.run({
+      ownerId: "owner-1"
+    });
+
+    expect(report.issues.filter((issue) => issue.type.startsWith("orphan-"))).toHaveLength(0);
   });
 });

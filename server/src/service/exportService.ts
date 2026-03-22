@@ -7,12 +7,14 @@ import type { AttachmentDb } from "../db/attachmentDb.js";
 import type { FolderDb } from "../db/folderDb.js";
 import type { JobDb } from "../db/jobDb.js";
 import type { NoteDb } from "../db/noteDb.js";
+import type { AppConfig } from "./configService.js";
 import type { ExportJobRecord } from "./models.js";
 import { sanitizeSegment } from "./slugService.js";
 import type { StorageService } from "./storageService.js";
 
 export class ExportService {
   constructor(
+    private readonly config: AppConfig,
     private readonly jobDb: JobDb,
     private readonly folderDb: FolderDb,
     private readonly noteDb: NoteDb,
@@ -65,7 +67,7 @@ export class ExportService {
         zip.file(exportedAssetPath, buffer);
         rewrittenBody = rewrittenBody
           .replaceAll(`/api/v1/attachments/${attachment.id}`, relativeAssetPath)
-          .replaceAll(`${process.env.APP_BASE_URL ?? "http://localhost:3000"}/api/v1/attachments/${attachment.id}`, relativeAssetPath);
+          .replaceAll(`${this.config.appBaseUrl}/api/v1/attachments/${attachment.id}`, relativeAssetPath);
       }
 
       const frontMatter = YAML.stringify({

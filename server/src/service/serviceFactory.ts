@@ -48,7 +48,7 @@ export async function createServices(config: AppConfig, app?: FastifyInstance): 
   const noteService = new NoteService(noteDb, folderDb, storageService, (noteId) => attachmentDb.listByNoteId(noteId));
   const attachmentService = new AttachmentService(attachmentDb, noteDb, storageService);
   const importService = new ImportService(jobDb, folderService, noteService, attachmentService);
-  const exportService = new ExportService(jobDb, folderDb, noteDb, attachmentDb, storageService);
+  const exportService = new ExportService(config, jobDb, folderDb, noteDb, attachmentDb, storageService);
   const consistencyService = new ConsistencyService(noteDb, attachmentDb, storageService);
   const authService = new AuthService(config, userDb, folderService, mockOidcService);
 

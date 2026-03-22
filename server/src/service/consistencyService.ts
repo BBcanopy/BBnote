@@ -1,5 +1,6 @@
 import fs from "node:fs/promises";
 import crypto from "node:crypto";
+import path from "node:path";
 import type { AttachmentDb } from "../db/attachmentDb.js";
 import type { NoteDb } from "../db/noteDb.js";
 import type { AttachmentRecord, NoteRecord } from "./models.js";
@@ -43,8 +44,8 @@ export class ConsistencyService {
     const issues: ConsistencyIssue[] = [];
     const repaired: string[] = [];
 
-    const notePathSet = new Set(notes.map((note) => note.filePath));
-    const attachmentPathSet = new Set(attachments.map((attachment) => attachment.storedPath));
+    const notePathSet = new Set(notes.map((note) => normalizePathKey(note.filePath)));
+    const attachmentPathSet = new Set(attachments.map((attachment) => normalizePathKey(attachment.storedPath)));
 
     for (const note of notes) {
       try {
@@ -126,7 +127,9 @@ export class ConsistencyService {
     ]);
 
     for (const ownerId of owners) {
-      const orphanNoteFiles = (await this.storageService.listNoteFiles(ownerId)).filter((filePath) => !notePathSet.has(filePath));
+      const orphanNoteFiles = (await this.storageService.listNoteFiles(ownerId)).filter(
+        (filePath) => !notePathSet.has(normalizePathKey(filePath))
+      );
       for (const orphan of orphanNoteFiles) {
         issues.push({
           type: "orphan-note-file",
@@ -138,7 +141,7 @@ export class ConsistencyService {
       }
 
       const orphanAttachmentFiles = (await this.storageService.listAttachmentFiles(ownerId)).filter(
-        (filePath) => !attachmentPathSet.has(filePath)
+        (filePath) => !attachmentPathSet.has(normalizePathKey(filePath))
       );
       for (const orphan of orphanAttachmentFiles) {
         issues.push({
@@ -189,4 +192,9 @@ function stripMarkdown(markdown: string) {
     .replace(/[#>*_~-]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function normalizePathKey(filePath: string) {
+  const normalized = path.normalize(filePath);
+  return process.platform === "win32" ? normalized.toLowerCase() : normalized;
 }
