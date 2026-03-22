@@ -21,4 +21,16 @@ describe("buildConfig", () => {
 
     delete process.env.OIDC_ISSUER_URL;
   });
+
+  it("keeps the listen port fixed while deriving the mock issuer from the base url", () => {
+    process.env.APP_BASE_URL = "https://notes.example.com";
+
+    const config = buildConfig();
+
+    expect(config.port).toBe(3000);
+    expect(config.appBaseUrl).toBe("https://notes.example.com");
+    expect(config.oidcIssuerUrl).toBe("https://notes.example.com/mock-oidc");
+
+    delete process.env.APP_BASE_URL;
+  });
 });

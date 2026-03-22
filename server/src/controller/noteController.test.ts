@@ -12,7 +12,6 @@ describe("noteController integration", () => {
 
   beforeEach(async () => {
     tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "bbnote-"));
-    process.env.APP_PORT = "3000";
     process.env.APP_BASE_URL = "http://localhost:3000";
     process.env.OIDC_ISSUER_URL = "http://localhost:3000/mock-oidc";
     process.env.OIDC_CLIENT_ID_WEB = "bbnote-web";
@@ -35,7 +34,6 @@ describe("noteController integration", () => {
   afterEach(async () => {
     await app.close();
     await fs.rm(tempRoot, { recursive: true, force: true });
-    delete process.env.APP_PORT;
     delete process.env.APP_BASE_URL;
     delete process.env.OIDC_ISSUER_URL;
     delete process.env.OIDC_CLIENT_ID_WEB;

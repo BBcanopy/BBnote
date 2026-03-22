@@ -15,12 +15,13 @@ export interface AppConfig {
 }
 
 export function buildConfig(): AppConfig {
+  const defaultPort = 3000;
   const appBaseUrl = process.env.APP_BASE_URL ?? "http://127.0.0.1:3000";
   const defaultMockIssuerUrl = `${appBaseUrl.replace(/\/$/, "")}/mock-oidc`;
   const oidcIssuerUrl = process.env.OIDC_ISSUER_URL ?? defaultMockIssuerUrl;
 
   return {
-    port: Number(process.env.APP_PORT ?? "3000"),
+    port: defaultPort,
     appBaseUrl,
     oidcIssuerUrl,
     oidcClientIdWeb: process.env.OIDC_CLIENT_ID_WEB ?? "bbnote-web",
