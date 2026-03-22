@@ -1,0 +1,30 @@
+import path from "node:path";
+
+export interface AppConfig {
+  port: number;
+  appBaseUrl: string;
+  oidcIssuerUrl: string;
+  oidcClientIdWeb: string;
+  oidcClientIdAndroid: string;
+  oidcScopes: string;
+  sqlitePath: string;
+  notesRoot: string;
+  attachmentsRoot: string;
+  mockOidcEnabled: boolean;
+}
+
+export function buildConfig(): AppConfig {
+  return {
+    port: Number(process.env.APP_PORT ?? "3000"),
+    appBaseUrl: process.env.APP_BASE_URL ?? "http://localhost:3000",
+    oidcIssuerUrl: process.env.OIDC_ISSUER_URL ?? "http://localhost:3000/mock-oidc",
+    oidcClientIdWeb: process.env.OIDC_CLIENT_ID_WEB ?? "bbnote-web",
+    oidcClientIdAndroid: process.env.OIDC_CLIENT_ID_ANDROID ?? "bbnote-android",
+    oidcScopes: process.env.OIDC_SCOPES ?? "openid profile email",
+    sqlitePath: process.env.SQLITE_PATH ?? path.resolve("data/db/bbnote.sqlite"),
+    notesRoot: process.env.NOTES_ROOT ?? path.resolve("data/notes"),
+    attachmentsRoot: process.env.ATTACHMENTS_ROOT ?? path.resolve("data/attachments"),
+    mockOidcEnabled: (process.env.MOCK_OIDC_ENABLED ?? "false") === "true"
+  };
+}
+

@@ -1,0 +1,28 @@
+@import "tailwindcss";
+
+:root {
+  font-family: "Geist Sans", system-ui, sans-serif;
+  color: rgb(15 23 42);
+  background:
+    radial-gradient(circle at top left, rgba(16, 185, 129, 0.08), transparent 26%),
+    linear-gradient(180deg, #f8fbfa 0%, #f3f5f6 100%);
+}
+
+@theme {
+  --color-canvas: #f3f5f6;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
