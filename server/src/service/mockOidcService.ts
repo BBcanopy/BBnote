@@ -179,7 +179,7 @@ export class MockOidcService {
     const result = await jwtVerify(
       token,
       createPublicKey({
-        key: jwk as JsonWebKey,
+        key: jwk as any,
         format: "jwk"
       }),
       {

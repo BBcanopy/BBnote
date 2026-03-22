@@ -10,6 +10,7 @@ export interface AppConfig {
   sqlitePath: string;
   notesRoot: string;
   attachmentsRoot: string;
+  exportsRoot: string;
   mockOidcEnabled: boolean;
 }
 
@@ -24,7 +25,7 @@ export function buildConfig(): AppConfig {
     sqlitePath: process.env.SQLITE_PATH ?? path.resolve("data/db/bbnote.sqlite"),
     notesRoot: process.env.NOTES_ROOT ?? path.resolve("data/notes"),
     attachmentsRoot: process.env.ATTACHMENTS_ROOT ?? path.resolve("data/attachments"),
+    exportsRoot: process.env.EXPORTS_ROOT ?? path.resolve("data/exports"),
     mockOidcEnabled: (process.env.MOCK_OIDC_ENABLED ?? "false") === "true"
   };
 }
-

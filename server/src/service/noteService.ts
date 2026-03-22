@@ -94,7 +94,17 @@ export class NoteService {
     };
   }
 
-  async createNote(input: { ownerId: string; folderId?: string; title: string; bodyMarkdown: string }) {
+  async createNote(input: {
+    ownerId: string;
+    folderId?: string;
+    title: string;
+    bodyMarkdown: string;
+    createdAt?: string;
+    updatedAt?: string;
+    sourceApp?: string | null;
+    sourceId?: string | null;
+    sourceTagsJson?: string;
+  }) {
     const folder =
       (input.folderId ? this.folderDb.getById(input.ownerId, input.folderId) : undefined) ??
       this.folderDb.findInbox(input.ownerId);
@@ -102,14 +112,15 @@ export class NoteService {
       throw new Error("Folder not found.");
     }
     const noteId = randomUUID();
-    const now = new Date().toISOString();
+    const createdAt = input.createdAt ?? new Date().toISOString();
+    const updatedAt = input.updatedAt ?? createdAt;
     const trimmedTitle = input.title.trim() || "Untitled note";
     const filePath = await this.storageService.createNoteFile({
       ownerId: input.ownerId,
       storageDirName: folder.storageDirName,
       noteId,
       title: trimmedTitle,
-      createdAt: now,
+      createdAt,
       bodyMarkdown: input.bodyMarkdown
     });
     try {
@@ -119,12 +130,12 @@ export class NoteService {
         folderId: folder.id,
         title: trimmedTitle,
         filePath,
-        createdAt: now,
-        updatedAt: now,
+        createdAt,
+        updatedAt,
         lastOpenedAt: null,
-        sourceApp: null,
-        sourceId: null,
-        sourceTagsJson: "[]"
+        sourceApp: input.sourceApp ?? null,
+        sourceId: input.sourceId ?? null,
+        sourceTagsJson: input.sourceTagsJson ?? "[]"
       });
       this.noteDb.replaceFts({
         noteId,

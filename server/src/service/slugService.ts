@@ -43,3 +43,12 @@ export function buildNoteFileName(date: string, title: string, noteId: string): 
   return `${prefix}${slug}${suffix}`;
 }
 
+export function buildAttachmentFileName(originalName: string): string {
+  const extensionMatch = originalName.match(/(\.[^.]+)$/u);
+  const extension = extensionMatch?.[1] ?? "";
+  const baseName = extension ? originalName.slice(0, -extension.length) : originalName;
+  const safeExtension = extension.replace(FORBIDDEN_PATH_CHARS, "").slice(0, 16);
+  const slugBudget = 143 - Buffer.byteLength(safeExtension, "utf8");
+  const base = truncateUtf8(sanitizeSegment(baseName), slugBudget);
+  return `${base}${safeExtension}`;
+}

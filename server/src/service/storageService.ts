@@ -1,7 +1,8 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import crypto from "node:crypto";
 import type { AppConfig } from "./configService.js";
-import { buildNoteFileName } from "./slugService.js";
+import { buildAttachmentFileName, buildNoteFileName } from "./slugService.js";
 
 export class StorageService {
   constructor(private readonly config: AppConfig) {}
@@ -9,7 +10,8 @@ export class StorageService {
   async ensureRoots() {
     await Promise.all([
       fs.mkdir(this.config.notesRoot, { recursive: true }),
-      fs.mkdir(this.config.attachmentsRoot, { recursive: true })
+      fs.mkdir(this.config.attachmentsRoot, { recursive: true }),
+      fs.mkdir(this.config.exportsRoot, { recursive: true })
     ]);
   }
 
@@ -19,6 +21,10 @@ export class StorageService {
 
   attachmentRootPath(ownerId: string) {
     return path.join(this.config.attachmentsRoot, ownerId);
+  }
+
+  exportRootPath(ownerId: string) {
+    return path.join(this.config.exportsRoot, ownerId);
   }
 
   async createNoteFile(input: {
@@ -50,6 +56,33 @@ export class StorageService {
     await fs.rm(filePath, { force: true });
   }
 
+  async saveAttachment(input: {
+    ownerId: string;
+    attachmentId: string;
+    originalName: string;
+    content: Buffer;
+  }) {
+    const safeName = buildAttachmentFileName(input.originalName);
+    const directory = path.join(this.attachmentRootPath(input.ownerId), input.attachmentId);
+    await fs.mkdir(directory, { recursive: true });
+    const filePath = path.join(directory, safeName);
+    await fs.writeFile(filePath, input.content);
+    return {
+      filePath,
+      safeName,
+      sizeBytes: input.content.byteLength,
+      sha256: crypto.createHash("sha256").update(input.content).digest("hex")
+    };
+  }
+
+  async writeExport(ownerId: string, jobId: string, archive: Buffer) {
+    const directory = this.exportRootPath(ownerId);
+    await fs.mkdir(directory, { recursive: true });
+    const filePath = path.join(directory, `${jobId}.zip`);
+    await fs.writeFile(filePath, archive);
+    return filePath;
+  }
+
   async listNoteFiles(ownerId?: string) {
     const root = ownerId ? path.join(this.config.notesRoot, ownerId) : this.config.notesRoot;
     return listFilesRecursive(root);
@@ -78,4 +111,3 @@ async function listFilesRecursive(root: string): Promise<string[]> {
     return [];
   }
 }
-

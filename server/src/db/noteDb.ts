@@ -77,6 +77,53 @@ export class NoteDb {
     this.connection.prepare("delete from notes where owner_id = ? and id = ?").run(ownerId, id);
   }
 
+  listAllByOwner(ownerId: string): NoteRecord[] {
+    return this.connection
+      .prepare<[string], NoteRecord>(
+        `
+          select
+            id,
+            owner_id as ownerId,
+            folder_id as folderId,
+            title,
+            file_path as filePath,
+            created_at as createdAt,
+            updated_at as updatedAt,
+            last_opened_at as lastOpenedAt,
+            source_app as sourceApp,
+            source_id as sourceId,
+            source_tags_json as sourceTagsJson
+          from notes
+          where owner_id = ?
+          order by created_at asc
+        `
+      )
+      .all(ownerId) as NoteRecord[];
+  }
+
+  listAll(): NoteRecord[] {
+    return this.connection
+      .prepare<[], NoteRecord>(
+        `
+          select
+            id,
+            owner_id as ownerId,
+            folder_id as folderId,
+            title,
+            file_path as filePath,
+            created_at as createdAt,
+            updated_at as updatedAt,
+            last_opened_at as lastOpenedAt,
+            source_app as sourceApp,
+            source_id as sourceId,
+            source_tags_json as sourceTagsJson
+          from notes
+          order by created_at asc
+        `
+      )
+      .all() as NoteRecord[];
+  }
+
   list(query: ListQuery): NoteRecord[] {
     const sortColumn =
       query.sort === "createdAt"
@@ -154,5 +201,22 @@ export class NoteDb {
 
   deleteFts(noteId: string) {
     this.connection.prepare("delete from notes_fts where note_id = ?").run(noteId);
+  }
+
+  getFtsRows(ownerId: string) {
+    return this.connection
+      .prepare<[string], { noteId: string; ownerId: string; folderId: string; title: string; body: string }>(
+        `
+          select
+            note_id as noteId,
+            owner_id as ownerId,
+            folder_id as folderId,
+            title,
+            body
+          from notes_fts
+          where owner_id = ?
+        `
+      )
+      .all(ownerId) as { noteId: string; ownerId: string; folderId: string; title: string; body: string }[];
   }
 }
