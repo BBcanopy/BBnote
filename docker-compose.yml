@@ -9,7 +9,9 @@ services:
       APP_BASE_URL: ${APP_BASE_URL:-http://127.0.0.1:3000}
       OIDC_CLIENT_ID_WEB: bbnote-web
       OIDC_CLIENT_ID_ANDROID: bbnote-android
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-}
       OIDC_SCOPES: openid profile email
+      SESSION_SECRET: ${SESSION_SECRET:-bbnote-dev-session-secret}
       SQLITE_PATH: /data/db/bbnote.sqlite
       NOTES_ROOT: /data/notes
       ATTACHMENTS_ROOT: /data/attachments

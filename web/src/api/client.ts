@@ -1,15 +1,14 @@
 import type {
+  AuthSession,
   ExportJob,
   FolderNode,
   ImportJob,
   NoteDetail,
-  PaginatedNotes,
-  RuntimeConfig
+  PaginatedNotes
 } from "./types";
 
 interface RequestOptions {
   method?: string;
-  token?: string | null;
   body?: BodyInit | null;
   headers?: HeadersInit;
 }
@@ -19,14 +18,12 @@ async function request<T>(url: string, options: RequestOptions = {}): Promise<T>
   if (options.body && !(options.body instanceof FormData) && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
-  if (options.token) {
-    headers.set("Authorization", `Bearer ${options.token}`);
-  }
 
   const response = await fetch(url, {
     method: options.method ?? "GET",
     body: options.body ?? null,
-    headers
+    headers,
+    credentials: "same-origin"
   });
 
   if (!response.ok) {
@@ -41,48 +38,48 @@ async function request<T>(url: string, options: RequestOptions = {}): Promise<T>
   return (await response.json()) as T;
 }
 
-export function getRuntimeConfig() {
-  return request<RuntimeConfig>("/api/v1/runtime-config");
+export function getAuthSession() {
+  return request<AuthSession>("/api/v1/auth/session");
 }
 
-export function listFolders(token: string) {
-  return request<FolderNode[]>("/api/v1/folders", { token });
+export function logoutAuthSession() {
+  return request<void>("/api/v1/auth/logout", {
+    method: "POST"
+  });
 }
 
-export function createFolder(token: string, payload: { name: string; parentId: string | null }) {
+export function listFolders() {
+  return request<FolderNode[]>("/api/v1/folders");
+}
+
+export function createFolder(payload: { name: string; parentId: string | null }) {
   return request<FolderNode>("/api/v1/folders", {
     method: "POST",
-    token,
     body: JSON.stringify(payload)
   });
 }
 
-export function updateFolder(token: string, folderId: string, payload: { name: string; parentId: string | null }) {
+export function updateFolder(folderId: string, payload: { name: string; parentId: string | null }) {
   return request<FolderNode>(`/api/v1/folders/${folderId}`, {
     method: "PATCH",
-    token,
     body: JSON.stringify(payload)
   });
 }
 
-export function deleteFolder(token: string, folderId: string) {
+export function deleteFolder(folderId: string) {
   return request<void>(`/api/v1/folders/${folderId}`, {
-    method: "DELETE",
-    token
+    method: "DELETE"
   });
 }
 
-export function listNotes(
-  token: string,
-  params: {
-    q?: string;
-    folderId?: string;
-    cursor?: string;
-    limit?: number;
-    sort?: "updatedAt" | "createdAt" | "title";
-    order?: "asc" | "desc";
-  }
-) {
+export function listNotes(params: {
+  q?: string;
+  folderId?: string;
+  cursor?: string;
+  limit?: number;
+  sort?: "updatedAt" | "createdAt" | "title";
+  order?: "asc" | "desc";
+}) {
   const search = new URLSearchParams();
   if (params.q) search.set("q", params.q);
   if (params.folderId) search.set("folderId", params.folderId);
@@ -90,58 +87,51 @@ export function listNotes(
   if (params.limit) search.set("limit", String(params.limit));
   if (params.sort) search.set("sort", params.sort);
   if (params.order) search.set("order", params.order);
-  return request<PaginatedNotes>(`/api/v1/notes?${search.toString()}`, { token });
+  return request<PaginatedNotes>(`/api/v1/notes?${search.toString()}`);
 }
 
-export function createNote(token: string, payload: { folderId?: string; title: string; bodyMarkdown: string }) {
+export function createNote(payload: { folderId?: string; title: string; bodyMarkdown: string }) {
   return request<NoteDetail>("/api/v1/notes", {
     method: "POST",
-    token,
     body: JSON.stringify(payload)
   });
 }
 
-export function getNote(token: string, noteId: string) {
-  return request<NoteDetail>(`/api/v1/notes/${noteId}`, { token });
+export function getNote(noteId: string) {
+  return request<NoteDetail>(`/api/v1/notes/${noteId}`);
 }
 
-export function updateNote(token: string, noteId: string, payload: { folderId?: string; title: string; bodyMarkdown: string }) {
+export function updateNote(noteId: string, payload: { folderId?: string; title: string; bodyMarkdown: string }) {
   return request<NoteDetail>(`/api/v1/notes/${noteId}`, {
     method: "PUT",
-    token,
     body: JSON.stringify(payload)
   });
 }
 
-export function deleteNote(token: string, noteId: string) {
+export function deleteNote(noteId: string) {
   return request<void>(`/api/v1/notes/${noteId}`, {
-    method: "DELETE",
-    token
+    method: "DELETE"
   });
 }
 
-export function uploadAttachment(token: string, noteId: string, file: File) {
+export function uploadAttachment(noteId: string, file: File) {
   const formData = new FormData();
   formData.set("file", file);
   return request(`/api/v1/notes/${noteId}/attachments`, {
     method: "POST",
-    token,
     body: formData
   });
 }
 
-export function deleteAttachment(token: string, attachmentId: string) {
+export function deleteAttachment(attachmentId: string) {
   return request<void>(`/api/v1/attachments/${attachmentId}`, {
-    method: "DELETE",
-    token
+    method: "DELETE"
   });
 }
 
-export function fetchAttachmentBlob(token: string, attachmentUrl: string) {
+export function fetchAttachmentBlob(attachmentUrl: string) {
   return fetch(attachmentUrl, {
-    headers: {
-      Authorization: `Bearer ${token}`
-    }
+    credentials: "same-origin"
   }).then(async (response) => {
     if (!response.ok) {
       throw new Error("Attachment fetch failed.");
@@ -150,41 +140,36 @@ export function fetchAttachmentBlob(token: string, attachmentUrl: string) {
   });
 }
 
-export function createImportJob(token: string, source: "onenote" | "synology_note_station", file: File) {
+export function createImportJob(source: "onenote" | "synology_note_station", file: File) {
   const formData = new FormData();
   formData.set("source", source);
   formData.set("file", file);
   return request<ImportJob>("/api/v1/imports", {
     method: "POST",
-    token,
     body: formData
   });
 }
 
-export function getImportJob(token: string, jobId: string) {
-  return request<ImportJob>(`/api/v1/imports/${jobId}`, { token });
+export function getImportJob(jobId: string) {
+  return request<ImportJob>(`/api/v1/imports/${jobId}`);
 }
 
-export function createExportJob(token: string) {
+export function createExportJob() {
   return request<ExportJob>("/api/v1/exports", {
-    method: "POST",
-    token
+    method: "POST"
   });
 }
 
-export function getExportJob(token: string, jobId: string) {
-  return request<ExportJob>(`/api/v1/exports/${jobId}`, { token });
+export function getExportJob(jobId: string) {
+  return request<ExportJob>(`/api/v1/exports/${jobId}`);
 }
 
-export async function downloadExport(token: string, jobId: string) {
+export async function downloadExport(jobId: string) {
   const response = await fetch(`/api/v1/exports/${jobId}/download`, {
-    headers: {
-      Authorization: `Bearer ${token}`
-    }
+    credentials: "same-origin"
   });
   if (!response.ok) {
     throw new Error("Export download failed.");
   }
   return response.blob();
 }
-

@@ -12,7 +12,7 @@ export function AppShell() {
       <main className="grid min-h-[100dvh] place-items-center bg-canvas px-4">
         <div className="inline-flex items-center gap-3 rounded-full border border-white/60 bg-white/85 px-5 py-3 text-sm text-slate-600 shadow-[0_20px_50px_-35px_rgba(15,23,42,0.35)]">
           <CircleNotch size={18} className="animate-spin text-emerald-700" />
-          Loading runtime config
+          Loading session
         </div>
       </main>
     );

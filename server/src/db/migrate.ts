@@ -84,6 +84,17 @@ export function runMigrations(connection: Database.Database) {
       foreign key(owner_id) references users(id) on delete cascade
     );
 
+    create table if not exists sessions (
+      id text primary key,
+      owner_id text not null,
+      created_at text not null,
+      updated_at text not null,
+      expires_at text not null,
+      foreign key(owner_id) references users(id) on delete cascade
+    );
+
+    create index if not exists idx_sessions_owner_expires on sessions(owner_id, expires_at);
+
     create virtual table if not exists notes_fts using fts5(
       note_id unindexed,
       owner_id unindexed,
@@ -94,4 +105,3 @@ export function runMigrations(connection: Database.Database) {
     );
   `);
 }
-

@@ -6,7 +6,9 @@ export interface AppConfig {
   oidcIssuerUrl: string;
   oidcClientIdWeb: string;
   oidcClientIdAndroid: string;
+  oidcClientSecret: string | null;
   oidcScopes: string;
+  sessionSecret: string;
   sqlitePath: string;
   notesRoot: string;
   attachmentsRoot: string;
@@ -16,7 +18,8 @@ export interface AppConfig {
 
 export function buildConfig(): AppConfig {
   const defaultPort = 3000;
-  const appBaseUrl = process.env.APP_BASE_URL ?? "http://127.0.0.1:3000";
+  const defaultAppBaseUrl = process.env.NODE_ENV === "production" ? "http://127.0.0.1:3000" : "http://127.0.0.1:5173";
+  const appBaseUrl = process.env.APP_BASE_URL ?? defaultAppBaseUrl;
   const defaultMockIssuerUrl = `${appBaseUrl.replace(/\/$/, "")}/mock-oidc`;
   const oidcIssuerUrl = process.env.OIDC_ISSUER_URL ?? defaultMockIssuerUrl;
 
@@ -26,7 +29,9 @@ export function buildConfig(): AppConfig {
     oidcIssuerUrl,
     oidcClientIdWeb: process.env.OIDC_CLIENT_ID_WEB ?? "bbnote-web",
     oidcClientIdAndroid: process.env.OIDC_CLIENT_ID_ANDROID ?? "bbnote-android",
+    oidcClientSecret: process.env.OIDC_CLIENT_SECRET?.trim() || null,
     oidcScopes: process.env.OIDC_SCOPES ?? "openid profile email",
+    sessionSecret: process.env.SESSION_SECRET ?? "bbnote-dev-session-secret",
     sqlitePath: process.env.SQLITE_PATH ?? path.resolve("data/db/bbnote.sqlite"),
     notesRoot: process.env.NOTES_ROOT ?? path.resolve("data/notes"),
     attachmentsRoot: process.env.ATTACHMENTS_ROOT ?? path.resolve("data/attachments"),

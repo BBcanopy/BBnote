@@ -1,9 +1,9 @@
-export interface RuntimeConfig {
-  appBaseUrl: string;
-  oidcIssuerUrl: string;
-  oidcClientIdWeb: string;
-  oidcScopes: string;
-  mockOidcEnabled: boolean;
+export interface AuthSession {
+  authenticated: boolean;
+  user: {
+    email: string | null;
+    name: string | null;
+  } | null;
 }
 
 export interface FolderNode {
@@ -68,4 +68,3 @@ export interface ExportJob {
     attachmentCount: number;
   };
 }
-

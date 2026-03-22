@@ -5,9 +5,10 @@ describe("buildConfig", () => {
   it("provides defaults for local development", () => {
     const config = buildConfig();
     expect(config.port).toBe(3000);
-    expect(config.appBaseUrl).toBe("http://127.0.0.1:3000");
-    expect(config.oidcIssuerUrl).toBe("http://127.0.0.1:3000/mock-oidc");
+    expect(config.appBaseUrl).toBe("http://127.0.0.1:5173");
+    expect(config.oidcIssuerUrl).toBe("http://127.0.0.1:5173/mock-oidc");
     expect(config.mockOidcEnabled).toBe(true);
+    expect(config.sessionSecret).toBe("bbnote-dev-session-secret");
     expect(config.notesRoot).toContain("data");
   });
 
@@ -32,5 +33,15 @@ describe("buildConfig", () => {
     expect(config.oidcIssuerUrl).toBe("https://notes.example.com/mock-oidc");
 
     delete process.env.APP_BASE_URL;
+  });
+
+  it("accepts an explicit oidc client secret", () => {
+    process.env.OIDC_CLIENT_SECRET = "super-secret";
+
+    const config = buildConfig();
+
+    expect(config.oidcClientSecret).toBe("super-secret");
+
+    delete process.env.OIDC_CLIENT_SECRET;
   });
 });

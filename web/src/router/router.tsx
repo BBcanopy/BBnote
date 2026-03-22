@@ -2,7 +2,6 @@ import { createBrowserRouter } from "react-router-dom";
 import { AppShell } from "../components/AppShell";
 import { ExportPage } from "../pages/ExportPage";
 import { ImportPage } from "../pages/ImportPage";
-import { LoginCallbackPage } from "../pages/LoginCallbackPage";
 import { NotesPage } from "../pages/NotesPage";
 
 export const router = createBrowserRouter([
@@ -23,10 +22,5 @@ export const router = createBrowserRouter([
         element: <ExportPage />
       }
     ]
-  },
-  {
-    path: "/auth/callback",
-    element: <LoginCallbackPage />
   }
 ]);
-

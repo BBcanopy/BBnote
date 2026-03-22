@@ -13,13 +13,13 @@ export function ImportPage() {
   const [error, setError] = useState<string | null>(null);
 
   async function handleImport() {
-    if (!auth.accessToken || !file) {
+    if (!auth.user || !file) {
       return;
     }
     setBusy(true);
     setError(null);
     try {
-      const createdJob = await createImportJob(auth.accessToken, source, file);
+      const createdJob = await createImportJob(source, file);
       setJob(createdJob);
     } catch (importError) {
       setError(String(importError));

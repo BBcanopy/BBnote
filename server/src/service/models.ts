@@ -6,6 +6,16 @@ export interface AuthenticatedUser {
   name: string | null;
 }
 
+export interface SessionUser {
+  email: string | null;
+  name: string | null;
+}
+
+export interface AuthSessionView {
+  authenticated: boolean;
+  user: SessionUser | null;
+}
+
 export interface FolderRecord {
   id: string;
   ownerId: string;
@@ -104,4 +114,3 @@ export interface PaginatedNotes {
   items: NoteSummary[];
   nextCursor: string | null;
 }
-

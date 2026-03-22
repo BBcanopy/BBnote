@@ -3,18 +3,14 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { fetchAttachmentBlob } from "../api/client";
 
-export function MarkdownPreview(props: { bodyMarkdown: string; token: string }) {
+export function MarkdownPreview(props: { bodyMarkdown: string }) {
   return (
     <div className="prose prose-slate max-w-none prose-headings:tracking-tight prose-img:rounded-[1rem]">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
-          img: ({ src, alt }) => <SecureAttachmentImage src={src} alt={alt ?? ""} token={props.token} />,
-          a: ({ href, children }) => (
-            <SecureAttachmentLink href={href} token={props.token}>
-              {children}
-            </SecureAttachmentLink>
-          )
+          img: ({ src, alt }) => <SecureAttachmentImage src={src} alt={alt ?? ""} />,
+          a: ({ href, children }) => <SecureAttachmentLink href={href}>{children}</SecureAttachmentLink>
         }}
       >
         {props.bodyMarkdown}
@@ -23,7 +19,7 @@ export function MarkdownPreview(props: { bodyMarkdown: string; token: string }) 
   );
 }
 
-function SecureAttachmentImage(props: { src?: string; alt: string; token: string }) {
+function SecureAttachmentImage(props: { src?: string; alt: string }) {
   const [objectUrl, setObjectUrl] = useState<string | null>(null);
 
   useEffect(() => {
@@ -35,7 +31,7 @@ function SecureAttachmentImage(props: { src?: string; alt: string; token: string
       return () => undefined;
     }
 
-    fetchAttachmentBlob(props.token, props.src)
+    fetchAttachmentBlob(props.src)
       .then((blob) => {
         if (!active) {
           return;
@@ -53,7 +49,7 @@ function SecureAttachmentImage(props: { src?: string; alt: string; token: string
         URL.revokeObjectURL(currentObjectUrl);
       }
     };
-  }, [props.src, props.token]);
+  }, [props.src]);
 
   if (!objectUrl) {
     return <span className="text-sm text-slate-400">Attachment preview unavailable.</span>;
@@ -62,7 +58,7 @@ function SecureAttachmentImage(props: { src?: string; alt: string; token: string
   return <img src={objectUrl} alt={props.alt} />;
 }
 
-function SecureAttachmentLink(props: { href?: string; token: string; children: ReactNode }) {
+function SecureAttachmentLink(props: { href?: string; children: ReactNode }) {
   if (!props.href || !props.href.startsWith("/api/v1/attachments/")) {
     return (
       <a href={props.href} target="_blank" rel="noreferrer">
@@ -75,7 +71,7 @@ function SecureAttachmentLink(props: { href?: string; token: string; children: R
     <button
       type="button"
       onClick={async () => {
-        const blob = await fetchAttachmentBlob(props.token, props.href!);
+        const blob = await fetchAttachmentBlob(props.href!);
         const objectUrl = URL.createObjectURL(blob);
         window.open(objectUrl, "_blank", "noopener,noreferrer");
         setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);

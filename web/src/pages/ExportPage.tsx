@@ -11,13 +11,13 @@ export function ExportPage() {
   const [error, setError] = useState<string | null>(null);
 
   async function handleCreateExport() {
-    if (!auth.accessToken) {
+    if (!auth.user) {
       return;
     }
     setBusy(true);
     setError(null);
     try {
-      const createdJob = await createExportJob(auth.accessToken);
+      const createdJob = await createExportJob();
       setJob(createdJob);
     } catch (exportError) {
       setError(String(exportError));
@@ -27,10 +27,10 @@ export function ExportPage() {
   }
 
   async function handleDownload() {
-    if (!auth.accessToken || !job) {
+    if (!auth.user || !job) {
       return;
     }
-    const blob = await downloadExport(auth.accessToken, job.id);
+    const blob = await downloadExport(job.id);
     const objectUrl = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = objectUrl;

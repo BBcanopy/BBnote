@@ -21,7 +21,6 @@ import { NoteListPane } from "../components/NoteListPane";
 
 export function NotesPage() {
   const auth = useAuth();
-  const token = auth.accessToken;
   const [folders, setFolders] = useState<FolderNode[]>([]);
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const [pendingFolderName, setPendingFolderName] = useState("");
@@ -44,11 +43,11 @@ export function NotesPage() {
   );
 
   useEffect(() => {
-    if (!token) {
+    if (!auth.user) {
       return;
     }
-    void refreshFolders(token);
-  }, [token]);
+    void refreshFolders();
+  }, [auth.user]);
 
   useEffect(() => {
     if (folders.length > 0 && !selectedFolderId) {
@@ -57,11 +56,11 @@ export function NotesPage() {
   }, [folders, selectedFolderId]);
 
   useEffect(() => {
-    if (!token || !selectedFolderId) {
+    if (!auth.user || !selectedFolderId) {
       return;
     }
     setLoadingNotes(true);
-    listNotes(token, {
+    listNotes({
       folderId: selectedFolderId,
       q: deferredSearch || undefined
     })
@@ -84,13 +83,13 @@ export function NotesPage() {
       .finally(() => {
         setLoadingNotes(false);
       });
-  }, [deferredSearch, selectedFolderId, token]);
+  }, [auth.user, deferredSearch, selectedFolderId]);
 
   useEffect(() => {
-    if (!token || !selectedNoteId) {
+    if (!auth.user || !selectedNoteId) {
       return;
     }
-    getNote(token, selectedNoteId)
+    getNote(selectedNoteId)
       .then((note) => {
         setCurrentNote(note);
         setDraftTitle(note.title);
@@ -99,15 +98,15 @@ export function NotesPage() {
       .catch((noteError) => {
         setError(String(noteError));
       });
-  }, [selectedNoteId, token]);
+  }, [auth.user, selectedNoteId]);
 
-  async function refreshFolders(activeToken: string) {
-    const nextFolders = await listFolders(activeToken);
+  async function refreshFolders() {
+    const nextFolders = await listFolders();
     setFolders(nextFolders);
   }
 
-  async function refreshSelectedNotes(activeToken: string, folderId: string) {
-    const payload = await listNotes(activeToken, {
+  async function refreshSelectedNotes(folderId: string) {
+    const payload = await listNotes({
       folderId,
       q: deferredSearch || undefined
     });
@@ -115,34 +114,34 @@ export function NotesPage() {
   }
 
   async function handleCreateFolder() {
-    if (!token || !pendingFolderName.trim()) {
+    if (!auth.user || !pendingFolderName.trim()) {
       return;
     }
     setError(null);
     try {
-      await createFolder(token, {
+      await createFolder({
         name: pendingFolderName,
         parentId: selectedFolderId
       });
       setPendingFolderName("");
-      await refreshFolders(token);
+      await refreshFolders();
     } catch (folderError) {
       setError(String(folderError));
     }
   }
 
   async function handleCreateNote() {
-    if (!token || !selectedFolderId) {
+    if (!auth.user || !selectedFolderId) {
       return;
     }
     setError(null);
     try {
-      const created = await createNote(token, {
+      const created = await createNote({
         folderId: selectedFolderId,
         title: "Untitled note",
         bodyMarkdown: ""
       });
-      await refreshSelectedNotes(token, selectedFolderId);
+      await refreshSelectedNotes(selectedFolderId);
       startTransition(() => {
         setSelectedNoteId(created.id);
       });
@@ -152,19 +151,19 @@ export function NotesPage() {
   }
 
   async function handleSaveNote() {
-    if (!token || !selectedNoteId || !selectedFolderId) {
+    if (!auth.user || !selectedNoteId || !selectedFolderId) {
       return;
     }
     setSaving(true);
     setError(null);
     try {
-      const updated = await updateNote(token, selectedNoteId, {
+      const updated = await updateNote(selectedNoteId, {
         folderId: selectedFolderId,
         title: draftTitle || "Untitled note",
         bodyMarkdown: draftBody
       });
       setCurrentNote(updated);
-      await refreshSelectedNotes(token, selectedFolderId);
+      await refreshSelectedNotes(selectedFolderId);
     } catch (saveError) {
       setError(String(saveError));
     } finally {
@@ -173,13 +172,13 @@ export function NotesPage() {
   }
 
   async function handleDeleteNote() {
-    if (!token || !selectedNoteId || !selectedFolderId) {
+    if (!auth.user || !selectedNoteId || !selectedFolderId) {
       return;
     }
     setError(null);
     try {
-      await deleteNote(token, selectedNoteId);
-      await refreshSelectedNotes(token, selectedFolderId);
+      await deleteNote(selectedNoteId);
+      await refreshSelectedNotes(selectedFolderId);
       setSelectedNoteId((current) => (current === selectedNoteId ? null : current));
       setCurrentNote(null);
       setDraftTitle("");
@@ -190,14 +189,14 @@ export function NotesPage() {
   }
 
   async function handleAttachmentUpload(files: FileList | null) {
-    if (!token || !selectedNoteId || !files?.[0]) {
+    if (!auth.user || !selectedNoteId || !files?.[0]) {
       return;
     }
     setUploadingAttachment(true);
     setError(null);
     try {
-      await uploadAttachment(token, selectedNoteId, files[0]);
-      const refreshed = await getNote(token, selectedNoteId);
+      await uploadAttachment(selectedNoteId, files[0]);
+      const refreshed = await getNote(selectedNoteId);
       setCurrentNote(refreshed);
     } catch (uploadError) {
       setError(String(uploadError));
@@ -207,19 +206,19 @@ export function NotesPage() {
   }
 
   async function handleDeleteAttachment(attachmentId: string) {
-    if (!token || !selectedNoteId) {
+    if (!auth.user || !selectedNoteId) {
       return;
     }
-    await deleteAttachment(token, attachmentId);
-    const refreshed = await getNote(token, selectedNoteId);
+    await deleteAttachment(attachmentId);
+    const refreshed = await getNote(selectedNoteId);
     setCurrentNote(refreshed);
   }
 
   async function handleDownloadAttachment(attachment: AttachmentRef) {
-    if (!token) {
+    if (!auth.user) {
       return;
     }
-    const blob = await fetchAttachmentBlob(token, attachment.url);
+    const blob = await fetchAttachmentBlob(attachment.url);
     const objectUrl = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = objectUrl;
@@ -312,7 +311,7 @@ export function NotesPage() {
             {showPreview ? (
               <div className="rounded-[1.4rem] border border-slate-200 bg-slate-50/80 px-5 py-4">
                 {currentNote ? (
-                  <MarkdownPreview bodyMarkdown={draftBody} token={token ?? ""} />
+                  <MarkdownPreview bodyMarkdown={draftBody} />
                 ) : (
                   <p className="text-sm text-slate-500">Preview appears once a note is selected.</p>
                 )}
