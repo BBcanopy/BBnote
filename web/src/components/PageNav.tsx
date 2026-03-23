@@ -1,4 +1,4 @@
-import { House, UploadSimple, DownloadSimple } from "@phosphor-icons/react";
+import { House } from "@phosphor-icons/react";
 import type { ReactNode } from "react";
 import { NavLink } from "react-router-dom";
 import type { AuthSession } from "../api/types";
@@ -22,8 +22,6 @@ export function PageNav(props: {
         </div>
         <nav className="bb-subnav" aria-label="Primary navigation">
           <NavItem to="/" label="Notes" icon={<House size={16} weight="bold" />} />
-          <NavItem to="/imports" label="Imports" icon={<UploadSimple size={16} weight="bold" />} />
-          <NavItem to="/exports" label="Exports" icon={<DownloadSimple size={16} weight="bold" />} />
         </nav>
       </div>
       <UserMenu

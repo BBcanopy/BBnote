@@ -144,9 +144,15 @@ test("navigates imports and exports from the avatar menu", async ({ page }) => {
   await login(page);
   await createNotebookAndPersistedNote(page);
 
+  await expect(page.getByRole("navigation", { name: /primary navigation/i }).getByRole("link", { name: /^notes$/i })).toBeVisible();
+  await expect(page.getByRole("navigation", { name: /primary navigation/i }).getByRole("link", { name: /^imports$/i })).toHaveCount(0);
+  await expect(page.getByRole("navigation", { name: /primary navigation/i }).getByRole("link", { name: /^exports$/i })).toHaveCount(0);
+
   await page.getByRole("button", { name: /open user menu/i }).click();
   const userMenu = page.getByRole("menu");
   await expect(userMenu.getByRole("link", { name: /^notes$/i })).toHaveAttribute("aria-current", "page");
+  await expect(userMenu.getByRole("link", { name: /^imports$/i })).toBeVisible();
+  await expect(userMenu.getByRole("link", { name: /^exports$/i })).toBeVisible();
   await userMenu.getByRole("button", { name: /^ember/i }).click();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "ember");
   await userMenu.getByRole("link", { name: /^exports$/i }).click();
