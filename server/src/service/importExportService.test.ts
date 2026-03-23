@@ -60,7 +60,10 @@ describe("import/export services", () => {
   });
 
   it("exports markdown bundles and imports them back", async () => {
-    const inbox = app.bbnote.folderDb.findInbox(ownerId)!;
+    const inbox = await app.bbnote.folderService.createFolder(ownerId, {
+      name: "Projects",
+      parentId: null
+    });
     const note = await app.bbnote.noteService.createNote({
       ownerId,
       folderId: inbox.id,

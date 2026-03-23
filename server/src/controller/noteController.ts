@@ -4,8 +4,8 @@ import { authenticate } from "./authenticate.js";
 import type { AppServices } from "../service/serviceFactory.js";
 
 const noteBodySchema = z.object({
-  folderId: z.string().uuid().optional(),
-  title: z.string().min(1),
+  folderId: z.string().uuid(),
+  title: z.string().trim().min(1),
   bodyMarkdown: z.string()
 });
 
@@ -35,7 +35,11 @@ export function registerNoteController(app: FastifyInstance, services: AppServic
   });
 
   app.post("/api/v1/notes", { preHandler: guard }, async (request, reply) => {
-    const body = noteBodySchema.parse(request.body);
+    const parsedBody = noteBodySchema.safeParse(request.body);
+    if (!parsedBody.success) {
+      return reply.code(400).send(parsedBody.error.message);
+    }
+    const body = parsedBody.data;
     const note = await services.noteService.createNote({
       ownerId: request.auth!.ownerId,
       folderId: body.folderId,
@@ -50,9 +54,13 @@ export function registerNoteController(app: FastifyInstance, services: AppServic
     return services.noteService.getNote(request.auth!.ownerId, params.id);
   });
 
-  app.put("/api/v1/notes/:id", { preHandler: guard }, async (request) => {
+  app.put("/api/v1/notes/:id", { preHandler: guard }, async (request, reply) => {
     const params = z.object({ id: z.string().uuid() }).parse(request.params);
-    const body = noteBodySchema.parse(request.body);
+    const parsedBody = noteBodySchema.safeParse(request.body);
+    if (!parsedBody.success) {
+      return reply.code(400).send(parsedBody.error.message);
+    }
+    const body = parsedBody.data;
     return services.noteService.updateNote({
       ownerId: request.auth!.ownerId,
       noteId: params.id,
@@ -68,4 +76,3 @@ export function registerNoteController(app: FastifyInstance, services: AppServic
     return reply.code(204).send();
   });
 }
-

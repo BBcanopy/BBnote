@@ -99,24 +99,4 @@ export class FolderDb {
     return (row?.count ?? 0) > 0;
   }
 
-  findInbox(ownerId: string): FolderRecord | undefined {
-    return this.connection
-      .prepare<[string], FolderRecord>(
-        `
-          select
-            id,
-            owner_id as ownerId,
-            parent_id as parentId,
-            name,
-            storage_dir_name as storageDirName,
-            created_at as createdAt,
-            updated_at as updatedAt
-          from folders
-          where owner_id = ? and parent_id is null and name = 'Inbox'
-          order by created_at asc
-          limit 1
-        `
-      )
-      .get(ownerId) as FolderRecord | undefined;
-  }
 }

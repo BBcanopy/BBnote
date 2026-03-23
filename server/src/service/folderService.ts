@@ -6,14 +6,6 @@ import { buildFolderDirectoryName } from "./slugService.js";
 export class FolderService {
   constructor(private readonly folderDb: FolderDb) {}
 
-  async ensureInbox(ownerId: string) {
-    const existing = this.folderDb.findInbox(ownerId);
-    if (existing) {
-      return existing;
-    }
-    return this.createFolder(ownerId, { name: "Inbox", parentId: null });
-  }
-
   async list(ownerId: string): Promise<FolderNode[]> {
     const folders = this.folderDb.listByOwner(ownerId);
     const byId = new Map(folders.map((folder) => [folder.id, folder]));
@@ -97,4 +89,3 @@ function buildPath(folderId: string, folders: Map<string, { id: string; name: st
   }
   return parts.join(" / ");
 }
-

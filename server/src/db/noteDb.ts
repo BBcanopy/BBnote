@@ -62,12 +62,12 @@ export class NoteDb {
   update(
     ownerId: string,
     id: string,
-    input: { folderId: string; title: string; updatedAt: string; lastOpenedAt: string | null }
+    input: { folderId: string; title: string; filePath: string; updatedAt: string; lastOpenedAt: string | null }
   ) {
     this.connection
       .prepare(`
         update notes
-        set folder_id = @folderId, title = @title, updated_at = @updatedAt, last_opened_at = @lastOpenedAt
+        set folder_id = @folderId, title = @title, file_path = @filePath, updated_at = @updatedAt, last_opened_at = @lastOpenedAt
         where owner_id = @ownerId and id = @id
       `)
       .run({ ownerId, id, ...input });

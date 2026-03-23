@@ -61,7 +61,10 @@ describe("consistencyService", () => {
   });
 
   it("detects and repairs fts drift plus deep attachment metadata drift", async () => {
-    const inbox = app.bbnote.folderDb.findInbox(ownerId)!;
+    const inbox = await app.bbnote.folderService.createFolder(ownerId, {
+      name: "Projects",
+      parentId: null
+    });
     const note = await app.bbnote.noteService.createNote({
       ownerId,
       folderId: inbox.id,
@@ -108,7 +111,7 @@ describe("consistencyService", () => {
       return;
     }
 
-    const notePath = "d:\\Code\\bbnote\\server\\data\\notes\\owner\\Inbox--folder\\2026-03-22--note--1.md";
+    const notePath = "d:\\Code\\bbnote\\server\\data\\notes\\owner\\Projects--folder\\2026-03-22--note--1.md";
     const attachmentPath = "d:\\Code\\bbnote\\server\\data\\attachments\\owner\\attachment\\budget.txt";
     const notes: NoteRecord[] = [
       {
