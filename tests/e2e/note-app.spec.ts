@@ -60,6 +60,11 @@ test("starts empty, restores separate notebook and notes lanes, supports row dra
   await expect.poll(async () => page.locator('[data-testid^="notebook-drag-"]').count()).toBe(2);
   await expect(page.locator('[data-testid^="notebook-drag-"]').filter({ hasText: subNotebookName }).first()).toBeVisible();
 
+  await page.getByRole("button", { name: new RegExp(`collapse notebook ${notebookName}`, "i") }).click();
+  await expect(page.locator('[data-testid^="notebook-drag-"]').filter({ hasText: subNotebookName })).toHaveCount(0);
+  await page.getByRole("button", { name: new RegExp(`expand notebook ${notebookName}`, "i") }).click();
+  await expect(page.locator('[data-testid^="notebook-drag-"]').filter({ hasText: subNotebookName }).first()).toBeVisible();
+
   await page.getByRole("button", { name: new RegExp(subNotebookName, "i") }).click();
   await page.getByPlaceholder("Notebook name").fill(archiveNotebookName);
   await page.getByRole("button", { name: /new notebook/i }).click();
