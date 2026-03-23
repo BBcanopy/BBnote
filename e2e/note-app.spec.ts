@@ -20,6 +20,18 @@ test("starts empty, restores separate notebook and notes lanes, supports row dra
   await expect(allNotesButton).toBeVisible();
   await expect(page.getByRole("button", { name: /collapse notebooks pane/i })).toBeVisible();
   await expect(page.getByRole("button", { name: /collapse notes pane/i })).toBeVisible();
+  const notebookPane = page.getByTestId("notebook-pane");
+  const notesPane = page.getByTestId("notes-pane");
+  const notebookPaneWidthBefore = (await notebookPane.boundingBox())?.width ?? 0;
+  const notesPaneWidthBefore = (await notesPane.boundingBox())?.width ?? 0;
+  await dragResizer(page, page.getByTestId("notebook-pane-resizer"), 72);
+  await dragResizer(page, page.getByTestId("notes-pane-resizer"), 88);
+  await expect
+    .poll(async () => ((await notebookPane.boundingBox())?.width ?? 0) - notebookPaneWidthBefore)
+    .toBeGreaterThan(40);
+  await expect
+    .poll(async () => ((await notesPane.boundingBox())?.width ?? 0) - notesPaneWidthBefore)
+    .toBeGreaterThan(48);
   await expect(page.getByRole("button", { name: /^new note$/i }).first()).toHaveAttribute("title", "New note");
   expect((await page.getByRole("button", { name: /^new note$/i }).first().textContent())?.trim() ?? "").toBe("");
   await expect
@@ -147,6 +159,9 @@ test("navigates imports and exports from the avatar menu", async ({ page }) => {
   await expect(page.getByRole("navigation", { name: /primary navigation/i }).getByRole("link", { name: /^notes$/i })).toBeVisible();
   await expect(page.getByRole("navigation", { name: /primary navigation/i }).getByRole("link", { name: /^imports$/i })).toHaveCount(0);
   await expect(page.getByRole("navigation", { name: /primary navigation/i }).getByRole("link", { name: /^exports$/i })).toHaveCount(0);
+  await expect
+    .poll(async () => ((await page.getByRole("button", { name: /open user menu/i }).textContent()) ?? "").trim().length)
+    .toBe(1);
 
   await page.getByRole("button", { name: /open user menu/i }).click();
   const userMenu = page.getByRole("menu");
@@ -219,4 +234,18 @@ async function createImportArchive() {
   const filePath = path.join(directory, "import.zip");
   await fs.writeFile(filePath, await zip.generateAsync({ type: "nodebuffer" }));
   return filePath;
+}
+
+async function dragResizer(page: import("@playwright/test").Page, handle: import("@playwright/test").Locator, deltaX: number) {
+  const box = await handle.boundingBox();
+  if (!box) {
+    throw new Error("Expected resize handle to be visible.");
+  }
+
+  const startX = box.x + box.width / 2;
+  const startY = box.y + box.height / 2;
+  await page.mouse.move(startX, startY);
+  await page.mouse.down();
+  await page.mouse.move(startX + deltaX, startY, { steps: 12 });
+  await page.mouse.up();
 }

@@ -9,7 +9,7 @@ import {
   Plus,
   Trash
 } from "@phosphor-icons/react";
-import { startTransition, useDeferredValue, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { startTransition, useDeferredValue, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import {
   createFolder,
   createNote,
@@ -46,6 +46,21 @@ interface EditorState {
 }
 
 const AUTOSAVE_DELAY_MS = 700;
+const DEFAULT_FOLDER_PANE_WIDTH = 320;
+const DEFAULT_NOTE_PANE_WIDTH = 340;
+const MIN_FOLDER_PANE_WIDTH = 260;
+const MAX_FOLDER_PANE_WIDTH = 420;
+const MIN_NOTE_PANE_WIDTH = 280;
+const MAX_NOTE_PANE_WIDTH = 480;
+const KEYBOARD_RESIZE_STEP = 24;
+
+type PaneResizeTarget = "folders" | "notes";
+
+interface PaneResizeState {
+  target: PaneResizeTarget;
+  startX: number;
+  startWidth: number;
+}
 
 export function NotesPage() {
   const auth = useAuth();
@@ -59,6 +74,9 @@ export function NotesPage() {
   const [editorPane, setEditorPane] = useState<EditorPane>("markdown");
   const [folderPaneCollapsed, setFolderPaneCollapsed] = useState(false);
   const [notePaneCollapsed, setNotePaneCollapsed] = useState(false);
+  const [folderPaneWidth, setFolderPaneWidth] = useState(DEFAULT_FOLDER_PANE_WIDTH);
+  const [notePaneWidth, setNotePaneWidth] = useState(DEFAULT_NOTE_PANE_WIDTH);
+  const [paneResize, setPaneResize] = useState<PaneResizeState | null>(null);
   const [mobileFoldersOpen, setMobileFoldersOpen] = useState(false);
   const [mobileNotesOpen, setMobileNotesOpen] = useState(false);
   const [loadingNotes, setLoadingNotes] = useState(false);
@@ -205,6 +223,44 @@ export function NotesPage() {
 
     return () => window.clearTimeout(timer);
   }, [auth.user, canPersistEditor, currentContentKey, editorNote, lastSyncedContentKey]);
+
+  useEffect(() => {
+    if (!paneResize) {
+      return;
+    }
+
+    const activeResize = paneResize;
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+
+    function handlePointerMove(event: PointerEvent) {
+      const delta = event.clientX - activeResize.startX;
+      if (activeResize.target === "folders") {
+        setFolderPaneWidth(clampValue(activeResize.startWidth + delta, MIN_FOLDER_PANE_WIDTH, MAX_FOLDER_PANE_WIDTH));
+        return;
+      }
+
+      setNotePaneWidth(clampValue(activeResize.startWidth + delta, MIN_NOTE_PANE_WIDTH, MAX_NOTE_PANE_WIDTH));
+    }
+
+    function handlePointerUp() {
+      setPaneResize(null);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    }
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp);
+    window.addEventListener("pointercancel", handlePointerUp);
+
+    return () => {
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+      window.removeEventListener("pointercancel", handlePointerUp);
+    };
+  }, [paneResize]);
 
   async function refreshFolders() {
     try {
@@ -443,6 +499,23 @@ export function NotesPage() {
     saving
   });
 
+  function startPaneResize(target: PaneResizeTarget, startX: number) {
+    setPaneResize({
+      target,
+      startX,
+      startWidth: target === "folders" ? folderPaneWidth : notePaneWidth
+    });
+  }
+
+  function nudgePaneWidth(target: PaneResizeTarget, delta: number) {
+    if (target === "folders") {
+      setFolderPaneWidth((current) => clampValue(current + delta, MIN_FOLDER_PANE_WIDTH, MAX_FOLDER_PANE_WIDTH));
+      return;
+    }
+
+    setNotePaneWidth((current) => clampValue(current + delta, MIN_NOTE_PANE_WIDTH, MAX_NOTE_PANE_WIDTH));
+  }
+
   return (
     <>
       <section className="mb-4 flex flex-wrap gap-2 lg:hidden">
@@ -460,7 +533,7 @@ export function NotesPage() {
         </button>
       </section>
 
-      <div className="hidden min-h-[calc(100dvh-7.5rem)] gap-4 lg:flex">
+      <div className="hidden min-h-[calc(100dvh-7.5rem)] items-stretch gap-4 lg:flex">
         {explorerCollapsed ? (
           <CollapsedPaneRail
             label="Notebooks"
@@ -484,16 +557,30 @@ export function NotesPage() {
                 icon={<FolderSimple size={18} />}
               />
             ) : (
-              <div className="w-[320px] shrink-0">
-                <FolderTree
-                  folders={folders}
-                  selectedFolderId={selectedFolderId}
-                  pendingName={pendingFolderName}
-                  onPendingNameChange={setPendingFolderName}
-                  onCreateNotebook={() => void handleCreateNotebook()}
-                  onMoveNotebook={(move) => void handleMoveNotebook(move)}
-                  onCollapse={() => setFolderPaneCollapsed(true)}
-                  onSelectFolder={handleSelectFolder}
+              <div className="flex shrink-0 items-stretch">
+                <div data-testid="notebook-pane" className="shrink-0" style={{ width: folderPaneWidth }}>
+                  <FolderTree
+                    folders={folders}
+                    selectedFolderId={selectedFolderId}
+                    pendingName={pendingFolderName}
+                    onPendingNameChange={setPendingFolderName}
+                    onCreateNotebook={() => void handleCreateNotebook()}
+                    onMoveNotebook={(move) => void handleMoveNotebook(move)}
+                    onCollapse={() => setFolderPaneCollapsed(true)}
+                    onSelectFolder={handleSelectFolder}
+                  />
+                </div>
+                <PaneResizeHandle
+                  testId="notebook-pane-resizer"
+                  label="Resize notebooks pane"
+                  onPointerDown={(event) => {
+                    if (event.button !== 0) {
+                      return;
+                    }
+                    event.preventDefault();
+                    startPaneResize("folders", event.clientX);
+                  }}
+                  onNudge={(delta) => nudgePaneWidth("folders", delta)}
                 />
               </div>
             )}
@@ -506,17 +593,31 @@ export function NotesPage() {
                 icon={<ListBullets size={18} />}
               />
             ) : (
-              <div className="w-[340px] shrink-0">
-                <NoteListPane
-                  notes={notes}
-                  search={search}
-                  onSearchChange={setSearch}
-                  selectedNoteId={selectedNoteId}
-                  onSelectNote={handleSelectNote}
-                  onCreateNote={handleCreateDraft}
-                  onCollapse={() => setNotePaneCollapsed(true)}
-                  loading={loadingNotes}
-                  notebookName={selectedFolder?.name ?? null}
+              <div className="flex shrink-0 items-stretch">
+                <div data-testid="notes-pane" className="shrink-0" style={{ width: notePaneWidth }}>
+                  <NoteListPane
+                    notes={notes}
+                    search={search}
+                    onSearchChange={setSearch}
+                    selectedNoteId={selectedNoteId}
+                    onSelectNote={handleSelectNote}
+                    onCreateNote={handleCreateDraft}
+                    onCollapse={() => setNotePaneCollapsed(true)}
+                    loading={loadingNotes}
+                    notebookName={selectedFolder?.name ?? null}
+                  />
+                </div>
+                <PaneResizeHandle
+                  testId="notes-pane-resizer"
+                  label="Resize notes pane"
+                  onPointerDown={(event) => {
+                    if (event.button !== 0) {
+                      return;
+                    }
+                    event.preventDefault();
+                    startPaneResize("notes", event.clientX);
+                  }}
+                  onNudge={(delta) => nudgePaneWidth("notes", delta)}
                 />
               </div>
             )}
@@ -775,6 +876,39 @@ function CollapsedPaneRail(props: {
   );
 }
 
+function PaneResizeHandle(props: {
+  testId: string;
+  label: string;
+  onPointerDown(event: ReactPointerEvent<HTMLButtonElement>): void;
+  onNudge(delta: number): void;
+}) {
+  return (
+    <button
+      type="button"
+      data-testid={props.testId}
+      aria-label={props.label}
+      title={props.label}
+      onPointerDown={props.onPointerDown}
+      onKeyDown={(event) => {
+        if (event.key === "ArrowLeft") {
+          event.preventDefault();
+          props.onNudge(-KEYBOARD_RESIZE_STEP);
+        }
+        if (event.key === "ArrowRight") {
+          event.preventDefault();
+          props.onNudge(KEYBOARD_RESIZE_STEP);
+        }
+      }}
+      className="bb-pane-resizer"
+    >
+      <span className="bb-pane-resizer__handle" aria-hidden="true">
+        <span />
+        <span />
+      </span>
+    </button>
+  );
+}
+
 function MobileDrawer(props: {
   open: boolean;
   title: string;
@@ -890,4 +1024,8 @@ function getEditorStatus(props: {
   }
 
   return props.editorFolderPath ?? "Draft";
+}
+
+function clampValue(value: number, min: number, max: number) {
+  return Math.min(Math.max(value, min), max);
 }

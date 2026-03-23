@@ -11,6 +11,9 @@ test("shows the simplified auth splash and docs page", async ({ page }) => {
   await expect(page.getByText("Keep drafts moving without friction")).toHaveCount(0);
   await expect(page.getByLabel("Workspace preview")).toHaveCount(0);
   await expect(page.getByText("Markdown in files. Metadata in SQLite.")).toHaveCount(0);
+  const heroBox = await page.locator(".bb-auth-hero").boundingBox();
+  const viewport = page.viewportSize();
+  expect(heroBox?.width ?? 0).toBeGreaterThan(((viewport?.width ?? 0) * 0.85));
 
   await page.getByRole("link", { name: /read api docs/i }).click();
 

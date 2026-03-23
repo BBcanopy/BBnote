@@ -1,4 +1,4 @@
-import { CaretDown, DownloadSimple, NotePencil, SignOut, UploadSimple } from "@phosphor-icons/react";
+import { DownloadSimple, NotePencil, SignOut, UploadSimple } from "@phosphor-icons/react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import type { UserTheme } from "../api/types";
@@ -50,11 +50,6 @@ export function UserMenu(props: {
         <span className="bb-avatar-button__letter">
           {initial}
         </span>
-        <span className="bb-avatar-button__meta">
-          <span className="bb-avatar-button__name">{props.name || "BBNote user"}</span>
-          <span className="bb-avatar-button__email">{props.email || "Signed in"}</span>
-        </span>
-        <CaretDown size={16} className={`bb-avatar-button__chevron${open ? " is-open" : ""}`} />
       </button>
       {open ? (
         <div
