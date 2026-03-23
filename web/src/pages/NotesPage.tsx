@@ -789,12 +789,13 @@ function ModeButton(props: {
     <button
       type="button"
       onClick={props.onClick}
-      className={`inline-flex h-9 items-center gap-2 whitespace-nowrap rounded-full px-4 text-sm font-medium transition duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+      aria-label={props.label}
+      title={props.label}
+      className={`inline-flex h-9 w-10 items-center justify-center rounded-full text-sm font-medium transition duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${
         props.active ? "bg-slate-950 text-white shadow-[0_10px_24px_-18px_rgba(15,23,42,0.9)]" : "text-slate-600 hover:text-slate-950"
       }`}
     >
       {props.icon}
-      {props.label}
     </button>
   );
 }

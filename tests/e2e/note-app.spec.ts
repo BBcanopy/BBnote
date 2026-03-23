@@ -67,7 +67,7 @@ test("starts empty, creates notebooks, supports notebook dragging, autosaves not
   await expect(page.getByText(/untitled note/i)).toHaveCount(0);
 
   await page.getByRole("textbox", { name: "Title" }).first().fill(noteTitle);
-  await page.getByLabel("Markdown").first().fill(`# Budget\n\nalpha launch ${searchTerm}`);
+  await page.getByPlaceholder("Write in Markdown").first().fill(`# Budget\n\nalpha launch ${searchTerm}`);
   await expect(page.getByText(/^Saved /).first()).toBeVisible();
 
   const notePreview = page.getByRole("button", { name: new RegExp(noteTitle, "i") }).first();
@@ -91,6 +91,8 @@ test("starts empty, creates notebooks, supports notebook dragging, autosaves not
   await expect(page.getByRole("button", { name: /open notes pane/i })).toBeVisible();
 
   await page.getByRole("button", { name: /open notes pane/i }).click();
+  await expect(page.getByRole("button", { name: /^markdown$/i })).toHaveAttribute("title", "Markdown");
+  await expect(page.getByRole("button", { name: /^preview$/i })).toHaveAttribute("title", "Preview");
   await page.getByRole("button", { name: /^preview$/i }).click();
   await expect(page.getByRole("heading", { name: "Budget" })).toBeVisible();
   await page.getByRole("button", { name: /^markdown$/i }).click();
@@ -100,7 +102,7 @@ test("starts empty, creates notebooks, supports notebook dragging, autosaves not
   await expect(page.getByText("budget.txt").first()).toBeVisible();
 
   await page.getByRole("button", { name: /^link$/i }).click();
-  await expect(page.getByLabel("Markdown").first()).toHaveValue(/budget\.txt/);
+  await expect(page.getByPlaceholder("Write in Markdown").first()).toHaveValue(/budget\.txt/);
 });
 
 test("navigates imports and exports from the avatar menu", async ({ page }) => {
@@ -146,7 +148,7 @@ async function createNotebookAndPersistedNote(page: import("@playwright/test").P
   await page.getByRole("button", { name: /new notebook/i }).click();
   await page.getByRole("button", { name: /^new note$/i }).click();
   await page.getByRole("textbox", { name: "Title" }).first().fill(`Export ready note ${suffix}`);
-  await page.getByLabel("Markdown").first().fill("This note should travel well.");
+  await page.getByPlaceholder("Write in Markdown").first().fill("This note should travel well.");
   await expect(page.getByText(/^Saved /).first()).toBeVisible();
   await expect(page.getByRole("button", { name: new RegExp(`Export ready note ${suffix}`, "i") })).toBeVisible();
 }
