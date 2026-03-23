@@ -19,6 +19,7 @@ import {
   getNote,
   listFolders,
   listNotes,
+  reorderNotes,
   updateFolder,
   updateNote,
   uploadAttachment
@@ -30,7 +31,9 @@ import { buttonDanger, buttonGhost, buttonPrimary, buttonSecondary } from "../co
 import { FolderTree } from "../components/FolderTree";
 import { MarkdownPreview } from "../components/MarkdownPreview";
 import { NoteListPane } from "../components/NoteListPane";
+import { TextPromptDialog } from "../components/TextPromptDialog";
 import { buildFolderMutations, moveFolders, type FolderMoveInstruction } from "../utils/folderTree";
+import { buildNoteOrderIds, moveNotes, type NoteMoveInstruction } from "../utils/noteOrder";
 
 type EditorPane = "markdown" | "preview";
 
@@ -66,7 +69,8 @@ export function NotesPage() {
   const auth = useAuth();
   const [folders, setFolders] = useState<FolderNode[]>([]);
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
-  const [pendingFolderName, setPendingFolderName] = useState("");
+  const [createNotebookOpen, setCreateNotebookOpen] = useState(false);
+  const [newNotebookName, setNewNotebookName] = useState("");
   const [notes, setNotes] = useState<NoteSummary[]>([]);
   const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null);
   const [editorNote, setEditorNote] = useState<EditorState | null>(null);
@@ -94,16 +98,13 @@ export function NotesPage() {
     () => folders.find((folder) => folder.id === selectedFolderId) ?? null,
     [folders, selectedFolderId]
   );
-  const editorFolder = useMemo(
-    () => folders.find((folder) => folder.id === editorNote?.folderId) ?? null,
-    [editorNote?.folderId, folders]
-  );
   const currentContentKey = useMemo(
     () => (editorNote ? buildContentKey(editorNote.folderId, editorNote.title, editorNote.bodyMarkdown) : null),
     [editorNote]
   );
   const canPersistEditor = Boolean(editorNote?.folderId && editorNote.title.trim().length > 0);
   const explorerCollapsed = folderPaneCollapsed && notePaneCollapsed;
+  const canReorderNotes = Boolean(selectedFolderId && search.trim().length === 0);
 
   useEffect(() => {
     if (!auth.user) {
@@ -285,7 +286,9 @@ export function NotesPage() {
       setLoadingNotes(true);
       const payload = await listNotes({
         folderId: selectedFolderId ?? undefined,
-        q: deferredSearch || undefined
+        q: deferredSearch || undefined,
+        sort: selectedFolderId && !deferredSearch ? "priority" : undefined,
+        order: selectedFolderId && !deferredSearch ? "asc" : undefined
       });
       setNotes(payload.items);
     } catch (notesError) {
@@ -295,8 +298,18 @@ export function NotesPage() {
     }
   }
 
+  function openCreateNotebookDialog() {
+    setNewNotebookName("");
+    setCreateNotebookOpen(true);
+  }
+
+  function closeCreateNotebookDialog() {
+    setCreateNotebookOpen(false);
+    setNewNotebookName("");
+  }
+
   async function handleCreateNotebook() {
-    if (!auth.user || !pendingFolderName.trim()) {
+    if (!auth.user || !newNotebookName.trim()) {
       return;
     }
 
@@ -304,10 +317,10 @@ export function NotesPage() {
 
     try {
       const created = await createFolder({
-        name: pendingFolderName.trim(),
+        name: newNotebookName.trim(),
         parentId: selectedFolderId
       });
-      setPendingFolderName("");
+      closeCreateNotebookDialog();
       await refreshFolders();
       setSelectedFolderId(created.id);
       setFolderPaneCollapsed(false);
@@ -369,6 +382,33 @@ export function NotesPage() {
       setFolders(previousFolders);
       setError(String(moveError));
       await refreshFolders();
+    }
+  }
+
+  async function handleMoveNote(move: NoteMoveInstruction) {
+    if (!auth.user || !selectedFolderId || !canReorderNotes) {
+      return;
+    }
+
+    const nextNotes = moveNotes(notes, move);
+    if (!nextNotes) {
+      return;
+    }
+
+    const previousNotes = notes;
+    setError(null);
+    setNotes(nextNotes);
+
+    try {
+      await reorderNotes({
+        folderId: selectedFolderId,
+        orderedNoteIds: buildNoteOrderIds(nextNotes)
+      });
+      await refreshNotes();
+    } catch (moveError) {
+      setNotes(previousNotes);
+      setError(String(moveError));
+      await refreshNotes();
     }
   }
 
@@ -493,7 +533,6 @@ export function NotesPage() {
 
   const editorStatus = getEditorStatus({
     editorNote,
-    editorFolderPath: editorFolder?.path ?? null,
     foldersCount: folders.length,
     loadingEditor,
     saving
@@ -562,9 +601,7 @@ export function NotesPage() {
                   <FolderTree
                     folders={folders}
                     selectedFolderId={selectedFolderId}
-                    pendingName={pendingFolderName}
-                    onPendingNameChange={setPendingFolderName}
-                    onCreateNotebook={() => void handleCreateNotebook()}
+                    onCreateNotebook={openCreateNotebookDialog}
                     onMoveNotebook={(move) => void handleMoveNotebook(move)}
                     onCollapse={() => setFolderPaneCollapsed(true)}
                     onSelectFolder={handleSelectFolder}
@@ -605,6 +642,8 @@ export function NotesPage() {
                     onCollapse={() => setNotePaneCollapsed(true)}
                     loading={loadingNotes}
                     notebookName={selectedFolder?.name ?? null}
+                    canReorder={canReorderNotes}
+                    onMoveNote={(move) => void handleMoveNote(move)}
                   />
                 </div>
                 <PaneResizeHandle
@@ -626,7 +665,6 @@ export function NotesPage() {
 
         <EditorPanel
           editorNote={editorNote}
-          editorFolderPath={editorFolder?.path ?? null}
           folders={folders}
           editorPane={editorPane}
           onEditorPaneChange={setEditorPane}
@@ -650,7 +688,6 @@ export function NotesPage() {
       <div className="lg:hidden">
         <EditorPanel
           editorNote={editorNote}
-          editorFolderPath={editorFolder?.path ?? null}
           folders={folders}
           editorPane={editorPane}
           onEditorPaneChange={setEditorPane}
@@ -675,9 +712,7 @@ export function NotesPage() {
         <FolderTree
           folders={folders}
           selectedFolderId={selectedFolderId}
-          pendingName={pendingFolderName}
-          onPendingNameChange={setPendingFolderName}
-          onCreateNotebook={() => void handleCreateNotebook()}
+          onCreateNotebook={openCreateNotebookDialog}
           onMoveNotebook={(move) => void handleMoveNotebook(move)}
           onSelectFolder={handleSelectFolder}
         />
@@ -693,15 +728,28 @@ export function NotesPage() {
           onCreateNote={handleCreateDraft}
           loading={loadingNotes}
           notebookName={selectedFolder?.name ?? null}
+          canReorder={canReorderNotes}
+          onMoveNote={(move) => void handleMoveNote(move)}
         />
       </MobileDrawer>
+
+      <TextPromptDialog
+        open={createNotebookOpen}
+        title={selectedFolder ? `Create notebook in ${selectedFolder.name}` : "Create notebook"}
+        description={selectedFolder ? "The new notebook will be created inside the currently selected notebook." : "Create a new top-level notebook."}
+        value={newNotebookName}
+        placeholder="Notebook name"
+        confirmLabel="Create notebook"
+        onChange={setNewNotebookName}
+        onClose={closeCreateNotebookDialog}
+        onConfirm={() => void handleCreateNotebook()}
+      />
     </>
   );
 }
 
 function EditorPanel(props: {
   editorNote: EditorState | null;
-  editorFolderPath: string | null;
   folders: FolderNode[];
   editorPane: EditorPane;
   onEditorPaneChange(value: EditorPane): void;
@@ -723,25 +771,7 @@ function EditorPanel(props: {
   return (
     <section className="bb-editor-panel lg:flex-1">
       <div className="bb-editor-header">
-        <div className="bb-panel-header__copy">
-          <p className="bb-eyebrow">{props.editorFolderPath ?? "Draft"}</p>
-          <p className="bb-panel-subtitle">{props.statusText}</p>
-        </div>
         <div className="flex flex-wrap items-center gap-2">
-          <div className="bb-editor-mode">
-            <ModeButton
-              active={props.editorPane === "markdown"}
-              label="Markdown"
-              icon={<PencilSimple size={17} />}
-              onClick={() => props.onEditorPaneChange("markdown")}
-            />
-            <ModeButton
-              active={props.editorPane === "preview"}
-              label="Preview"
-              icon={<Eye size={17} />}
-              onClick={() => props.onEditorPaneChange("preview")}
-            />
-          </div>
           <button
             type="button"
             onClick={props.onDelete}
@@ -803,9 +833,26 @@ function EditorPanel(props: {
           </label>
         </div>
 
+        <div className="bb-editor-body-header">
+          <span className="bb-field__label">{props.editorPane === "markdown" ? "Markdown" : "Preview"}</span>
+          <div className="bb-editor-mode">
+            <ModeButton
+              active={props.editorPane === "markdown"}
+              label="Markdown"
+              icon={<PencilSimple size={17} />}
+              onClick={() => props.onEditorPaneChange("markdown")}
+            />
+            <ModeButton
+              active={props.editorPane === "preview"}
+              label="Preview"
+              icon={<Eye size={17} />}
+              onClick={() => props.onEditorPaneChange("preview")}
+            />
+          </div>
+        </div>
+
         {props.editorPane === "markdown" ? (
           <label className="bb-field">
-            <span className="bb-field__label">Markdown</span>
             <textarea
               value={props.editorNote?.bodyMarkdown ?? ""}
               onChange={(event) => props.onBodyChange(event.target.value)}
@@ -836,8 +883,13 @@ function EditorPanel(props: {
             Create a notebook before this note can save.
           </div>
         ) : null}
+
       </div>
       )}
+
+      <div className="bb-editor-footer">
+        <span>{props.statusText}</span>
+      </div>
     </section>
   );
 }
@@ -990,7 +1042,6 @@ function buildContentKey(folderId: string | null, title: string, bodyMarkdown: s
 
 function getEditorStatus(props: {
   editorNote: EditorState | null;
-  editorFolderPath: string | null;
   foldersCount: number;
   loadingEditor: boolean;
   saving: boolean;
@@ -1020,10 +1071,10 @@ function getEditorStatus(props: {
   }
 
   if (props.editorNote.updatedAt) {
-    return `Saved ${new Date(props.editorNote.updatedAt).toLocaleString()}`;
+    return props.editorNote.updatedAt;
   }
 
-  return props.editorFolderPath ?? "Draft";
+  return "Draft";
 }
 
 function clampValue(value: number, min: number, max: number) {

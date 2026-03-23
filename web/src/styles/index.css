@@ -32,7 +32,7 @@
   --scrim: rgba(16, 32, 34, 0.22);
   --ease: cubic-bezier(0.16, 1, 0.3, 1);
   color: var(--ink);
-  font-family: "Outfit", "Segoe UI Variable Display", "Segoe UI", sans-serif;
+  font-family: "Geist Sans", "Segoe UI Variable Display", "Segoe UI", sans-serif;
 }
 
 :root[data-theme="ember"] {
@@ -633,9 +633,11 @@ button:disabled {
 .bb-auth-hero {
   display: grid;
   place-items: center;
-  min-height: min(82dvh, 60rem);
-  padding: clamp(2rem, 6vw, 5rem);
-  border-radius: 2.8rem;
+  justify-self: center;
+  width: min(100%, 34rem);
+  min-height: min(34rem, 72dvh);
+  padding: clamp(1.6rem, 4vw, 2.6rem);
+  border-radius: 2.35rem;
   background: color-mix(in srgb, var(--surface-strong) 96%, white);
   box-shadow:
     inset 0 1px 0 var(--surface-highlight-strong),
@@ -646,8 +648,8 @@ button:disabled {
   display: grid;
   justify-items: center;
   align-content: center;
-  gap: clamp(1.3rem, 3vw, 2.5rem);
-  width: min(100%, 42rem);
+  gap: clamp(1rem, 2.6vw, 1.8rem);
+  width: min(100%, 24rem);
   text-align: center;
 }
 
@@ -657,11 +659,11 @@ button:disabled {
 }
 
 .bb-auth-hero__mark .bb-brand-mark__pill {
-  width: 4.6rem;
-  height: 4.6rem;
-  border-radius: 1.45rem;
-  font-family: "Outfit", "Segoe UI Variable Display", "Segoe UI", sans-serif;
-  font-size: 2rem;
+  width: 3.6rem;
+  height: 3.6rem;
+  border-radius: 1.2rem;
+  font-family: "Geist Sans", "Segoe UI Variable Display", "Segoe UI", sans-serif;
+  font-size: 1.7rem;
   font-weight: 500;
   letter-spacing: -0.08em;
   text-transform: none;
@@ -669,9 +671,9 @@ button:disabled {
 
 .bb-auth-hero__title {
   margin: 0;
-  font-size: clamp(4.25rem, 11vw, 6.8rem);
-  line-height: 0.88;
-  letter-spacing: -0.1em;
+  font-size: clamp(3.1rem, 9vw, 4.8rem);
+  line-height: 0.9;
+  letter-spacing: -0.09em;
   color: var(--ink);
 }
 
@@ -684,9 +686,9 @@ button:disabled {
 }
 
 .bb-auth-hero__actions .bb-button {
-  min-height: 4rem;
-  padding: 0.9rem 1.9rem;
-  font-size: 1.05rem;
+  min-height: 3.3rem;
+  padding: 0.8rem 1.3rem;
+  font-size: 0.98rem;
 }
 
 .bb-auth-hero__actions .bb-button--primary {
@@ -897,8 +899,9 @@ button:disabled {
 .bb-overview-card,
 .bb-job-card {
   display: grid;
-  gap: 1rem;
-  padding: 1.1rem;
+  align-content: start;
+  gap: 0.85rem;
+  padding: 1rem;
   border-radius: 1.7rem;
   min-width: 0;
 }
@@ -909,6 +912,7 @@ button:disabled {
 
 .bb-workspace-lane > .bb-pane-card {
   min-height: 100dvh;
+  align-content: start;
 }
 
 .bb-pane-card__header,
@@ -916,7 +920,7 @@ button:disabled {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 0.85rem;
+  gap: 0.7rem;
 }
 
 .bb-panel-header__copy {
@@ -941,15 +945,19 @@ button:disabled {
 .bb-search-shell {
   display: flex;
   align-items: center;
-  gap: 0.7rem;
-  min-height: 2.8rem;
-  padding: 0.12rem 0.95rem;
+  gap: 0.6rem;
+  min-height: 2.9rem;
+  padding: 0.18rem 0.9rem;
   border: 1px solid var(--line);
-  border-radius: 999px;
+  border-radius: 1rem;
   background: var(--surface-input);
   box-shadow:
     inset 0 1px 0 var(--surface-highlight),
     0 14px 28px -30px rgba(18, 34, 36, 0.18);
+}
+
+.bb-search-shell--plain {
+  background: color-mix(in srgb, var(--surface-strong) 92%, white);
 }
 
 .bb-search-shell input,
@@ -1123,7 +1131,7 @@ button:disabled {
   align-items: center;
   gap: 0.6rem;
   width: 100%;
-  padding: 0.75rem 0.9rem;
+  padding: 0.62rem 0.8rem;
   text-align: left;
 }
 
@@ -1143,6 +1151,23 @@ button:disabled {
 .bb-note-card.is-active .bb-note-icon {
   background: rgba(255, 255, 255, 0.14);
   color: #f5fffe;
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+.bb-note-drag-handle {
+  display: inline-grid;
+  place-items: center;
+  width: 1.65rem;
+  height: 1.65rem;
+  border-radius: 0.8rem;
+  color: var(--ink-soft);
+  background: color-mix(in srgb, var(--surface-strong) 80%, transparent);
+  border: 1px solid color-mix(in srgb, var(--line) 82%, transparent);
+}
+
+.bb-note-card.is-active .bb-note-drag-handle {
+  color: #f5fffe;
+  background: rgba(255, 255, 255, 0.12);
   border-color: rgba(255, 255, 255, 0.18);
 }
 
@@ -1202,10 +1227,11 @@ button:disabled {
 }
 
 .bb-editor-panel {
-  padding: 1.25rem;
+  align-content: start;
+  padding: 1.1rem;
   border-radius: 2rem;
   display: grid;
-  gap: 1rem;
+  gap: 0.9rem;
   min-width: 0;
 }
 
@@ -1216,9 +1242,17 @@ button:disabled {
 
 .bb-editor-header {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.bb-editor-body-header {
+  display: flex;
+  align-items: center;
   justify-content: space-between;
-  gap: 1rem;
+  gap: 0.75rem;
   flex-wrap: wrap;
 }
 
@@ -1267,6 +1301,71 @@ button:disabled {
   border-radius: 1.15rem;
   background: color-mix(in srgb, var(--surface-muted) 78%, transparent);
   color: var(--ink-soft);
+}
+
+.bb-editor-footer {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 0.2rem;
+  color: var(--ink-soft);
+  font-family: "IBM Plex Mono", "SFMono-Regular", Consolas, monospace;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  text-align: right;
+  word-break: break-all;
+}
+
+.bb-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  padding: 1.25rem;
+  background: color-mix(in srgb, var(--scrim) 88%, transparent);
+  backdrop-filter: blur(8px);
+}
+
+.bb-dialog {
+  width: min(100%, 29rem);
+  border: 1px solid var(--line);
+  border-radius: 1.75rem;
+  background: var(--surface-popover);
+  box-shadow:
+    inset 0 1px 0 var(--surface-highlight),
+    var(--shadow-lift);
+}
+
+.bb-dialog__content {
+  display: grid;
+  gap: 1rem;
+  padding: 1.15rem;
+}
+
+.bb-dialog__copy {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.bb-dialog__title {
+  margin: 0;
+  font-size: 1.2rem;
+  font-weight: 700;
+  letter-spacing: -0.04em;
+}
+
+.bb-dialog__description {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 0.92rem;
+  line-height: 1.6;
+}
+
+.bb-dialog__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.65rem;
+  flex-wrap: wrap;
 }
 
 .bb-attachment-card {
@@ -1629,7 +1728,8 @@ button:disabled {
   }
 
   .bb-auth-hero {
-    min-height: min(78dvh, 44rem);
+    width: min(100%, 30rem);
+    min-height: auto;
     border-radius: 2rem;
   }
 
@@ -1639,6 +1739,7 @@ button:disabled {
   .bb-panel-header,
   .bb-migration-card__header,
   .bb-editor-header,
+  .bb-editor-body-header,
   .bb-attachment-card {
     align-items: stretch;
   }
