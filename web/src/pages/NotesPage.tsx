@@ -557,8 +557,8 @@ export function NotesPage() {
                 icon={<FolderSimple size={18} />}
               />
             ) : (
-              <div className="flex shrink-0 items-stretch">
-                <div data-testid="notebook-pane" className="shrink-0" style={{ width: folderPaneWidth }}>
+                <div className="flex shrink-0 items-stretch">
+                  <div data-testid="notebook-pane" className="bb-workspace-lane shrink-0" style={{ width: folderPaneWidth }}>
                   <FolderTree
                     folders={folders}
                     selectedFolderId={selectedFolderId}
@@ -593,8 +593,8 @@ export function NotesPage() {
                 icon={<ListBullets size={18} />}
               />
             ) : (
-              <div className="flex shrink-0 items-stretch">
-                <div data-testid="notes-pane" className="shrink-0" style={{ width: notePaneWidth }}>
+                <div className="flex shrink-0 items-stretch">
+                  <div data-testid="notes-pane" className="bb-workspace-lane shrink-0" style={{ width: notePaneWidth }}>
                   <NoteListPane
                     notes={notes}
                     search={search}

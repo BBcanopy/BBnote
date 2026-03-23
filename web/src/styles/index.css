@@ -903,6 +903,14 @@ button:disabled {
   min-width: 0;
 }
 
+.bb-workspace-lane {
+  min-height: 100dvh;
+}
+
+.bb-workspace-lane > .bb-pane-card {
+  min-height: 100dvh;
+}
+
 .bb-pane-card__header,
 .bb-panel-header {
   display: flex;
@@ -1381,11 +1389,13 @@ button:disabled {
     inset 0 1px 0 var(--surface-highlight),
     0 14px 24px -24px rgba(18, 34, 36, 0.24);
   transition:
+    opacity 180ms var(--ease),
     border-color 220ms var(--ease),
     background-color 220ms var(--ease),
     box-shadow 220ms var(--ease),
     transform 220ms var(--ease);
-  transform: translate(-50%, -50%);
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(0.94);
 }
 
 .bb-pane-resizer__handle span {
@@ -1396,7 +1406,9 @@ button:disabled {
 }
 
 .bb-pane-resizer:hover .bb-pane-resizer__handle,
-.bb-pane-resizer:focus-visible .bb-pane-resizer__handle {
+.bb-pane-resizer:focus-visible .bb-pane-resizer__handle,
+.bb-pane-resizer:active .bb-pane-resizer__handle {
+  opacity: 1;
   border-color: color-mix(in srgb, var(--accent) 28%, var(--line));
   background: color-mix(in srgb, var(--surface-strong) 92%, white);
   box-shadow:

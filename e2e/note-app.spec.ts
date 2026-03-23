@@ -4,6 +4,81 @@ import path from "node:path";
 import { expect, test } from "@playwright/test";
 import JSZip from "jszip";
 
+test("keeps desktop lanes viewport-height and only shows the pane grip on border hover", async ({ page }) => {
+  await page.setViewportSize({ width: 1900, height: 1000 });
+
+  await login(page);
+
+  await expect(page.getByRole("button", { name: /collapse notebooks pane/i })).toBeVisible();
+  await expect(page.getByRole("button", { name: /collapse notes pane/i })).toBeVisible();
+
+  const viewport = page.viewportSize();
+  const notebookPane = page.getByTestId("notebook-pane");
+  const notesPane = page.getByTestId("notes-pane");
+  const notebookPaneResizer = page.getByTestId("notebook-pane-resizer");
+  const notesPaneResizer = page.getByTestId("notes-pane-resizer");
+  const notebookPaneHandle = notebookPaneResizer.locator(".bb-pane-resizer__handle");
+  const notesPaneHandle = notesPaneResizer.locator(".bb-pane-resizer__handle");
+
+  await expect
+    .poll(async () => Number.parseFloat(await notebookPaneHandle.evaluate((element) => getComputedStyle(element).opacity)))
+    .toBeLessThan(0.05);
+  await expect
+    .poll(async () => Number.parseFloat(await notesPaneHandle.evaluate((element) => getComputedStyle(element).opacity)))
+    .toBeLessThan(0.05);
+
+  await notebookPaneResizer.hover();
+  await expect
+    .poll(async () => Number.parseFloat(await notebookPaneHandle.evaluate((element) => getComputedStyle(element).opacity)))
+    .toBeGreaterThan(0.95);
+  await expect
+    .poll(async () => {
+      const paneBox = await notebookPane.boundingBox();
+      const handleBox = await notebookPaneHandle.boundingBox();
+      if (!paneBox || !handleBox) {
+        return Number.POSITIVE_INFINITY;
+      }
+      return Math.abs(handleBox.x + handleBox.width / 2 - (paneBox.x + paneBox.width));
+    })
+    .toBeLessThan(4);
+
+  await notesPaneResizer.hover();
+  await expect
+    .poll(async () => Number.parseFloat(await notesPaneHandle.evaluate((element) => getComputedStyle(element).opacity)))
+    .toBeGreaterThan(0.95);
+  await expect
+    .poll(async () => Number.parseFloat(await notebookPaneHandle.evaluate((element) => getComputedStyle(element).opacity)))
+    .toBeLessThan(0.05);
+  await expect
+    .poll(async () => {
+      const paneBox = await notesPane.boundingBox();
+      const handleBox = await notesPaneHandle.boundingBox();
+      if (!paneBox || !handleBox) {
+        return Number.POSITIVE_INFINITY;
+      }
+      return Math.abs(handleBox.x + handleBox.width / 2 - (paneBox.x + paneBox.width));
+    })
+    .toBeLessThan(4);
+
+  await expect
+    .poll(async () => (await notebookPane.boundingBox())?.height ?? 0)
+    .toBeGreaterThan((viewport?.height ?? 0) - 4);
+  await expect
+    .poll(async () => (await notesPane.boundingBox())?.height ?? 0)
+    .toBeGreaterThan((viewport?.height ?? 0) - 4);
+
+  const notebookPaneWidthBefore = (await notebookPane.boundingBox())?.width ?? 0;
+  const notesPaneWidthBefore = (await notesPane.boundingBox())?.width ?? 0;
+  await dragResizer(page, notebookPaneResizer, 72);
+  await dragResizer(page, notesPaneResizer, 88);
+  await expect
+    .poll(async () => ((await notebookPane.boundingBox())?.width ?? 0) - notebookPaneWidthBefore)
+    .toBeGreaterThan(40);
+  await expect
+    .poll(async () => ((await notesPane.boundingBox())?.width ?? 0) - notesPaneWidthBefore)
+    .toBeGreaterThan(48);
+});
+
 test("starts empty, restores separate notebook and notes lanes, supports row dragging, autosaves notes, and collapses both lanes", async ({ page }) => {
   await page.setViewportSize({ width: 1900, height: 1000 });
   const suffix = Date.now().toString();
@@ -26,29 +101,7 @@ test("starts empty, restores separate notebook and notes lanes, supports row dra
   await expect(page.getByRole("button", { name: /collapse notes pane/i })).toBeVisible();
   const notebookPane = page.getByTestId("notebook-pane");
   const notesPane = page.getByTestId("notes-pane");
-  const notebookPaneHandle = page.getByTestId("notebook-pane-resizer").locator(".bb-pane-resizer__handle");
-  const notesPaneHandle = page.getByTestId("notes-pane-resizer").locator(".bb-pane-resizer__handle");
   await expect(notebookPane.locator("p.bb-eyebrow")).toHaveCount(0);
-  await expect
-    .poll(async () => {
-      const paneBox = await notebookPane.boundingBox();
-      const handleBox = await notebookPaneHandle.boundingBox();
-      if (!paneBox || !handleBox) {
-        return Number.POSITIVE_INFINITY;
-      }
-      return Math.abs(handleBox.x + handleBox.width / 2 - (paneBox.x + paneBox.width));
-    })
-    .toBeLessThan(4);
-  await expect
-    .poll(async () => {
-      const paneBox = await notesPane.boundingBox();
-      const handleBox = await notesPaneHandle.boundingBox();
-      if (!paneBox || !handleBox) {
-        return Number.POSITIVE_INFINITY;
-      }
-      return Math.abs(handleBox.x + handleBox.width / 2 - (paneBox.x + paneBox.width));
-    })
-    .toBeLessThan(4);
   const notebookPaneWidthBefore = (await notebookPane.boundingBox())?.width ?? 0;
   const notesPaneWidthBefore = (await notesPane.boundingBox())?.width ?? 0;
   await dragResizer(page, page.getByTestId("notebook-pane-resizer"), 72);
@@ -116,7 +169,9 @@ test("starts empty, restores separate notebook and notes lanes, supports row dra
 
   const archiveNotebookRow = page.getByTestId(buildNotebookTestId("drag", archiveNotebookName));
   await expect(archiveNotebookRow).toBeVisible();
-  await archiveNotebookRow.dragTo(
+  await dragToDropZone(
+    page,
+    archiveNotebookRow,
     page.getByTestId(buildNotebookTestId("before", notebookName))
   );
   await expect
@@ -282,5 +337,34 @@ async function dragResizer(page: import("@playwright/test").Page, handle: import
   await page.mouse.move(startX, startY);
   await page.mouse.down();
   await page.mouse.move(startX + deltaX, startY, { steps: 12 });
+  await page.mouse.up();
+}
+
+async function dragToDropZone(
+  page: import("@playwright/test").Page,
+  source: import("@playwright/test").Locator,
+  target: import("@playwright/test").Locator
+) {
+  const sourceBox = await source.boundingBox();
+  if (!sourceBox) {
+    throw new Error("Expected drag source to be visible.");
+  }
+
+  const startX = sourceBox.x + sourceBox.width / 2;
+  const startY = sourceBox.y + sourceBox.height / 2;
+  await page.mouse.move(startX, startY);
+  await page.mouse.down();
+  await page.mouse.move(startX, startY + 12, { steps: 4 });
+
+  await expect
+    .poll(async () => (await target.boundingBox())?.height ?? 0)
+    .toBeGreaterThan(4);
+
+  const targetBox = await target.boundingBox();
+  if (!targetBox) {
+    throw new Error("Expected drop zone to be visible.");
+  }
+
+  await page.mouse.move(targetBox.x + targetBox.width / 2, targetBox.y + targetBox.height / 2, { steps: 12 });
   await page.mouse.up();
 }
