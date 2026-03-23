@@ -27,12 +27,11 @@ function pkceChallenge(verifier: string) {
 
 export class OidcService {
   private discoveryPromise: Promise<OidcDiscoveryDocument> | null = null;
+  private remoteJwksPromise: Promise<ReturnType<typeof createRemoteJWKSet>> | null = null;
   private readonly redirectUri: string;
-  private readonly remoteJwks;
 
   constructor(private readonly config: AppConfig, private readonly mockOidc: MockOidcService | null) {
     this.redirectUri = `${this.config.appBaseUrl.replace(/\/$/, "")}/auth/callback`;
-    this.remoteJwks = createRemoteJWKSet(new URL(`${this.config.oidcIssuerUrl}/jwks`));
   }
 
   async buildLoginRequest(returnTo: string) {
@@ -94,7 +93,7 @@ export class OidcService {
       return this.mockOidc.verifyAccessToken(token);
     }
 
-    const result = await jwtVerify(token, this.remoteJwks, {
+    const result = await jwtVerify(token, await this.getRemoteJwks(), {
       issuer: this.config.oidcIssuerUrl,
       audience: [this.config.oidcClientIdWeb, this.config.oidcClientIdAndroid]
     });
@@ -124,11 +123,19 @@ export class OidcService {
       return this.mockOidc.verifyAccessToken(idToken);
     }
 
-    const result = await jwtVerify(idToken, this.remoteJwks, {
+    const result = await jwtVerify(idToken, await this.getRemoteJwks(), {
       issuer: this.config.oidcIssuerUrl,
       audience: this.config.oidcClientIdWeb
     });
     return result.payload;
+  }
+
+  private async getRemoteJwks() {
+    if (!this.remoteJwksPromise) {
+      this.remoteJwksPromise = this.getDiscovery().then((discovery) => createRemoteJWKSet(new URL(discovery.jwks_uri)));
+    }
+
+    return this.remoteJwksPromise;
   }
 
   private async exchangeAuthorizationCode(input: { code: string; flow: AuthFlowCookieValue }) {
