@@ -385,7 +385,9 @@ test("opens migration from the avatar menu and runs both export and import flows
   await userMenu.getByRole("link", { name: /^migration$/i }).click();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "ember");
   await expect(page).toHaveURL(/\/migration$/);
-  await expect(page.getByRole("heading", { name: /bring notes in, package everything out/i })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /bring notes in, package everything out/i })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: /bring in an archive/i })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /create a markdown bundle/i })).toBeVisible();
   await page.getByRole("button", { name: /export all notes/i }).click();
   const exportJobPanel = page.getByTestId("export-job-panel");
   await expect(exportJobPanel).toContainText(/status/i);
