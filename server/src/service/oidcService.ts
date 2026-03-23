@@ -31,7 +31,7 @@ export class OidcService {
   private readonly remoteJwks;
 
   constructor(private readonly config: AppConfig, private readonly mockOidc: MockOidcService | null) {
-    this.redirectUri = `${this.config.appBaseUrl.replace(/\/$/, "")}/api/v1/auth/callback`;
+    this.redirectUri = `${this.config.appBaseUrl.replace(/\/$/, "")}/auth/callback`;
     this.remoteJwks = createRemoteJWKSet(new URL(`${this.config.oidcIssuerUrl}/jwks`));
   }
 

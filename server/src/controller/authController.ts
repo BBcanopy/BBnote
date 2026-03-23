@@ -22,7 +22,7 @@ export function registerAuthController(app: FastifyInstance, services: AppServic
     return reply.header("Set-Cookie", flowCookie).redirect(redirectUrl);
   });
 
-  app.get("/api/v1/auth/callback", async (request, reply) => {
+  app.get("/auth/callback", async (request, reply) => {
     const query = callbackQuerySchema.parse(request.query);
 
     try {

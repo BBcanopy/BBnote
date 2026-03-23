@@ -70,6 +70,7 @@ describe("authController integration", () => {
 
     expect(authorizeResponse.statusCode).toBe(302);
     const callbackUrl = new URL(String(authorizeResponse.headers.location));
+    expect(callbackUrl.pathname).toBe("/auth/callback");
 
     const callbackResponse = await app.inject({
       method: "GET",
