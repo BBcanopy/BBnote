@@ -7,10 +7,11 @@ import {
   useState,
   type ReactNode
 } from "react";
-import { getAuthSession, logoutAuthSession } from "../api/client";
-import type { AuthSession } from "../api/types";
+import { getAuthSession, logoutAuthSession, updateUserTheme } from "../api/client";
+import type { AuthSession, UserTheme } from "../api/types";
 
 type AuthStatus = "loading" | "ready";
+const DEFAULT_THEME: UserTheme = "sea";
 
 interface AuthContextValue {
   status: AuthStatus;
@@ -18,6 +19,7 @@ interface AuthContextValue {
   login(): void;
   logout(): Promise<void>;
   reloadUser(): Promise<void>;
+  setTheme(theme: UserTheme): Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -48,6 +50,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  useEffect(() => {
+    document.documentElement.dataset.theme = user?.theme ?? DEFAULT_THEME;
+  }, [user]);
+
   const value = useMemo<AuthContextValue>(
     () => ({
       status,
@@ -64,6 +70,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       },
       async reloadUser() {
         const session = await getAuthSession();
+        startTransition(() => {
+          setUser(session.user);
+        });
+      },
+      async setTheme(theme) {
+        const session = await updateUserTheme(theme);
         startTransition(() => {
           setUser(session.user);
         });

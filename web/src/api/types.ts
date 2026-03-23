@@ -1,8 +1,11 @@
+export type UserTheme = "sea" | "ember" | "midnight";
+
 export interface AuthSession {
   authenticated: boolean;
   user: {
     email: string | null;
     name: string | null;
+    theme: UserTheme;
   } | null;
 }
 

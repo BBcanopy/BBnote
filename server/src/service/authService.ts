@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import type { FastifyRequest } from "fastify";
 import type { AppConfig } from "./configService.js";
 import { AUTH_FLOW_COOKIE_NAME, SESSION_COOKIE_NAME, type CookieService } from "./cookieService.js";
-import type { AuthenticatedUser, AuthSessionView } from "./models.js";
+import type { AuthenticatedUser, AuthSessionView, UserTheme } from "./models.js";
 import type { OidcService } from "./oidcService.js";
 import type { SessionDb } from "../db/sessionDb.js";
 import type { UserDb } from "../db/userDb.js";
@@ -46,7 +46,8 @@ export class AuthService {
       issuer: user.issuer,
       subject: user.subject,
       email: user.email,
-      name: user.display_name
+      name: user.display_name,
+      theme: user.theme
     };
   }
 
@@ -118,7 +119,8 @@ export class AuthService {
         authenticated: true,
         user: {
           email: user.email,
-          name: user.name
+          name: user.name,
+          theme: user.theme
         }
       };
     } catch {
@@ -135,6 +137,20 @@ export class AuthService {
       this.sessions.deleteById(sessionId);
     }
     return this.cookieService.clearCookie(SESSION_COOKIE_NAME);
+  }
+
+  async updateTheme(request: FastifyRequest, theme: UserTheme): Promise<AuthSessionView> {
+    const user = await this.authenticateRequest(request);
+    const updatedUser = this.users.updateTheme(user.ownerId, theme);
+
+    return {
+      authenticated: true,
+      user: {
+        email: updatedUser?.email ?? user.email,
+        name: updatedUser?.display_name ?? user.name,
+        theme: updatedUser?.theme ?? theme
+      }
+    };
   }
 
   private async syncUserFromClaims(payload: {
@@ -169,16 +185,20 @@ export class AuthService {
       subject: identity.subject,
       email: identity.email,
       display_name: identity.name,
+      theme: "sea",
       created_at: now,
       updated_at: now
     });
+
+    const persistedUser = this.users.getById(ownerId);
 
     return {
       ownerId,
       issuer: identity.issuer,
       subject: identity.subject,
-      email: identity.email,
-      name: identity.name
+      email: persistedUser?.email ?? identity.email,
+      name: persistedUser?.display_name ?? identity.name,
+      theme: persistedUser?.theme ?? "sea"
     };
   }
 }

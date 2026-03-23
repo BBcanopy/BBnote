@@ -8,6 +8,7 @@ export function runMigrations(connection: Database.Database) {
       subject text not null,
       email text,
       display_name text,
+      theme text not null default 'sea',
       created_at text not null,
       updated_at text not null,
       unique(issuer, subject)
@@ -105,6 +106,15 @@ export function runMigrations(connection: Database.Database) {
       tokenize = 'unicode61'
     );
   `);
+
+  const userColumns = connection
+    .prepare<[], { name: string }>("pragma table_info(users)")
+    .all()
+    .map((column) => column.name);
+
+  if (!userColumns.includes("theme")) {
+    connection.exec("alter table users add column theme text not null default 'sea';");
+  }
 
   const folderColumns = connection
     .prepare<[], { name: string }>("pragma table_info(folders)")
