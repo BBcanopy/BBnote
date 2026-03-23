@@ -224,7 +224,6 @@ button:disabled {
 
 .bb-topbar,
 .bb-auth-hero,
-.bb-auth-preview,
 .bb-pane-card,
 .bb-editor-panel,
 .bb-mobile-drawer__panel,
@@ -650,134 +649,82 @@ button:disabled {
 .bb-auth-shell {
   min-height: calc(100dvh - 2rem);
   display: grid;
-  align-items: stretch;
+  align-items: center;
 }
 
 .bb-auth-grid {
-  width: min(100%, 1400px);
+  width: min(100%, 1480px);
   margin: 0 auto;
   display: grid;
-  grid-template-columns: minmax(0, 1.18fr) minmax(21rem, 0.82fr);
-  gap: 1rem;
-  align-items: stretch;
-}
-
-.bb-auth-hero,
-.bb-auth-preview {
-  border-radius: 2rem;
-  padding: clamp(1.4rem, 3vw, 2.5rem);
 }
 
 .bb-auth-hero {
   display: grid;
+  place-items: center;
+  min-height: min(82dvh, 60rem);
+  padding: clamp(2rem, 6vw, 5rem);
+  border-radius: 2.8rem;
+  background: color-mix(in srgb, var(--surface-strong) 96%, white);
+  box-shadow:
+    inset 0 1px 0 var(--surface-highlight-strong),
+    var(--shadow-lift);
+}
+
+.bb-auth-hero__inner {
+  display: grid;
+  justify-items: center;
   align-content: center;
-  gap: 1rem;
-  min-height: min(74dvh, 46rem);
+  gap: clamp(1.3rem, 3vw, 2.5rem);
+  width: min(100%, 42rem);
+  text-align: center;
 }
 
 .bb-auth-hero__mark {
   display: flex;
-  justify-content: flex-start;
+  justify-content: center;
+}
+
+.bb-auth-hero__mark .bb-brand-mark__pill {
+  width: 4.6rem;
+  height: 4.6rem;
+  border-radius: 1.45rem;
+  font-family: "Outfit", "Segoe UI Variable Display", "Segoe UI", sans-serif;
+  font-size: 2rem;
+  font-weight: 500;
+  letter-spacing: -0.08em;
+  text-transform: none;
 }
 
 .bb-auth-hero__title {
   margin: 0;
-  font-size: clamp(3rem, 7vw, 5.4rem);
-  line-height: 0.92;
-  letter-spacing: -0.07em;
+  font-size: clamp(4.25rem, 11vw, 6.8rem);
+  line-height: 0.88;
+  letter-spacing: -0.1em;
   color: var(--ink);
-}
-
-.bb-auth-hero__copy {
-  max-width: 36rem;
-  margin: 0;
-  color: var(--ink-soft);
-  font-size: 1.02rem;
-  line-height: 1.65;
 }
 
 .bb-auth-hero__actions {
   display: flex;
   flex-wrap: wrap;
+  justify-content: center;
   gap: 0.75rem;
-  margin-top: 0.35rem;
+  width: 100%;
 }
 
-.bb-auth-preview {
-  display: grid;
-  gap: 1rem;
-  align-content: start;
+.bb-auth-hero__actions .bb-button {
+  min-height: 4rem;
+  padding: 0.9rem 1.9rem;
+  font-size: 1.05rem;
 }
 
-.bb-auth-preview__row {
-  display: flex;
-  align-items: center;
-  gap: 0.9rem;
+.bb-auth-hero__actions .bb-button--primary {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.24),
+    0 28px 42px -28px rgba(18, 34, 36, 0.42);
 }
 
-.bb-auth-preview__badge {
-  display: inline-grid;
-  place-items: center;
-  width: 2.5rem;
-  height: 2.5rem;
-  border-radius: 999px;
-  background: var(--accent-soft);
-  color: var(--accent-strong);
-}
-
-.bb-auth-preview__title {
-  margin: 0.2rem 0 0;
-  font-size: 1.35rem;
-  line-height: 1.05;
-  letter-spacing: -0.04em;
-  color: var(--ink);
-}
-
-.bb-auth-preview__stack {
-  display: grid;
-  gap: 0.8rem;
-}
-
-.bb-auth-preview__card {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 0.85rem;
-  align-items: start;
-  padding: 0.95rem 1rem;
-  border: 1px solid var(--line);
-  border-radius: 1.25rem;
-  background: var(--surface-strong);
-  box-shadow: inset 0 1px 0 var(--surface-highlight-strong);
-  animation: rise-in 520ms var(--ease) both;
-}
-
-.bb-auth-preview__card:nth-child(2) {
-  animation-delay: 90ms;
-}
-
-.bb-auth-preview__card-icon {
-  display: inline-grid;
-  place-items: center;
-  width: 2.2rem;
-  height: 2.2rem;
-  border-radius: 0.95rem;
-  background: color-mix(in srgb, var(--accent-soft) 78%, white);
-  color: var(--accent-strong);
-}
-
-.bb-auth-preview__card p {
-  margin: 0;
-  color: var(--ink);
-  font-size: 0.94rem;
-  font-weight: 700;
-}
-
-.bb-auth-preview__card span {
-  display: block;
-  margin-top: 0.28rem;
-  color: var(--ink-soft);
-  font-size: 0.88rem;
-  line-height: 1.5;
+.bb-auth-hero__actions .bb-button--ghost {
+  background: color-mix(in srgb, var(--surface-strong) 94%, white);
 }
 
 .bb-pane-card,
@@ -1360,12 +1307,6 @@ button:disabled {
   }
 }
 
-@media (max-width: 1024px) {
-  .bb-auth-grid {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-
 @media (max-width: 860px) {
   body::after {
     inset: 0.75rem;
@@ -1392,7 +1333,6 @@ button:disabled {
 
 @media (max-width: 720px) {
   .bb-auth-hero,
-  .bb-auth-preview,
   .bb-pane-card,
   .bb-overview-card,
   .bb-job-card,
@@ -1406,7 +1346,8 @@ button:disabled {
   }
 
   .bb-auth-hero {
-    min-height: auto;
+    min-height: min(78dvh, 44rem);
+    border-radius: 2rem;
   }
 
   .bb-auth-hero__actions,
@@ -1424,5 +1365,17 @@ button:disabled {
 
   .bb-avatar-dropdown {
     width: min(100vw - 1.6rem, 23rem);
+  }
+
+  .bb-auth-hero__title {
+    font-size: clamp(3.6rem, 19vw, 4.9rem);
+  }
+
+  .bb-auth-hero__actions {
+    width: min(100%, 19rem);
+  }
+
+  .bb-auth-hero__actions .bb-button {
+    width: 100%;
   }
 }
