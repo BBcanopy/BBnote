@@ -27,6 +27,16 @@ test("keeps desktop lanes viewport-height and only shows the pane grip on border
   await expect
     .poll(async () => Number.parseFloat(await notesPaneHandle.evaluate((element) => getComputedStyle(element).opacity)))
     .toBeLessThan(0.05);
+  await expect
+    .poll(async () =>
+      notebookPaneResizer.evaluate((element) => getComputedStyle(element, "::before").content)
+    )
+    .toBe("none");
+  await expect
+    .poll(async () =>
+      notesPaneResizer.evaluate((element) => getComputedStyle(element, "::before").content)
+    )
+    .toBe("none");
 
   await notebookPaneResizer.hover();
   await expect

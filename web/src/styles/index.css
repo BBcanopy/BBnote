@@ -1511,16 +1511,6 @@ button:disabled {
   touch-action: none;
 }
 
-.bb-pane-resizer::before {
-  content: "";
-  position: absolute;
-  top: 1rem;
-  bottom: 1rem;
-  left: 0;
-  width: 1px;
-  background: color-mix(in srgb, var(--line-strong) 80%, transparent);
-}
-
 .bb-pane-resizer__handle {
   position: absolute;
   top: 50%;
