@@ -22,6 +22,7 @@ export function FolderTree(props: {
   const [dropTarget, setDropTarget] = useState<DropTarget | null>(null);
   const dragging = draggedFolderId !== null;
   const canCreateNotebook = props.pendingName.trim().length > 0;
+  const allNotesCount = props.folders.reduce((total, folder) => total + folder.noteCount, 0);
 
   function handleDragStart(event: DragEvent<HTMLDivElement>, folderId: string) {
     event.dataTransfer.effectAllowed = "move";
@@ -66,7 +67,7 @@ export function FolderTree(props: {
   }
 
   return (
-    <section className="rounded-[2rem] border border-slate-200/70 bg-white/88 p-5 shadow-[0_20px_50px_-32px_rgba(15,23,42,0.18)] backdrop-blur-sm">
+    <section className="rounded-[2rem] border border-slate-200/70 bg-white/88 p-4 shadow-[0_20px_50px_-32px_rgba(15,23,42,0.18)] backdrop-blur-sm">
       <div className="flex items-center justify-between gap-3">
         <p className="text-xs uppercase tracking-[0.3em] text-slate-500">Notebooks</p>
         <div data-testid="notebooks-actions" className="flex items-center gap-2">
@@ -93,7 +94,25 @@ export function FolderTree(props: {
         </div>
       </div>
 
-      <div className="mt-5 space-y-2">
+      <div className="mt-4 space-y-1.5">
+        <button
+          type="button"
+          onClick={() => props.onSelectFolder(null)}
+          className={`flex w-full items-center gap-2.5 rounded-[1.1rem] px-3.5 py-2.5 text-left transition duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+            props.selectedFolderId === null ? "bg-slate-950 text-white" : "bg-slate-50/70 text-slate-700 hover:-translate-y-[1px] hover:bg-white"
+          }`}
+        >
+          <span
+            className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[0.9rem] border ${
+              props.selectedFolderId === null ? "border-slate-700 bg-slate-900 text-slate-300" : "border-slate-200 bg-white text-slate-400"
+            }`}
+          >
+            <FolderSimple size={16} />
+          </span>
+          <span className="flex-1 truncate text-sm font-medium tracking-tight">All Notes</span>
+          <span className={`text-[11px] ${props.selectedFolderId === null ? "text-slate-300" : "text-slate-400"}`}>{allNotesCount}</span>
+        </button>
+
         {props.folders.length === 0 ? (
           <div className="rounded-[1.3rem] border border-dashed border-slate-200 bg-slate-50/70 px-4 py-5 text-sm text-slate-500">No notebooks yet.</div>
         ) : (
@@ -122,28 +141,28 @@ export function FolderTree(props: {
                   onDragEnd={clearDragState}
                   onDragOver={(event) => handleDragOver(event, folder.id, "inside")}
                   onDrop={(event) => handleDrop(event, folder.id, "inside")}
-                  className={`rounded-[1.3rem] transition duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+                  className={`rounded-[1.15rem] transition duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${
                     insideDropActive ? "bg-emerald-50/80 ring-2 ring-emerald-300/70 ring-offset-2 ring-offset-white" : ""
                   }`}
                 >
                   <button
                     type="button"
                     onClick={() => props.onSelectFolder(selected ? null : folder.id)}
-                    className={`flex w-full items-center gap-2.5 rounded-[1.2rem] px-4 py-3 text-left transition duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+                    className={`flex w-full items-center gap-2.5 rounded-[1.1rem] px-3.5 py-2.5 text-left transition duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${
                       selected ? "bg-slate-950 text-white" : "bg-slate-50/70 text-slate-700 hover:-translate-y-[1px] hover:bg-white"
                     }`}
-                    style={{ paddingLeft: `${18 + depth * 18}px` }}
+                    style={{ paddingLeft: `${16 + depth * 16}px` }}
                   >
-                    <CaretDown size={14} weight="bold" className={selected ? "text-emerald-300" : "text-slate-400"} />
+                    <CaretDown size={13} weight="bold" className={selected ? "text-emerald-300" : "text-slate-400"} />
                     <span
-                      className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-[1rem] border ${
+                      className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[0.9rem] border ${
                         selected ? "border-slate-700 bg-slate-900 text-slate-300" : "border-slate-200 bg-white text-slate-400"
                       }`}
                     >
-                      <FolderSimple size={18} />
+                      <FolderSimple size={16} />
                     </span>
-                    <span className="flex-1 truncate">{folder.name}</span>
-                    <span className={`text-xs ${selected ? "text-slate-300" : "text-slate-400"}`}>{folder.noteCount}</span>
+                    <span className="flex-1 truncate text-sm font-medium tracking-tight">{folder.name}</span>
+                    <span className={`text-[11px] ${selected ? "text-slate-300" : "text-slate-400"}`}>{folder.noteCount}</span>
                   </button>
                 </div>
 
@@ -163,13 +182,13 @@ export function FolderTree(props: {
         )}
       </div>
 
-      <div className="mt-5 border-t border-slate-200/80 pt-5">
+      <div className="mt-4 border-t border-slate-200/80 pt-4">
         <input
           value={props.pendingName}
           onChange={(event) => props.onPendingNameChange(event.target.value)}
           onKeyDown={handlePendingNameKeyDown}
           placeholder="Notebook name"
-          className="w-full rounded-[1.1rem] border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm outline-none transition duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] focus:border-emerald-400"
+          className="w-full rounded-[1rem] border border-slate-200 bg-slate-50/80 px-3.5 py-2.5 text-sm outline-none transition duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] focus:border-emerald-400"
         />
       </div>
     </section>

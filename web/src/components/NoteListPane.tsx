@@ -1,7 +1,7 @@
 import { CaretLeft, MagnifyingGlass, NotePencil, Plus } from "@phosphor-icons/react";
 import type { NoteSummary } from "../api/types";
 
-const NOTE_PREVIEW_EXCERPT_LIMIT = 72;
+const NOTE_PREVIEW_EXCERPT_LIMIT = 54;
 
 export function NoteListPane(props: {
   notes: NoteSummary[];
@@ -15,7 +15,7 @@ export function NoteListPane(props: {
   notebookName: string | null;
 }) {
   return (
-    <section className="rounded-[2rem] border border-slate-200/70 bg-white/88 p-5 shadow-[0_20px_50px_-32px_rgba(15,23,42,0.18)] backdrop-blur-sm">
+    <section className="rounded-[2rem] border border-slate-200/70 bg-white/88 p-4 shadow-[0_20px_50px_-32px_rgba(15,23,42,0.18)] backdrop-blur-sm">
       <div className="flex items-center justify-between gap-4">
         <div>
           <p className="text-xs uppercase tracking-[0.3em] text-slate-500">Notes</p>
@@ -43,8 +43,8 @@ export function NoteListPane(props: {
           ) : null}
         </div>
       </div>
-      <label className="mt-5 flex items-center gap-3 rounded-[1.3rem] border border-slate-200 bg-slate-50/70 px-4 py-3">
-        <MagnifyingGlass size={18} className="text-slate-400" />
+      <label className="mt-4 flex items-center gap-3 rounded-[1.15rem] border border-slate-200 bg-slate-50/70 px-3.5 py-2.5">
+        <MagnifyingGlass size={16} className="text-slate-400" />
         <input
           value={props.search}
           onChange={(event) => props.onSearchChange(event.target.value)}
@@ -52,7 +52,7 @@ export function NoteListPane(props: {
           className="w-full bg-transparent text-sm outline-none"
         />
       </label>
-      <div className="mt-5 space-y-3">
+      <div className="mt-4 space-y-2">
         {props.loading ? (
           <>
             <SkeletonCard />
@@ -72,7 +72,7 @@ export function NoteListPane(props: {
                 key={note.id}
                 type="button"
                 onClick={() => props.onSelectNote(note.id)}
-                className={`w-full rounded-[1.4rem] border px-4 py-4 text-left transition duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+                className={`w-full rounded-[1.15rem] border px-3.5 py-3 text-left transition duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${
                   selected
                     ? "border-slate-950 bg-slate-950 text-white"
                     : "border-slate-200 bg-slate-50/70 text-slate-700 hover:-translate-y-[1px] hover:border-slate-300 hover:bg-white"
@@ -80,16 +80,16 @@ export function NoteListPane(props: {
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
-                    <p className="truncate font-medium tracking-tight">{note.title}</p>
+                    <p className="truncate text-sm font-medium tracking-tight">{note.title}</p>
                     <p
-                      className={`mt-2 overflow-hidden break-words text-sm leading-relaxed [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:3] ${
+                      className={`mt-1.5 overflow-hidden break-words text-[13px] leading-5 [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2] ${
                         selected ? "text-slate-300" : "text-slate-500"
                       }`}
                     >
                       {previewExcerpt || "Empty note"}
                     </p>
                   </div>
-                  <NotePencil size={18} className={`shrink-0 ${selected ? "text-emerald-300" : "text-slate-400"}`} />
+                  <NotePencil size={16} className={`mt-0.5 shrink-0 ${selected ? "text-emerald-300" : "text-slate-400"}`} />
                 </div>
               </button>
             );
@@ -101,7 +101,7 @@ export function NoteListPane(props: {
 }
 
 function SkeletonCard() {
-  return <div className="h-24 animate-pulse rounded-[1.4rem] border border-slate-200 bg-slate-100/80" />;
+  return <div className="h-20 animate-pulse rounded-[1.15rem] border border-slate-200 bg-slate-100/80" />;
 }
 
 function formatPreviewExcerpt(excerpt: string) {

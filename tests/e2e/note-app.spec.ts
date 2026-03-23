@@ -16,7 +16,8 @@ test("starts empty, restores separate notebook and notes lanes, supports row dra
 
   await expect(page.getByText("No notebooks yet.")).toBeVisible();
   await expect(page.getByText(/inbox/i)).toHaveCount(0);
-  await expect(page.getByRole("button", { name: /all notes/i })).toHaveCount(0);
+  const allNotesButton = page.getByRole("button", { name: /all notes/i }).first();
+  await expect(allNotesButton).toBeVisible();
   await expect(page.getByRole("button", { name: /collapse notebooks pane/i })).toBeVisible();
   await expect(page.getByRole("button", { name: /collapse notes pane/i })).toBeVisible();
   await expect(page.getByRole("button", { name: /^new note$/i }).first()).toHaveAttribute("title", "New note");
@@ -91,6 +92,9 @@ test("starts empty, restores separate notebook and notes lanes, supports row dra
   await page.getByPlaceholder("Write in Markdown").first().fill(`# Budget\n\nalpha launch ${searchTerm}`);
   await expect(page.getByText(/^Saved /).first()).toBeVisible();
 
+  await allNotesButton.click();
+  await expect(page.getByText(noteTitle).first()).toBeVisible();
+
   const notePreview = page.getByRole("button", { name: new RegExp(noteTitle, "i") }).first();
   await expect(notePreview).toBeVisible();
   expect(
@@ -102,7 +106,7 @@ test("starts empty, restores separate notebook and notes lanes, supports row dra
   expect(
     await notePreview.evaluate((element) => {
       const excerpt = element.querySelector("p:nth-of-type(2)");
-      return (excerpt?.textContent ?? "").length <= 75;
+      return (excerpt?.textContent ?? "").length <= 57;
     })
   ).toBeTruthy();
 
