@@ -5,6 +5,7 @@ import { expect, test } from "@playwright/test";
 import JSZip from "jszip";
 
 test("starts empty, restores separate notebook and notes lanes, supports row dragging, autosaves notes, and collapses both lanes", async ({ page }) => {
+  await page.setViewportSize({ width: 1900, height: 1000 });
   const suffix = Date.now().toString();
   const notebookName = `Projects ${suffix}`;
   const subNotebookName = `Roadmaps ${suffix}`;
@@ -15,6 +16,9 @@ test("starts empty, restores separate notebook and notes lanes, supports row dra
   await login(page);
 
   await expect(page.getByText("No notebooks yet.")).toBeVisible();
+  const topbarBox = await page.locator(".bb-topbar").boundingBox();
+  const viewport = page.viewportSize();
+  expect(topbarBox?.width ?? 0).toBeGreaterThan(((viewport?.width ?? 0) * 0.85));
   await expect(page.getByText(/inbox/i)).toHaveCount(0);
   const allNotesButton = page.getByRole("button", { name: /all notes/i }).first();
   await expect(allNotesButton).toBeVisible();
@@ -152,13 +156,14 @@ test("starts empty, restores separate notebook and notes lanes, supports row dra
   await expect(page.getByPlaceholder("Write in Markdown").first()).toHaveValue(/budget\.txt/);
 });
 
-test("navigates imports and exports from the avatar menu", async ({ page }) => {
+test("opens migration from the avatar menu and runs both export and import flows", async ({ page }) => {
   await login(page);
   await createNotebookAndPersistedNote(page);
 
   await expect(page.getByRole("navigation", { name: /primary navigation/i }).getByRole("link", { name: /^notes$/i })).toBeVisible();
   await expect(page.getByRole("navigation", { name: /primary navigation/i }).getByRole("link", { name: /^imports$/i })).toHaveCount(0);
   await expect(page.getByRole("navigation", { name: /primary navigation/i }).getByRole("link", { name: /^exports$/i })).toHaveCount(0);
+  await expect(page.getByRole("navigation", { name: /primary navigation/i }).getByRole("link", { name: /^migration$/i })).toHaveCount(0);
   await expect
     .poll(async () => ((await page.getByRole("button", { name: /open user menu/i }).textContent()) ?? "").trim().length)
     .toBe(1);
@@ -166,31 +171,38 @@ test("navigates imports and exports from the avatar menu", async ({ page }) => {
   await page.getByRole("button", { name: /open user menu/i }).click();
   const userMenu = page.getByRole("menu");
   await expect(userMenu.getByRole("link", { name: /^notes$/i })).toHaveAttribute("aria-current", "page");
-  await expect(userMenu.getByRole("link", { name: /^imports$/i })).toBeVisible();
-  await expect(userMenu.getByRole("link", { name: /^exports$/i })).toBeVisible();
+  await expect(userMenu.getByRole("link", { name: /^migration$/i })).toBeVisible();
+  await expect(userMenu.getByRole("link", { name: /^imports$/i })).toHaveCount(0);
+  await expect(userMenu.getByRole("link", { name: /^exports$/i })).toHaveCount(0);
   await userMenu.getByRole("button", { name: /^ember/i }).click();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "ember");
-  await userMenu.getByRole("link", { name: /^exports$/i }).click();
+  await userMenu.getByRole("link", { name: /^migration$/i }).click();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "ember");
+  await expect(page).toHaveURL(/\/migration$/);
+  await expect(page.getByRole("heading", { name: /bring notes in, package everything out/i })).toBeVisible();
   await page.getByRole("button", { name: /export all notes/i }).click();
-  await expect(page.getByText(/status: completed/i)).toBeVisible();
-  await expect(page.getByText(/notebooks:/i)).toBeVisible();
+  const exportJobPanel = page.getByTestId("export-job-panel");
+  await expect(exportJobPanel).toContainText(/status/i);
+  await expect(exportJobPanel).toContainText(/notebooks/i);
+  await expect(exportJobPanel.getByRole("button", { name: /download zip/i })).toBeVisible();
 
   const importArchive = await createImportArchive();
   await page.getByRole("button", { name: /open user menu/i }).click();
-  const exportsMenu = page.getByRole("menu");
-  await expect(exportsMenu.getByRole("link", { name: /^exports$/i })).toHaveAttribute("aria-current", "page");
-  await exportsMenu.getByRole("button", { name: /^midnight/i }).click();
+  const migrationMenu = page.getByRole("menu");
+  await expect(migrationMenu.getByRole("link", { name: /^migration$/i })).toHaveAttribute("aria-current", "page");
+  await migrationMenu.getByRole("button", { name: /^midnight/i }).click();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "midnight");
-  await exportsMenu.getByRole("link", { name: /^imports$/i }).click();
-  await expect(page.locator("html")).toHaveAttribute("data-theme", "midnight");
+  await page.getByRole("button", { name: /open user menu/i }).click();
   await page.getByLabel("Source").selectOption("onenote");
   await page.getByLabel("Archive").setInputFiles(importArchive);
   await page.getByRole("button", { name: /start import/i }).click();
-  await expect(page.getByText(/status: completed/i)).toBeVisible();
-  await expect(page.getByText(/created notes:/i)).toContainText("1");
+  const importJobPanel = page.getByTestId("import-job-panel");
+  await expect(importJobPanel).toContainText(/status/i);
+  await expect(importJobPanel).toContainText(/created notes/i);
+  await expect(importJobPanel).toContainText("1");
   await page.reload();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "midnight");
+  await expect(page).toHaveURL(/\/migration$/);
 });
 
 async function login(page: import("@playwright/test").Page) {

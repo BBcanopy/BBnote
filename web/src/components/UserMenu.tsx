@@ -1,4 +1,4 @@
-import { DownloadSimple, NotePencil, SignOut, UploadSimple } from "@phosphor-icons/react";
+import { ArrowsClockwise, NotePencil, SignOut } from "@phosphor-icons/react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import type { UserTheme } from "../api/types";
@@ -91,8 +91,7 @@ export function UserMenu(props: {
           <div className="bb-menu-section">
             <p className="bb-menu-section__label">Navigate</p>
             <MenuLink to="/" label="Notes" icon={<NotePencil size={18} />} />
-            <MenuLink to="/imports" label="Imports" icon={<UploadSimple size={18} />} />
-            <MenuLink to="/exports" label="Exports" icon={<DownloadSimple size={18} />} />
+            <MenuLink to="/migration" label="Migration" icon={<ArrowsClockwise size={18} />} />
           </div>
           <div className="bb-menu-divider" />
           <button

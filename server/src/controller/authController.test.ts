@@ -47,7 +47,7 @@ describe("authController integration", () => {
   it("signs in through server-managed oidc and authenticates protected routes via session cookie", async () => {
     const loginResponse = await app.inject({
       method: "GET",
-      url: "/api/v1/auth/login?returnTo=%2Fimports"
+      url: "/api/v1/auth/login?returnTo=%2Fmigration"
     });
 
     expect(loginResponse.statusCode).toBe(302);
@@ -81,7 +81,7 @@ describe("authController integration", () => {
     });
 
     expect(callbackResponse.statusCode).toBe(302);
-    expect(callbackResponse.headers.location).toBe("http://localhost:3000/imports");
+    expect(callbackResponse.headers.location).toBe("http://localhost:3000/migration");
 
     const sessionCookie = getCookieValue(callbackResponse.headers["set-cookie"], "bbnote_session");
     expect(sessionCookie).toBeTruthy();

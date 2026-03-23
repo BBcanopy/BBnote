@@ -1,7 +1,6 @@
 import { createBrowserRouter } from "react-router-dom";
 import { AppShell } from "../components/AppShell";
-import { ExportPage } from "../pages/ExportPage";
-import { ImportPage } from "../pages/ImportPage";
+import { MigrationPage } from "../pages/MigrationPage";
 import { NotesPage } from "../pages/NotesPage";
 
 export const router = createBrowserRouter([
@@ -14,12 +13,8 @@ export const router = createBrowserRouter([
         element: <NotesPage />
       },
       {
-        path: "imports",
-        element: <ImportPage />
-      },
-      {
-        path: "exports",
-        element: <ExportPage />
+        path: "migration",
+        element: <MigrationPage />
       }
     ]
   }

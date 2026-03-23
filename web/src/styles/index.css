@@ -188,7 +188,8 @@ button:disabled {
 }
 
 .bb-shell {
-  width: min(100%, 1440px);
+  width: 100%;
+  max-width: none;
   margin: 0 auto;
   display: grid;
   gap: 1rem;
@@ -230,7 +231,9 @@ button:disabled {
 .bb-mobile-drawer__panel,
 .bb-overview-card,
 .bb-job-card,
-.bb-collapsed-rail {
+.bb-collapsed-rail,
+.bb-migration-hero,
+.bb-migration-card {
   border: 1px solid var(--line);
   background: var(--surface);
   box-shadow:
@@ -696,6 +699,200 @@ button:disabled {
   background: color-mix(in srgb, var(--surface-strong) 94%, white);
 }
 
+.bb-migration-layout {
+  display: grid;
+  gap: 1rem;
+}
+
+.bb-migration-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.18fr) minmax(18rem, 0.82fr);
+  gap: 1.25rem;
+  padding: clamp(1.4rem, 4vw, 2.6rem);
+  border-radius: 2rem;
+  background:
+    linear-gradient(150deg, color-mix(in srgb, var(--surface-strong) 96%, white) 0%, color-mix(in srgb, var(--accent-soft) 42%, var(--surface)) 100%);
+}
+
+.bb-migration-hero__copy {
+  display: grid;
+  gap: 0.8rem;
+  align-content: start;
+}
+
+.bb-migration-hero__title {
+  margin: 0;
+  max-width: 13ch;
+  font-size: clamp(2.5rem, 5vw, 4.6rem);
+  line-height: 0.94;
+  letter-spacing: -0.08em;
+  color: var(--ink);
+}
+
+.bb-migration-hero__body {
+  margin: 0;
+  max-width: 42rem;
+  color: var(--ink-soft);
+  font-size: 1rem;
+  line-height: 1.7;
+}
+
+.bb-migration-hero__stats {
+  display: grid;
+  gap: 0.75rem;
+  align-content: end;
+}
+
+.bb-migration-stat {
+  display: grid;
+  gap: 0.2rem;
+  padding: 0.95rem 1rem;
+  border: 1px solid var(--line);
+  border-radius: 1.2rem;
+  background: color-mix(in srgb, var(--surface-strong) 86%, white);
+  box-shadow: inset 0 1px 0 var(--surface-highlight-strong);
+}
+
+.bb-migration-stat__label {
+  color: var(--ink-soft);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+
+.bb-migration-stat__value {
+  color: var(--ink);
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}
+
+.bb-migration-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+}
+
+.bb-migration-card {
+  display: grid;
+  gap: 1.2rem;
+  padding: 1.25rem;
+  border-radius: 1.8rem;
+}
+
+.bb-migration-card__header {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+.bb-migration-card__icon {
+  display: inline-grid;
+  place-items: center;
+  width: 3rem;
+  height: 3rem;
+  border-radius: 1rem;
+  background: color-mix(in srgb, var(--accent-soft) 80%, white);
+  color: var(--accent-strong);
+  box-shadow: inset 0 1px 0 var(--surface-highlight-strong);
+}
+
+.bb-migration-card__copy {
+  display: grid;
+  gap: 0.28rem;
+}
+
+.bb-migration-card__title {
+  margin: 0;
+  color: var(--ink);
+  font-size: 1.45rem;
+  font-weight: 700;
+  line-height: 1.05;
+  letter-spacing: -0.05em;
+}
+
+.bb-migration-card__body {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 0.95rem;
+  line-height: 1.65;
+}
+
+.bb-migration-form,
+.bb-migration-card__actions,
+.bb-migration-job-stack {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.bb-migration-card__actions {
+  justify-items: start;
+}
+
+.bb-migration-callout,
+.bb-migration-job-panel {
+  display: grid;
+  gap: 0.8rem;
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-radius: 1.3rem;
+  background: color-mix(in srgb, var(--surface-input) 88%, white);
+  box-shadow: inset 0 1px 0 var(--surface-highlight-strong);
+}
+
+.bb-migration-callout__title {
+  margin: 0;
+  color: var(--ink);
+  font-size: 0.98rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}
+
+.bb-migration-callout__body {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 0.9rem;
+  line-height: 1.6;
+}
+
+.bb-migration-job-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.bb-migration-metric-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.8rem 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+  background: var(--surface);
+  color: var(--ink-soft);
+  font-size: 0.9rem;
+}
+
+.bb-migration-metric-row strong {
+  color: var(--ink);
+  font-size: 0.96rem;
+}
+
+.bb-migration-warning-list {
+  margin: 0;
+  padding: 0.95rem 1rem 0.95rem 2rem;
+  border: 1px solid color-mix(in srgb, var(--danger) 22%, var(--line));
+  border-radius: 1rem;
+  background: color-mix(in srgb, var(--danger) 8%, transparent);
+  color: var(--danger);
+  font-size: 0.88rem;
+  line-height: 1.6;
+}
+
 .bb-pane-card,
 .bb-overview-card,
 .bb-job-card {
@@ -781,6 +978,32 @@ button:disabled {
   min-height: 3rem;
   padding: 0.8rem 0.95rem;
   outline: none;
+}
+
+.bb-file-input {
+  padding: 0.55rem;
+}
+
+.bb-file-input::file-selector-button {
+  margin-right: 0.8rem;
+  padding: 0.65rem 0.95rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface-strong) 94%, white);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    transform 220ms var(--ease),
+    border-color 220ms var(--ease),
+    background-color 220ms var(--ease);
+}
+
+.bb-file-input::file-selector-button:hover {
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--accent) 28%, var(--line));
+  background: color-mix(in srgb, var(--accent-soft) 30%, var(--surface-strong));
 }
 
 .bb-textarea {
@@ -1368,6 +1591,11 @@ button:disabled {
     padding-left: 0;
     border-left: none;
   }
+
+  .bb-migration-hero,
+  .bb-migration-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 @media (max-width: 720px) {
@@ -1375,6 +1603,8 @@ button:disabled {
   .bb-pane-card,
   .bb-overview-card,
   .bb-job-card,
+  .bb-migration-hero,
+  .bb-migration-card,
   .bb-editor-panel,
   .bb-mobile-drawer__panel {
     padding: 1rem;
@@ -1393,6 +1623,7 @@ button:disabled {
   .bb-topbar,
   .bb-pane-card__header,
   .bb-panel-header,
+  .bb-migration-card__header,
   .bb-editor-header,
   .bb-attachment-card {
     align-items: stretch;
@@ -1411,6 +1642,20 @@ button:disabled {
   }
 
   .bb-auth-hero__actions .bb-button {
+    width: 100%;
+  }
+
+  .bb-migration-hero__title {
+    max-width: none;
+    font-size: clamp(2.5rem, 13vw, 3.6rem);
+  }
+
+  .bb-migration-card__header {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .bb-migration-card__actions,
+  .bb-migration-card__actions .bb-button {
     width: 100%;
   }
 }
