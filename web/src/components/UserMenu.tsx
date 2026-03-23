@@ -79,8 +79,10 @@ function MenuLink(props: { to: string; label: string; icon: ReactNode }) {
       to={props.to}
       end={props.to === "/"}
       className={({ isActive }) =>
-        `flex items-center gap-3 rounded-[1.1rem] px-3 py-3 text-sm transition duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${
-          isActive ? "bg-slate-950 text-white" : "text-slate-600 hover:bg-slate-50 hover:text-slate-950"
+        `flex items-center gap-3 rounded-[1.1rem] border px-3 py-3 text-sm font-medium transition duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+          isActive
+            ? "border-emerald-200 bg-emerald-50 text-emerald-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.35)]"
+            : "border-transparent text-slate-600 hover:border-slate-100 hover:bg-slate-50 hover:text-slate-950"
         }`
       }
     >

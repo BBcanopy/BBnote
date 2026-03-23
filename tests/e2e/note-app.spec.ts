@@ -64,14 +64,20 @@ test("navigates imports and exports from the avatar menu", async ({ page }) => {
   await createNotebookAndPersistedNote(page);
 
   await page.getByRole("button", { name: /open user menu/i }).click();
-  await page.getByRole("link", { name: /exports/i }).click();
+  const notesLink = page.getByRole("link", { name: /^notes$/i });
+  await expect(notesLink).toHaveClass(/bg-emerald-50/);
+  await expect(notesLink).toHaveClass(/text-emerald-950/);
+  await page.getByRole("link", { name: /^exports$/i }).click();
   await page.getByRole("button", { name: /export all notes/i }).click();
   await expect(page.getByText(/status: completed/i)).toBeVisible();
   await expect(page.getByText(/notebooks:/i)).toBeVisible();
 
   const importArchive = await createImportArchive();
   await page.getByRole("button", { name: /open user menu/i }).click();
-  await page.getByRole("link", { name: /imports/i }).click();
+  const exportsLink = page.getByRole("link", { name: /^exports$/i });
+  await expect(exportsLink).toHaveClass(/bg-emerald-50/);
+  await expect(exportsLink).toHaveClass(/text-emerald-950/);
+  await page.getByRole("link", { name: /^imports$/i }).click();
   await page.getByLabel("Source").selectOption("onenote");
   await page.getByLabel("Archive").setInputFiles(importArchive);
   await page.getByRole("button", { name: /start import/i }).click();
