@@ -589,6 +589,21 @@ function EditorPanel(props: {
         <p className="mt-4 rounded-[1.2rem] border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{props.error}</p>
       ) : null}
 
+      {props.loading ? (
+        <div className="mt-5 grid min-h-[22rem] place-items-center rounded-[1.5rem] border border-slate-200 bg-slate-50/70 text-sm text-slate-500">
+          <span className="inline-flex items-center gap-2">
+            <CircleNotch size={18} className="animate-spin text-emerald-700" />
+            Loading note
+          </span>
+        </div>
+      ) : !props.editorNote ? (
+        <div className="mt-5 grid min-h-[22rem] place-items-center rounded-[1.5rem] border border-dashed border-slate-200 bg-slate-50/70 px-6 py-8 text-center">
+          <div className="space-y-2">
+            <p className="text-sm font-medium tracking-tight text-slate-900">No note selected</p>
+            <p className="text-sm text-slate-500">Choose a note or start a new draft.</p>
+          </div>
+        </div>
+      ) : (
       <div className="mt-5 grid gap-5">
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_14rem]">
           <label className="grid gap-2 text-sm text-slate-700">
@@ -619,14 +634,7 @@ function EditorPanel(props: {
           </label>
         </div>
 
-        {props.loading ? (
-          <div className="grid min-h-[22rem] place-items-center rounded-[1.5rem] border border-slate-200 bg-slate-50/70 text-sm text-slate-500">
-            <span className="inline-flex items-center gap-2">
-              <CircleNotch size={18} className="animate-spin text-emerald-700" />
-              Loading note
-            </span>
-          </div>
-        ) : props.editorPane === "markdown" ? (
+        {props.editorPane === "markdown" ? (
           <label className="grid gap-2 text-sm text-slate-700">
             Markdown
             <textarea
@@ -639,11 +647,7 @@ function EditorPanel(props: {
           </label>
         ) : (
           <div className="min-h-[30rem] rounded-[1.4rem] border border-slate-200 bg-slate-50/80 px-5 py-4">
-            {props.editorNote ? (
-              <MarkdownPreview bodyMarkdown={props.editorNote.bodyMarkdown} />
-            ) : (
-              <p className="text-sm text-slate-500">No preview yet.</p>
-            )}
+            <MarkdownPreview bodyMarkdown={props.editorNote.bodyMarkdown} />
           </div>
         )}
 
@@ -664,6 +668,7 @@ function EditorPanel(props: {
           </div>
         ) : null}
       </div>
+      )}
     </section>
   );
 }

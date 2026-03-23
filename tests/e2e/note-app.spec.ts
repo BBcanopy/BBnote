@@ -97,6 +97,9 @@ async function login(page: import("@playwright/test").Page) {
   await page.getByRole("button", { name: /continue to bbnote/i }).click();
   await expect(page.getByRole("button", { name: /^new note$/i })).toBeVisible();
   await expect(page.getByText("Notebook workspace")).toHaveCount(0);
+  await expect(page.getByText("No note selected").first()).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "Title" })).toHaveCount(0);
+  await expect(page.getByRole("combobox", { name: "Notebook" })).toHaveCount(0);
 }
 
 async function createNotebookAndPersistedNote(page: import("@playwright/test").Page) {
