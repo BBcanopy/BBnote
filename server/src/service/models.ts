@@ -38,6 +38,7 @@ export interface NoteRecord {
   folderId: string;
   title: string;
   filePath: string;
+  sortOrder: number;
   createdAt: string;
   updatedAt: string;
   lastOpenedAt: string | null;
@@ -102,6 +103,7 @@ export interface NoteSummary {
   folderId: string;
   title: string;
   excerpt: string;
+  sortOrder: number;
   updatedAt: string;
   attachmentCount: number;
 }
@@ -111,6 +113,7 @@ export interface NoteDetail {
   folderId: string;
   title: string;
   bodyMarkdown: string;
+  sortOrder: number;
   createdAt: string;
   updatedAt: string;
   attachments: AttachmentView[];

@@ -6,7 +6,7 @@ interface ListQuery {
   folderId?: string;
   limit: number;
   offset: number;
-  sort: "updatedAt" | "createdAt" | "title";
+  sort: "updatedAt" | "createdAt" | "title" | "priority";
   order: "asc" | "desc";
 }
 
@@ -25,11 +25,11 @@ export class NoteDb {
     this.connection
       .prepare(`
         insert into notes (
-          id, owner_id, folder_id, title, file_path, created_at, updated_at,
+          id, owner_id, folder_id, title, file_path, sort_order, created_at, updated_at,
           last_opened_at, source_app, source_id, source_tags_json
         )
         values (
-          @id, @ownerId, @folderId, @title, @filePath, @createdAt, @updatedAt,
+          @id, @ownerId, @folderId, @title, @filePath, @sortOrder, @createdAt, @updatedAt,
           @lastOpenedAt, @sourceApp, @sourceId, @sourceTagsJson
         )
       `)
@@ -46,6 +46,7 @@ export class NoteDb {
             folder_id as folderId,
             title,
             file_path as filePath,
+            sort_order as sortOrder,
             created_at as createdAt,
             updated_at as updatedAt,
             last_opened_at as lastOpenedAt,
@@ -62,12 +63,18 @@ export class NoteDb {
   update(
     ownerId: string,
     id: string,
-    input: { folderId: string; title: string; filePath: string; updatedAt: string; lastOpenedAt: string | null }
+    input: { folderId: string; title: string; filePath: string; sortOrder: number | null; updatedAt: string; lastOpenedAt: string | null }
   ) {
     this.connection
       .prepare(`
         update notes
-        set folder_id = @folderId, title = @title, file_path = @filePath, updated_at = @updatedAt, last_opened_at = @lastOpenedAt
+        set
+          folder_id = @folderId,
+          title = @title,
+          file_path = @filePath,
+          sort_order = coalesce(@sortOrder, sort_order),
+          updated_at = @updatedAt,
+          last_opened_at = @lastOpenedAt
         where owner_id = @ownerId and id = @id
       `)
       .run({ ownerId, id, ...input });
@@ -87,6 +94,7 @@ export class NoteDb {
             folder_id as folderId,
             title,
             file_path as filePath,
+            sort_order as sortOrder,
             created_at as createdAt,
             updated_at as updatedAt,
             last_opened_at as lastOpenedAt,
@@ -111,6 +119,7 @@ export class NoteDb {
             folder_id as folderId,
             title,
             file_path as filePath,
+            sort_order as sortOrder,
             created_at as createdAt,
             updated_at as updatedAt,
             last_opened_at as lastOpenedAt,
@@ -128,6 +137,8 @@ export class NoteDb {
     const sortColumn =
       query.sort === "createdAt"
         ? "created_at"
+        : query.sort === "priority"
+          ? "sort_order"
         : query.sort === "title"
           ? "title collate nocase"
           : "updated_at";
@@ -141,6 +152,7 @@ export class NoteDb {
             folder_id as folderId,
             title,
             file_path as filePath,
+            sort_order as sortOrder,
             created_at as createdAt,
             updated_at as updatedAt,
             last_opened_at as lastOpenedAt,
@@ -167,6 +179,7 @@ export class NoteDb {
             notes.folder_id as folderId,
             notes.title,
             notes.file_path as filePath,
+            notes.sort_order as sortOrder,
             notes.created_at as createdAt,
             notes.updated_at as updatedAt,
             notes.last_opened_at as lastOpenedAt,
@@ -218,5 +231,61 @@ export class NoteDb {
         `
       )
       .all(ownerId) as { noteId: string; ownerId: string; folderId: string; title: string; body: string }[];
+  }
+
+  listByFolder(ownerId: string, folderId: string): NoteRecord[] {
+    return this.connection
+      .prepare<[string, string], NoteRecord>(
+        `
+          select
+            id,
+            owner_id as ownerId,
+            folder_id as folderId,
+            title,
+            file_path as filePath,
+            sort_order as sortOrder,
+            created_at as createdAt,
+            updated_at as updatedAt,
+            last_opened_at as lastOpenedAt,
+            source_app as sourceApp,
+            source_id as sourceId,
+            source_tags_json as sourceTagsJson
+          from notes
+          where owner_id = ? and folder_id = ?
+          order by sort_order asc, created_at asc, id asc
+        `
+      )
+      .all(ownerId, folderId) as NoteRecord[];
+  }
+
+  getNextSortOrder(ownerId: string, folderId: string) {
+    const row = this.connection
+      .prepare<[string, string], { maxSortOrder: number | null }>(
+        `
+          select max(sort_order) as maxSortOrder
+          from notes
+          where owner_id = ? and folder_id = ?
+        `
+      )
+      .get(ownerId, folderId);
+    return (row?.maxSortOrder ?? -1) + 1;
+  }
+
+  reorder(ownerId: string, folderId: string, orderedNoteIds: string[]) {
+    const updateSortOrder = this.connection.prepare(
+      `
+        update notes
+        set sort_order = ?
+        where owner_id = ? and folder_id = ? and id = ?
+      `
+    );
+
+    const transaction = this.connection.transaction((noteIds: string[]) => {
+      noteIds.forEach((noteId, index) => {
+        updateSortOrder.run(index, ownerId, folderId, noteId);
+      });
+    });
+
+    transaction(orderedNoteIds);
   }
 }

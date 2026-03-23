@@ -11,7 +11,7 @@ interface ListOptions {
   q?: string;
   cursor?: string;
   limit?: number;
-  sort?: "updatedAt" | "createdAt" | "title";
+  sort?: "updatedAt" | "createdAt" | "title" | "priority";
   order?: "asc" | "desc";
 }
 
@@ -52,6 +52,7 @@ export class NoteService {
           folderId: record.folderId,
           title: record.title,
           excerpt: excerptFromMarkdown(body),
+          sortOrder: record.sortOrder,
           updatedAt: record.updatedAt,
           attachmentCount: this.attachmentsResolver(record.id).length
         } satisfies NoteSummary;
@@ -74,6 +75,7 @@ export class NoteService {
       folderId: record.folderId,
       title: record.title,
       filePath: record.filePath,
+      sortOrder: null,
       updatedAt: record.updatedAt,
       lastOpenedAt: new Date().toISOString()
     });
@@ -82,6 +84,7 @@ export class NoteService {
       folderId: record.folderId,
       title: record.title,
       bodyMarkdown,
+      sortOrder: record.sortOrder,
       createdAt: record.createdAt,
       updatedAt: record.updatedAt,
       attachments: this.attachmentsResolver(record.id).map((attachment) => ({
@@ -117,6 +120,7 @@ export class NoteService {
     const noteId = randomUUID();
     const createdAt = input.createdAt ?? new Date().toISOString();
     const updatedAt = input.updatedAt ?? createdAt;
+    const sortOrder = this.noteDb.getNextSortOrder(input.ownerId, folder.id);
     const filePath = await this.storageService.createNoteFile({
       ownerId: input.ownerId,
       storageDirName: folder.storageDirName,
@@ -132,6 +136,7 @@ export class NoteService {
         folderId: folder.id,
         title: trimmedTitle,
         filePath,
+        sortOrder,
         createdAt,
         updatedAt,
         lastOpenedAt: null,
@@ -174,6 +179,7 @@ export class NoteService {
     }
 
     const previousBody = await this.storageService.readMarkdown(record.filePath);
+    const folderChanged = record.folderId !== folder.id;
     const nextFilePath = this.storageService.noteFilePath({
       ownerId: input.ownerId,
       storageDirName: folder.storageDirName,
@@ -190,10 +196,12 @@ export class NoteService {
       }
 
       const updatedAt = new Date().toISOString();
+      const sortOrder = folderChanged ? this.noteDb.getNextSortOrder(input.ownerId, folder.id) : null;
       this.noteDb.update(input.ownerId, input.noteId, {
         folderId: folder.id,
         title: trimmedTitle,
         filePath: nextFilePath,
+        sortOrder,
         updatedAt,
         lastOpenedAt: new Date().toISOString()
       });
@@ -226,6 +234,38 @@ export class NoteService {
     this.noteDb.deleteFts(noteId);
     this.noteDb.delete(ownerId, noteId);
     await this.storageService.deleteFile(record.filePath);
+  }
+
+  async reorderNotes(input: { ownerId: string; folderId: string; orderedNoteIds: string[] }) {
+    const folder = this.folderDb.getById(input.ownerId, input.folderId);
+    if (!folder) {
+      throw new Error("Folder not found.");
+    }
+
+    const notes = this.noteDb.listByFolder(input.ownerId, input.folderId);
+    const existingIds = notes.map((note) => note.id);
+    const requestedIds = input.orderedNoteIds;
+
+    if (!requestedIds.length && existingIds.length) {
+      throw new Error("Ordered note list cannot be empty.");
+    }
+
+    if (requestedIds.length !== existingIds.length) {
+      throw new Error("Ordered note list must include every note in the notebook exactly once.");
+    }
+
+    const requestedIdSet = new Set(requestedIds);
+    if (requestedIdSet.size !== requestedIds.length) {
+      throw new Error("Ordered note list cannot contain duplicates.");
+    }
+
+    for (const noteId of existingIds) {
+      if (!requestedIdSet.has(noteId)) {
+        throw new Error("Ordered note list must include every note in the notebook exactly once.");
+      }
+    }
+
+    this.noteDb.reorder(input.ownerId, input.folderId, requestedIds);
   }
 }
 
