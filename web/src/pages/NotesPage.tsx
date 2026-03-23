@@ -1,12 +1,12 @@
 import {
   CaretLeft,
-  CaretRight,
   CircleNotch,
   Eye,
   FolderSimple,
   ListBullets,
   PencilSimple,
   Plus,
+  Rows,
   Trash
 } from "@phosphor-icons/react";
 import { startTransition, useDeferredValue, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
@@ -251,7 +251,7 @@ export function NotesPage() {
       setPendingFolderName("");
       await refreshFolders();
       setSelectedFolderId(created.id);
-      setFolderPaneCollapsed(true);
+      setFolderPaneCollapsed(false);
       setNotePaneCollapsed(false);
       setMobileFoldersOpen(false);
 
@@ -277,13 +277,14 @@ export function NotesPage() {
     setEditorNote(createDraft(selectedFolderId));
     setLastSyncedContentKey(null);
     setEditorPane("markdown");
-    setNotePaneCollapsed(true);
+    setFolderPaneCollapsed(false);
+    setNotePaneCollapsed(false);
     setMobileNotesOpen(false);
   }
 
   function handleSelectFolder(folderId: string | null) {
     setSelectedFolderId(folderId);
-    setFolderPaneCollapsed(folderId !== null);
+    setFolderPaneCollapsed(false);
     setNotePaneCollapsed(false);
     setMobileFoldersOpen(false);
     setSelectedNoteId(null);
@@ -291,6 +292,7 @@ export function NotesPage() {
 
   function handleSelectNote(noteId: string) {
     setSelectedNoteId(noteId);
+    setFolderPaneCollapsed(true);
     setNotePaneCollapsed(true);
     setMobileNotesOpen(false);
   }
@@ -298,7 +300,6 @@ export function NotesPage() {
   function handleEditorFolderChange(nextFolderId: string | null) {
     setEditorNote((current) => (current ? { ...current, folderId: nextFolderId } : current));
     setSelectedFolderId(nextFolderId);
-    setFolderPaneCollapsed(nextFolderId !== null);
   }
 
   async function handleDeleteCurrentNote() {
@@ -315,6 +316,7 @@ export function NotesPage() {
       setEditorNote(null);
       setSelectedNoteId(null);
       setLastSyncedContentKey(null);
+      setFolderPaneCollapsed(false);
       setNotePaneCollapsed(false);
       await refreshNotes();
     } catch (deleteError) {
@@ -426,6 +428,7 @@ export function NotesPage() {
               selectedFolderId={selectedFolderId}
               pendingName={pendingFolderName}
               onPendingNameChange={setPendingFolderName}
+              onCollapse={() => setFolderPaneCollapsed(true)}
               onCreateNotebook={(parentId) => void handleCreateNotebook(parentId)}
               onSelectFolder={(folderId) => handleSelectFolder(folderId)}
               onClearSelection={() => handleSelectFolder(null)}
@@ -449,6 +452,7 @@ export function NotesPage() {
               selectedNoteId={selectedNoteId}
               onSelectNote={handleSelectNote}
               onCreateNote={handleCreateDraft}
+              onCollapse={() => setNotePaneCollapsed(true)}
               loading={loadingNotes}
               notebookName={selectedFolder?.name ?? null}
             />
@@ -684,14 +688,19 @@ function CollapsedPaneRail(props: {
       type="button"
       onClick={props.onOpen}
       aria-label={`Open ${props.label} pane`}
-      className="flex w-[5.25rem] shrink-0 flex-col items-center justify-between rounded-[2rem] border border-slate-200/70 bg-white/88 px-3 py-4 text-slate-700 shadow-[0_20px_50px_-36px_rgba(15,23,42,0.3)] transition duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-[1px] hover:border-slate-300"
+      className="flex w-[6.75rem] shrink-0 flex-col items-center gap-3 rounded-[1.75rem] border border-slate-200/70 bg-white/90 px-3 py-4 text-slate-700 shadow-[0_20px_50px_-36px_rgba(15,23,42,0.18)] transition duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-[1px] hover:border-slate-300"
     >
-      <span className="rounded-full bg-slate-100 p-3 text-emerald-700">{props.icon}</span>
-      <span className="space-y-2">
+      <span className="rounded-full bg-emerald-50 p-3 text-emerald-700">{props.icon}</span>
+      <span className="space-y-2 text-center">
         <span className="block text-[11px] uppercase tracking-[0.24em] text-slate-400">{props.label}</span>
-        <span className="block text-sm font-medium tracking-tight text-slate-900 [writing-mode:vertical-rl]">{props.detail}</span>
+        <span className="block overflow-hidden text-xs font-medium leading-4 text-slate-600 [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2]">
+          {props.detail}
+        </span>
       </span>
-      <CaretRight size={18} className="text-slate-400" />
+      <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-medium text-slate-500">
+        <Rows size={14} />
+        Open
+      </span>
     </button>
   );
 }

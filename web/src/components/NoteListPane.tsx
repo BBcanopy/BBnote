@@ -1,4 +1,4 @@
-import { MagnifyingGlass, NotePencil, Plus } from "@phosphor-icons/react";
+import { CaretLeft, MagnifyingGlass, NotePencil, Plus } from "@phosphor-icons/react";
 import type { NoteSummary } from "../api/types";
 import { buttonPrimary } from "./buttonStyles";
 
@@ -11,6 +11,7 @@ export function NoteListPane(props: {
   selectedNoteId: string | null;
   onSelectNote(noteId: string): void;
   onCreateNote(): void;
+  onCollapse?(): void;
   loading: boolean;
   notebookName: string | null;
 }) {
@@ -21,14 +22,26 @@ export function NoteListPane(props: {
           <p className="text-xs uppercase tracking-[0.3em] text-slate-500">Notes</p>
           <p className="mt-2 text-sm font-medium tracking-tight text-slate-900">{props.notebookName ?? "All notes"}</p>
         </div>
-        <button
-          type="button"
-          onClick={props.onCreateNote}
-          className={buttonPrimary}
-        >
-          <Plus size={18} />
-          New note
-        </button>
+        <div className="flex items-center gap-2">
+          {props.onCollapse ? (
+            <button
+              type="button"
+              aria-label="Collapse notes pane"
+              onClick={props.onCollapse}
+              className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-[1px] hover:border-slate-300 hover:text-slate-900 active:translate-y-0"
+            >
+              <CaretLeft size={16} />
+            </button>
+          ) : null}
+          <button
+            type="button"
+            onClick={props.onCreateNote}
+            className={buttonPrimary}
+          >
+            <Plus size={18} />
+            New note
+          </button>
+        </div>
       </div>
       <label className="mt-5 flex items-center gap-3 rounded-[1.3rem] border border-slate-200 bg-slate-50/70 px-4 py-3">
         <MagnifyingGlass size={18} className="text-slate-400" />
