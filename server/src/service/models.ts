@@ -22,6 +22,7 @@ export interface FolderRecord {
   parentId: string | null;
   name: string;
   storageDirName: string;
+  sortOrder: number;
   createdAt: string;
   updatedAt: string;
 }

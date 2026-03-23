@@ -4,10 +4,11 @@ import path from "node:path";
 import { expect, test } from "@playwright/test";
 import JSZip from "jszip";
 
-test("starts empty, creates notebooks, autosaves notes, and collapses workspace lanes", async ({ page }) => {
+test("starts empty, creates notebooks, supports notebook dragging, autosaves notes, and collapses workspace lanes", async ({ page }) => {
   const suffix = Date.now().toString();
   const notebookName = `Projects ${suffix}`;
   const subNotebookName = `Roadmaps ${suffix}`;
+  const archiveNotebookName = `Archive ${suffix}`;
   const noteTitle = `Launch-plan-${suffix}-preview-overflow-check`;
   const searchTerm = `budget-${suffix}-ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff`;
 
@@ -27,14 +28,39 @@ test("starts empty, creates notebooks, autosaves notes, and collapses workspace 
   await expect(page.getByRole("button", { name: /open notebooks pane/i })).toBeVisible();
   await page.getByRole("button", { name: /open notebooks pane/i }).click();
   await expect(page.getByRole("button", { name: /collapse notebooks pane/i })).toBeVisible();
+  await expect(page.getByRole("button", { name: /sub-notebook/i })).toHaveCount(0);
 
   await page.getByPlaceholder("Notebook name").fill(notebookName);
   await page.getByRole("button", { name: /new notebook/i }).click();
   await expect(page.getByRole("button", { name: /open notebooks pane/i })).toHaveCount(0);
 
   await page.getByPlaceholder("Notebook name").fill(subNotebookName);
-  await page.getByRole("button", { name: /sub-notebook/i }).click();
+  await page.getByRole("button", { name: /new notebook/i }).click();
   await expect(page.getByRole("button", { name: /open notebooks pane/i })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: new RegExp(subNotebookName, "i") }).first()).toBeVisible();
+
+  await page.getByRole("button", { name: /all notes/i }).click();
+  await page.getByPlaceholder("Notebook name").fill(archiveNotebookName);
+  await page.getByRole("button", { name: /new notebook/i }).click();
+
+  await page.getByTestId(buildNotebookTestId("drag", archiveNotebookName)).dragTo(
+    page.getByTestId(buildNotebookTestId("before", notebookName))
+  );
+  await expect
+    .poll(async () => {
+      const items = await page
+        .locator('[data-testid^="notebook-drag-"]')
+        .evaluateAll((elements) => elements.map((element) => element.textContent?.replace(/\s+/g, " ").trim() ?? ""));
+      return items[0]?.includes(archiveNotebookName) && items[1]?.includes(notebookName);
+    })
+    .toBeTruthy();
+
+  await page.getByTestId(buildNotebookTestId("drag", archiveNotebookName)).dragTo(
+    page.getByTestId(buildNotebookTestId("drag", notebookName))
+  );
+
+  const draggedNotebook = page.getByRole("button", { name: new RegExp(archiveNotebookName, "i") }).first();
+  await draggedNotebook.click();
 
   await page.getByRole("button", { name: /^new note$/i }).click();
   await expect(page.getByRole("button", { name: /open notes pane/i })).toHaveCount(0);
@@ -123,6 +149,10 @@ async function createNotebookAndPersistedNote(page: import("@playwright/test").P
   await page.getByLabel("Markdown").first().fill("This note should travel well.");
   await expect(page.getByText(/^Saved /).first()).toBeVisible();
   await expect(page.getByRole("button", { name: new RegExp(`Export ready note ${suffix}`, "i") })).toBeVisible();
+}
+
+function buildNotebookTestId(kind: "drag" | "before" | "after", name: string) {
+  return `notebook-${kind}-${encodeURIComponent(name)}`;
 }
 
 async function createTempFile(name: string, contents: string) {

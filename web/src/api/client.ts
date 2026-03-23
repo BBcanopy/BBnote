@@ -59,7 +59,7 @@ export function createFolder(payload: { name: string; parentId: string | null })
   });
 }
 
-export function updateFolder(folderId: string, payload: { name: string; parentId: string | null }) {
+export function updateFolder(folderId: string, payload: { name: string; parentId: string | null; sortOrder?: number }) {
   return request<FolderNode>(`/api/v1/folders/${folderId}`, {
     method: "PATCH",
     body: JSON.stringify(payload)

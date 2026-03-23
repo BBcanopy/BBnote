@@ -5,7 +5,8 @@ import type { AppServices } from "../service/serviceFactory.js";
 
 const folderBodySchema = z.object({
   name: z.string().min(1),
-  parentId: z.string().uuid().nullable().optional()
+  parentId: z.string().uuid().nullable().optional(),
+  sortOrder: z.number().int().min(0).optional()
 });
 
 export function registerFolderController(app: FastifyInstance, services: AppServices) {
@@ -29,7 +30,8 @@ export function registerFolderController(app: FastifyInstance, services: AppServ
     const params = z.object({ id: z.string().uuid() }).parse(request.params);
     return services.folderService.updateFolder(request.auth!.ownerId, params.id, {
       name: body.name,
-      parentId: body.parentId ?? null
+      parentId: body.parentId ?? null,
+      sortOrder: body.sortOrder
     });
   });
 
@@ -39,4 +41,3 @@ export function registerFolderController(app: FastifyInstance, services: AppServ
     return reply.code(204).send();
   });
 }
-

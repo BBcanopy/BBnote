@@ -19,6 +19,7 @@ import {
   getNote,
   listFolders,
   listNotes,
+  updateFolder,
   updateNote,
   uploadAttachment
 } from "../api/client";
@@ -29,6 +30,7 @@ import { buttonDanger, buttonGhost, buttonPrimary, buttonSecondary } from "../co
 import { FolderTree } from "../components/FolderTree";
 import { MarkdownPreview } from "../components/MarkdownPreview";
 import { NoteListPane } from "../components/NoteListPane";
+import { buildFolderMutations, moveFolders, type FolderMoveInstruction } from "../utils/folderTree";
 
 type EditorPane = "markdown" | "preview";
 
@@ -236,7 +238,7 @@ export function NotesPage() {
     }
   }
 
-  async function handleCreateNotebook(parentId: string | null) {
+  async function handleCreateNotebook() {
     if (!auth.user || !pendingFolderName.trim()) {
       return;
     }
@@ -246,7 +248,7 @@ export function NotesPage() {
     try {
       const created = await createFolder({
         name: pendingFolderName.trim(),
-        parentId
+        parentId: selectedFolderId
       });
       setPendingFolderName("");
       await refreshFolders();
@@ -266,6 +268,50 @@ export function NotesPage() {
       });
     } catch (folderError) {
       setError(String(folderError));
+    }
+  }
+
+  async function handleMoveNotebook(move: FolderMoveInstruction) {
+    if (!auth.user) {
+      return;
+    }
+
+    const nextFolders = moveFolders(folders, move);
+    if (!nextFolders) {
+      return;
+    }
+
+    const previousFolders = folders;
+    const previousMutations = new Map(buildFolderMutations(previousFolders).map((mutation) => [mutation.id, mutation]));
+    const nextMutations = buildFolderMutations(nextFolders);
+    const changedFolders = nextMutations.filter((mutation) => {
+      const previous = previousMutations.get(mutation.id);
+      return !previous || previous.parentId !== mutation.parentId || previous.sortOrder !== mutation.sortOrder;
+    });
+
+    setError(null);
+    setFolders(nextFolders);
+
+    try {
+      await Promise.all(
+        changedFolders.map((mutation) => {
+          const folder = nextFolders.find((entry) => entry.id === mutation.id);
+          if (!folder) {
+            return Promise.resolve();
+          }
+
+          return updateFolder(mutation.id, {
+            name: folder.name,
+            parentId: mutation.parentId,
+            sortOrder: mutation.sortOrder
+          });
+        })
+      );
+      await refreshFolders();
+    } catch (moveError) {
+      setFolders(previousFolders);
+      setError(String(moveError));
+      await refreshFolders();
     }
   }
 
@@ -428,8 +474,9 @@ export function NotesPage() {
               selectedFolderId={selectedFolderId}
               pendingName={pendingFolderName}
               onPendingNameChange={setPendingFolderName}
+              onCreateNotebook={() => void handleCreateNotebook()}
+              onMoveNotebook={(move) => void handleMoveNotebook(move)}
               onCollapse={() => setFolderPaneCollapsed(true)}
-              onCreateNotebook={(parentId) => void handleCreateNotebook(parentId)}
               onSelectFolder={(folderId) => handleSelectFolder(folderId)}
               onClearSelection={() => handleSelectFolder(null)}
             />
@@ -512,7 +559,8 @@ export function NotesPage() {
           selectedFolderId={selectedFolderId}
           pendingName={pendingFolderName}
           onPendingNameChange={setPendingFolderName}
-          onCreateNotebook={(parentId) => void handleCreateNotebook(parentId)}
+          onCreateNotebook={() => void handleCreateNotebook()}
+          onMoveNotebook={(move) => void handleMoveNotebook(move)}
           onSelectFolder={(folderId) => handleSelectFolder(folderId)}
           onClearSelection={() => handleSelectFolder(null)}
         />

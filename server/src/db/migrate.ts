@@ -19,6 +19,7 @@ export function runMigrations(connection: Database.Database) {
       parent_id text references folders(id) on delete cascade,
       name text not null,
       storage_dir_name text not null,
+      sort_order integer not null default 0,
       created_at text not null,
       updated_at text not null,
       foreign key(owner_id) references users(id) on delete cascade
@@ -104,4 +105,13 @@ export function runMigrations(connection: Database.Database) {
       tokenize = 'unicode61'
     );
   `);
+
+  const folderColumns = connection
+    .prepare<[], { name: string }>("pragma table_info(folders)")
+    .all()
+    .map((column) => column.name);
+
+  if (!folderColumns.includes("sort_order")) {
+    connection.exec("alter table folders add column sort_order integer not null default 0;");
+  }
 }

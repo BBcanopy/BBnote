@@ -9,7 +9,8 @@ export class FolderService {
   async list(ownerId: string): Promise<FolderNode[]> {
     const folders = this.folderDb.listByOwner(ownerId);
     const byId = new Map(folders.map((folder) => [folder.id, folder]));
-    return folders.map((folder) => ({
+    const orderedFolders = flattenFoldersByTree(folders);
+    return orderedFolders.map((folder) => ({
       id: folder.id,
       name: folder.name,
       parentId: folder.parentId,
@@ -35,6 +36,7 @@ export class FolderService {
       parentId: input.parentId,
       name: input.name.trim() || "Untitled folder",
       storageDirName: buildFolderDirectoryName(input.name, folderId),
+      sortOrder: this.folderDb.getNextSortOrder(ownerId, input.parentId),
       createdAt: now,
       updatedAt: now
     };
@@ -42,7 +44,7 @@ export class FolderService {
     return record;
   }
 
-  async updateFolder(ownerId: string, folderId: string, input: { name: string; parentId: string | null }) {
+  async updateFolder(ownerId: string, folderId: string, input: { name: string; parentId: string | null; sortOrder?: number }) {
     const existing = this.folderDb.getById(ownerId, folderId);
     if (!existing) {
       throw new Error("Folder not found.");
@@ -56,9 +58,18 @@ export class FolderService {
         throw new Error("Parent folder was not found.");
       }
     }
+
+    assertNoDescendantParent(ownerId, folderId, input.parentId, this.folderDb);
+
     this.folderDb.update(ownerId, folderId, {
       name: input.name.trim() || existing.name,
       parentId: input.parentId,
+      sortOrder:
+        typeof input.sortOrder === "number"
+          ? Math.max(0, input.sortOrder)
+          : input.parentId !== existing.parentId
+            ? this.folderDb.getNextSortOrder(ownerId, input.parentId)
+            : existing.sortOrder,
       updatedAt: new Date().toISOString()
     });
     return this.folderDb.getById(ownerId, folderId)!;
@@ -88,4 +99,52 @@ function buildPath(folderId: string, folders: Map<string, { id: string; name: st
     current = current.parentId ? folders.get(current.parentId) : undefined;
   }
   return parts.join(" / ");
+}
+
+function flattenFoldersByTree<T extends { id: string; parentId: string | null; sortOrder: number; createdAt: string }>(folders: T[]) {
+  const byParent = new Map<string | null, T[]>();
+
+  for (const folder of folders) {
+    const siblings = byParent.get(folder.parentId) ?? [];
+    siblings.push(folder);
+    byParent.set(folder.parentId, siblings);
+  }
+
+  const ordered: T[] = [];
+
+  const visit = (parentId: string | null) => {
+    const children = [...(byParent.get(parentId) ?? [])].sort((left, right) => {
+      if (left.sortOrder !== right.sortOrder) {
+        return left.sortOrder - right.sortOrder;
+      }
+      return left.createdAt.localeCompare(right.createdAt);
+    });
+
+    for (const child of children) {
+      ordered.push(child);
+      visit(child.id);
+    }
+  };
+
+  visit(null);
+
+  return ordered;
+}
+
+function assertNoDescendantParent(
+  ownerId: string,
+  folderId: string,
+  parentId: string | null,
+  folderDb: Pick<FolderDb, "getById">
+) {
+  let currentParentId = parentId;
+
+  while (currentParentId) {
+    if (currentParentId === folderId) {
+      throw new Error("A folder cannot be moved into one of its descendants.");
+    }
+
+    const current = folderDb.getById(ownerId, currentParentId);
+    currentParentId = current?.parentId ?? null;
+  }
 }
