@@ -1,4 +1,4 @@
-import { CaretDown, CaretLeft, DotsSixVertical, FolderSimple, FolderSimplePlus } from "@phosphor-icons/react";
+import { CaretDown, CaretLeft, FolderSimple, FolderSimplePlus } from "@phosphor-icons/react";
 import { useState, type DragEvent, type KeyboardEvent } from "react";
 import type { FolderNode } from "../api/types";
 import type { FolderMoveInstruction, FolderMovePosition } from "../utils/folderTree";
@@ -136,18 +136,17 @@ export function FolderTree(props: {
                   <button
                     type="button"
                     onClick={() => props.onSelectFolder(folder.id)}
-                    className={`flex w-full items-center gap-3 rounded-[1.2rem] px-4 py-3 text-left transition duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+                    className={`flex w-full items-center gap-2.5 rounded-[1.2rem] px-4 py-3 text-left transition duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${
                       selected ? "bg-slate-950 text-white" : "bg-slate-50/70 text-slate-700 hover:-translate-y-[1px] hover:bg-white"
                     }`}
-                    style={{ paddingLeft: `${16 + depth * 18}px` }}
+                    style={{ paddingLeft: `${18 + depth * 18}px` }}
                   >
-                    <span className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border ${
+                    <CaretDown size={14} weight="bold" className={selected ? "text-emerald-300" : "text-slate-400"} />
+                    <span className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-[1rem] border ${
                       selected ? "border-slate-700 bg-slate-900 text-slate-300" : "border-slate-200 bg-white text-slate-400"
                     }`}>
-                      <DotsSixVertical size={16} />
+                      <FolderSimple size={18} />
                     </span>
-                    <CaretDown size={14} weight="bold" className={selected ? "text-emerald-300" : "text-slate-400"} />
-                    <FolderSimple size={18} />
                     <span className="flex-1 truncate">{folder.name}</span>
                     <span className={`text-xs ${selected ? "text-slate-300" : "text-slate-400"}`}>{folder.noteCount}</span>
                   </button>

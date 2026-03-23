@@ -4,7 +4,7 @@ import path from "node:path";
 import { expect, test } from "@playwright/test";
 import JSZip from "jszip";
 
-test("starts empty, creates notebooks, supports notebook dragging, autosaves notes, and collapses workspace lanes", async ({ page }) => {
+test("starts empty, creates notebooks, supports row dragging, autosaves notes, and collapses workspace lanes", async ({ page }) => {
   const suffix = Date.now().toString();
   const notebookName = `Projects ${suffix}`;
   const subNotebookName = `Roadmaps ${suffix}`;
@@ -46,7 +46,9 @@ test("starts empty, creates notebooks, supports notebook dragging, autosaves not
   await page.getByRole("button", { name: /new notebook/i }).click();
   await expect.poll(async () => page.locator('[data-testid^="notebook-drag-"]').count()).toBe(3);
 
-  await page.getByTestId(buildNotebookTestId("drag", archiveNotebookName)).dragTo(
+  const archiveNotebookRow = page.getByTestId(buildNotebookTestId("drag", archiveNotebookName));
+  await expect(archiveNotebookRow).toBeVisible();
+  await archiveNotebookRow.dragTo(
     page.getByTestId(buildNotebookTestId("before", notebookName))
   );
   await expect
@@ -58,7 +60,7 @@ test("starts empty, creates notebooks, supports notebook dragging, autosaves not
     })
     .toBeTruthy();
 
-  await page.getByTestId(buildNotebookTestId("drag", archiveNotebookName)).dragTo(
+  await archiveNotebookRow.dragTo(
     page.getByTestId(buildNotebookTestId("drag", notebookName))
   );
 
