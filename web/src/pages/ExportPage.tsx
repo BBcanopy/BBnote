@@ -41,33 +41,33 @@ export function ExportPage() {
   }
 
   return (
-    <section className="grid gap-6 md:grid-cols-[1.1fr_0.9fr]">
-      <div className="rounded-[2rem] border border-slate-200/70 bg-white/80 p-6 shadow-[0_20px_50px_-32px_rgba(15,23,42,0.28)]">
-        <p className="text-xs uppercase tracking-[0.3em] text-slate-500">Exports</p>
-        <h1 className="mt-4 text-3xl font-semibold tracking-tight">Take everything out as Markdown</h1>
-        <p className="mt-3 max-w-[60ch] text-sm leading-relaxed text-slate-600">
+    <section className="grid gap-6 xl:grid-cols-[minmax(0,1.12fr)_minmax(18rem,0.88fr)]">
+      <div className="bb-overview-card">
+        <p className="bb-eyebrow">Exports</p>
+        <h1 className="text-3xl font-semibold tracking-tight text-[color:var(--ink)] md:text-4xl">Take everything out as Markdown</h1>
+        <p className="max-w-[60ch] text-sm leading-relaxed text-[color:var(--ink-soft)]">
           Export jobs package your notes into nested notebooks with YAML front matter and relative asset paths.
         </p>
         <button
           type="button"
           onClick={() => void handleCreateExport()}
           disabled={busy}
-          className={`mt-6 ${buttonPrimary}`}
+          className={buttonPrimary}
         >
           <DownloadSimple size={18} />
           {busy ? "Building export" : "Export all notes"}
         </button>
-        {error ? <p className="mt-4 text-sm text-red-600">{error}</p> : null}
+        {error ? <p className="bb-inline-error">{error}</p> : null}
       </div>
-      <div className="rounded-[2rem] border border-slate-200/70 bg-white/80 p-6 shadow-[0_20px_50px_-32px_rgba(15,23,42,0.28)]">
-        <p className="text-xs uppercase tracking-[0.3em] text-slate-500">Latest job</p>
+      <div className="bb-job-card">
+        <p className="bb-eyebrow">Latest job</p>
         {job ? (
-          <div className="mt-4 space-y-4">
-            <div className="rounded-[1.4rem] border border-slate-200 bg-slate-50/70 px-4 py-4">
-              <p className="text-sm font-medium text-slate-900">Status: {job.status}</p>
-              <p className="mt-2 text-sm text-slate-600">Notes: {job.summary.noteCount}</p>
-              <p className="text-sm text-slate-600">Notebooks: {job.summary.folderCount}</p>
-              <p className="text-sm text-slate-600">Attachments: {job.summary.attachmentCount}</p>
+          <div className="space-y-4">
+            <div className="bb-summary-card px-4 py-4">
+              <p className="text-sm font-medium text-[color:var(--ink)]">Status: {job.status}</p>
+              <p className="mt-2 text-sm text-[color:var(--ink-soft)]">Notes: {job.summary.noteCount}</p>
+              <p className="text-sm text-[color:var(--ink-soft)]">Notebooks: {job.summary.folderCount}</p>
+              <p className="text-sm text-[color:var(--ink-soft)]">Attachments: {job.summary.attachmentCount}</p>
             </div>
             <button
               type="button"
@@ -79,7 +79,7 @@ export function ExportPage() {
             </button>
           </div>
         ) : (
-          <p className="mt-4 text-sm leading-relaxed text-slate-500">No export has been generated in this session yet.</p>
+          <p className="text-sm leading-relaxed text-[color:var(--ink-soft)]">No export has been generated in this session yet.</p>
         )}
       </div>
     </section>

@@ -1,36 +1,68 @@
-import { SignIn } from "@phosphor-icons/react";
+import { ArrowRight, NotePencil, StackSimple, Swatches } from "@phosphor-icons/react";
 
 export function AuthSplash(props: { onLogin(): void; busy: boolean }) {
   return (
-    <section className="grid min-h-[100dvh] place-items-center px-4 py-8">
-      <article className="w-full max-w-[34rem] rounded-[2rem] border border-black/6 bg-white/88 px-8 py-10 shadow-[0_24px_60px_-36px_rgba(15,23,42,0.28)] backdrop-blur-sm sm:px-10">
-        <div className="flex justify-center">
-          <span
-            aria-hidden="true"
-            className="inline-flex h-11 min-w-11 items-center justify-center rounded-full bg-emerald-900 px-3 font-['Geist_Mono'] text-sm font-medium uppercase tracking-[0.18em] text-[#f3efe8]"
-          >
-            bb
-          </span>
-        </div>
-        <h1 className="mt-6 text-center text-4xl font-semibold tracking-tight text-slate-950 sm:text-5xl">BBNote</h1>
-        <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
-          <button
-            type="button"
-            onClick={props.onLogin}
-            disabled={props.busy}
-            className="inline-flex h-11 items-center justify-center gap-2 whitespace-nowrap rounded-full bg-emerald-900 px-5 text-sm font-medium text-[#f7f3ec] transition duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-[1px] hover:bg-emerald-800 active:translate-y-0 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            <SignIn size={18} weight="bold" />
-            {props.busy ? "Preparing sign-in" : "Sign in with OIDC"}
-          </button>
-          <a
-            href="/docs"
-            className="inline-flex h-11 items-center justify-center whitespace-nowrap rounded-full border border-slate-200 bg-white px-5 text-sm font-medium text-slate-700 transition duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-[1px] hover:border-slate-300 hover:text-slate-950 active:translate-y-0 active:scale-[0.98]"
-          >
-            Read API docs
-          </a>
-        </div>
-      </article>
+    <section className="bb-auth-shell">
+      <div className="bb-auth-grid">
+        <article className="bb-auth-hero">
+          <div className="bb-auth-hero__mark">
+            <span aria-hidden="true" className="bb-brand-mark__pill">bb</span>
+          </div>
+          <p className="bb-eyebrow">Quietly structured note work</p>
+          <h1 className="bb-auth-hero__title">BBNote</h1>
+          <p className="bb-auth-hero__copy">
+            Capture drafts, sort notebooks, and keep a calm markdown workspace across imports, exports, and attached files.
+          </p>
+          <div className="bb-auth-hero__actions">
+            <button
+              type="button"
+              onClick={props.onLogin}
+              disabled={props.busy}
+              className="bb-button bb-button--primary"
+            >
+              <ArrowRight size={18} weight="bold" />
+              {props.busy ? "Preparing sign-in" : "Sign in with OIDC"}
+            </button>
+            <a
+              href="/docs"
+              className="bb-button bb-button--ghost"
+            >
+              Read API docs
+            </a>
+          </div>
+        </article>
+        <aside className="bb-auth-preview" aria-label="Workspace preview">
+          <div className="bb-auth-preview__row">
+            <div className="bb-auth-preview__badge">
+              <NotePencil size={18} weight="bold" />
+            </div>
+            <div>
+              <p className="bb-eyebrow">Editor</p>
+              <h2 className="bb-auth-preview__title">Keep drafts moving without friction</h2>
+            </div>
+          </div>
+          <div className="bb-auth-preview__stack">
+            <article className="bb-auth-preview__card">
+              <div className="bb-auth-preview__card-icon">
+                <StackSimple size={18} weight="bold" />
+              </div>
+              <div>
+                <p>Nested notebooks stay easy to scan</p>
+                <span>Drag, collapse, and reopen the workspace without losing context.</span>
+              </div>
+            </article>
+            <article className="bb-auth-preview__card">
+              <div className="bb-auth-preview__card-icon">
+                <Swatches size={18} weight="bold" />
+              </div>
+              <div>
+                <p>Three themes, one steady workspace</p>
+                <span>Sea, Ember, and Midnight travel with your account.</span>
+              </div>
+            </article>
+          </div>
+        </aside>
+      </div>
     </section>
   );
 }

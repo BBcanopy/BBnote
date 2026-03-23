@@ -1,20 +1,51 @@
-import { NotePencil } from "@phosphor-icons/react";
+import { House, UploadSimple, DownloadSimple } from "@phosphor-icons/react";
+import type { ReactNode } from "react";
+import { NavLink } from "react-router-dom";
 import type { AuthSession } from "../api/types";
+import type { UserTheme } from "../api/types";
 import { UserMenu } from "./UserMenu";
 
 export function PageNav(props: {
   user: AuthSession["user"];
   onLogout(): void;
+  onThemeChange(theme: UserTheme): Promise<void>;
 }) {
   return (
-    <header className="relative z-20 mb-4 flex items-center justify-between gap-4 rounded-[2rem] border border-white/70 bg-white/88 px-4 py-3 shadow-[0_20px_50px_-34px_rgba(15,23,42,0.35)] backdrop-blur-sm sm:px-5">
-      <div className="flex items-center gap-3">
-        <div className="rounded-full bg-emerald-700/10 p-2.5 text-emerald-700">
-          <NotePencil size={20} weight="bold" />
+    <header className="bb-topbar">
+      <div className="bb-topbar__nav">
+        <div className="bb-brand-mark" aria-label="BBNote">
+          <span className="bb-brand-mark__pill">bb</span>
+          <span className="bb-brand-mark__copy">
+            <span className="bb-brand-mark__title">BBNote</span>
+            <span className="bb-brand-mark__subtitle">Markdown workspace</span>
+          </span>
         </div>
-        <p className="text-xs uppercase tracking-[0.3em] text-slate-500">BBNote</p>
+        <nav className="bb-subnav" aria-label="Primary navigation">
+          <NavItem to="/" label="Notes" icon={<House size={16} weight="bold" />} />
+          <NavItem to="/imports" label="Imports" icon={<UploadSimple size={16} weight="bold" />} />
+          <NavItem to="/exports" label="Exports" icon={<DownloadSimple size={16} weight="bold" />} />
+        </nav>
       </div>
-      <UserMenu name={props.user?.name ?? null} email={props.user?.email ?? null} onLogout={props.onLogout} />
+      <UserMenu
+        name={props.user?.name ?? null}
+        email={props.user?.email ?? null}
+        theme={props.user?.theme ?? "sea"}
+        onLogout={props.onLogout}
+        onThemeChange={props.onThemeChange}
+      />
     </header>
+  );
+}
+
+function NavItem(props: { to: string; label: string; icon: ReactNode }) {
+  return (
+    <NavLink
+      to={props.to}
+      end={props.to === "/"}
+      className={({ isActive }) => `bb-nav-link${isActive ? " is-active" : ""}`}
+    >
+      {props.icon}
+      <span>{props.label}</span>
+    </NavLink>
   );
 }

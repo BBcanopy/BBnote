@@ -620,14 +620,14 @@ function EditorPanel(props: {
   error: string | null;
 }) {
   return (
-    <section className="min-w-0 rounded-[2rem] border border-slate-200/70 bg-white/90 p-5 shadow-[0_24px_60px_-40px_rgba(15,23,42,0.3)] backdrop-blur-sm lg:flex-1">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <p className="text-xs uppercase tracking-[0.3em] text-slate-500">{props.editorFolderPath ?? "Draft"}</p>
-          <p className="mt-2 text-sm text-slate-600">{props.statusText}</p>
+    <section className="bb-editor-panel lg:flex-1">
+      <div className="bb-editor-header">
+        <div className="bb-panel-header__copy">
+          <p className="bb-eyebrow">{props.editorFolderPath ?? "Draft"}</p>
+          <p className="bb-panel-subtitle">{props.statusText}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <div className="inline-flex rounded-full border border-slate-200 bg-slate-50 p-1">
+          <div className="bb-editor-mode">
             <ModeButton
               active={props.editorPane === "markdown"}
               label="Markdown"
@@ -654,43 +654,43 @@ function EditorPanel(props: {
       </div>
 
       {props.error ? (
-        <p className="mt-4 rounded-[1.2rem] border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{props.error}</p>
+        <p className="bb-error-banner text-sm">{props.error}</p>
       ) : null}
 
       {props.loading ? (
-        <div className="mt-5 grid min-h-[22rem] place-items-center rounded-[1.5rem] border border-slate-200 bg-slate-50/70 text-sm text-slate-500">
+        <div className="bb-empty-state bb-empty-state--center text-sm">
           <span className="inline-flex items-center gap-2">
-            <CircleNotch size={18} className="animate-spin text-emerald-700" />
+            <CircleNotch size={18} className="animate-spin text-[color:var(--accent-strong)]" />
             Loading note
           </span>
         </div>
       ) : !props.editorNote ? (
-        <div className="mt-5 grid min-h-[22rem] place-items-center rounded-[1.5rem] border border-dashed border-slate-200 bg-slate-50/70 px-6 py-8 text-center">
+        <div className="bb-empty-state bb-empty-state--center px-6 py-8">
           <div className="space-y-2">
-            <p className="text-sm font-medium tracking-tight text-slate-900">No note selected</p>
-            <p className="text-sm text-slate-500">Choose a note or start a new draft.</p>
+            <p className="text-sm font-medium tracking-tight text-[color:var(--ink)]">No note selected</p>
+            <p className="text-sm text-[color:var(--ink-soft)]">Choose a note or start a new draft.</p>
           </div>
         </div>
       ) : (
-      <div className="mt-5 grid gap-5">
+      <div className="bb-editor-panel__content">
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_14rem]">
-          <label className="grid gap-2 text-sm text-slate-700">
-            Title
+          <label className="bb-field">
+            <span className="bb-field__label">Title</span>
             <input
               value={props.editorNote?.title ?? ""}
               onChange={(event) => props.onTitleChange(event.target.value)}
               placeholder="Note title"
               disabled={!props.editorNote}
-              className="rounded-[1.1rem] border border-slate-200 bg-slate-50/80 px-4 py-3 text-lg font-medium tracking-tight outline-none transition duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] focus:border-emerald-400"
+              className="bb-input text-lg font-medium tracking-tight"
             />
           </label>
-          <label className="grid gap-2 text-sm text-slate-700">
-            Notebook
+          <label className="bb-field">
+            <span className="bb-field__label">Notebook</span>
             <select
               value={props.editorNote?.folderId ?? ""}
               onChange={(event) => props.onFolderChange(event.target.value || null)}
               disabled={!props.editorNote}
-              className="rounded-[1.1rem] border border-slate-200 bg-slate-50/80 px-4 py-3 outline-none transition duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] focus:border-emerald-400"
+              className="bb-select"
             >
               <option value="">Select a notebook</option>
               {props.folders.map((folder) => (
@@ -703,18 +703,18 @@ function EditorPanel(props: {
         </div>
 
         {props.editorPane === "markdown" ? (
-          <label className="grid gap-2 text-sm text-slate-700">
-            Markdown
+          <label className="bb-field">
+            <span className="bb-field__label">Markdown</span>
             <textarea
               value={props.editorNote?.bodyMarkdown ?? ""}
               onChange={(event) => props.onBodyChange(event.target.value)}
               placeholder="Write in Markdown"
               disabled={!props.editorNote}
-              className="min-h-[30rem] rounded-[1.4rem] border border-slate-200 bg-slate-50/80 px-4 py-4 font-['Geist_Mono'] text-sm leading-7 outline-none transition duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] focus:border-emerald-400"
+              className="bb-textarea bb-code min-h-[30rem] text-sm leading-7"
             />
           </label>
         ) : (
-          <div className="min-h-[30rem] rounded-[1.4rem] border border-slate-200 bg-slate-50/80 px-5 py-4">
+          <div className="bb-pane-card min-h-[30rem]">
             <MarkdownPreview bodyMarkdown={props.editorNote.bodyMarkdown} />
           </div>
         )}
@@ -731,7 +731,7 @@ function EditorPanel(props: {
         />
 
         {!props.folders.length ? (
-          <div className="rounded-[1.3rem] border border-dashed border-slate-200 bg-slate-50/70 px-4 py-4 text-sm text-slate-500">
+          <div className="bb-panel-note text-sm">
             Create a notebook before this note can save.
           </div>
         ) : null}
@@ -756,23 +756,19 @@ function CollapsedPaneRail(props: {
       onClick={props.onOpen}
       aria-label={props.ariaLabel ?? `Open ${props.label} pane`}
       title={props.titleText ?? `${props.label}: ${props.detail}`}
-      className="group flex w-[5.2rem] shrink-0 flex-col items-center gap-3 rounded-[1.7rem] border border-slate-200/80 bg-white/92 px-2.5 py-3.5 text-slate-700 shadow-[0_18px_44px_-34px_rgba(15,23,42,0.24)] transition duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-[1px] hover:border-slate-300"
+      className="bb-collapsed-rail"
     >
-      <span className="inline-flex h-11 w-11 items-center justify-center rounded-[1.15rem] border border-emerald-100 bg-emerald-50/90 text-emerald-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.65)]">
+      <span className="bb-collapsed-rail__icon">
         {props.icon}
       </span>
-      <span className="space-y-2 text-center">
-        <span className="block text-[11px] uppercase tracking-[0.24em] text-slate-400">{props.label}</span>
-        <span className="block max-w-full truncate text-[11px] font-medium text-slate-500">
-          {props.detail}
-        </span>
+      <span className="bb-collapsed-rail__meta">
+        <span className="bb-eyebrow text-[11px]">{props.label}</span>
+        <strong>{props.detail}</strong>
         {props.subdetail ? (
-          <span className="block max-w-full truncate text-[11px] text-slate-400">
-            {props.subdetail}
-          </span>
+          <span>{props.subdetail}</span>
         ) : null}
       </span>
-      <span className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 bg-slate-50 text-slate-400 transition duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:border-slate-950 group-hover:bg-slate-950 group-hover:text-white">
+      <span className="bb-collapsed-rail__action">
         <CaretRight size={15} />
       </span>
     </button>
@@ -790,16 +786,16 @@ function MobileDrawer(props: {
   }
 
   return (
-    <div className="fixed inset-0 z-30 bg-slate-950/30 px-3 py-4 lg:hidden">
-      <div className="flex h-full max-h-[100dvh] flex-col rounded-[2rem] bg-canvas p-1 shadow-[0_32px_80px_-40px_rgba(15,23,42,0.65)]">
-        <div className="flex items-center justify-between px-3 py-2">
-          <p className="text-xs uppercase tracking-[0.3em] text-slate-500">{props.title}</p>
+    <div className="bb-mobile-drawer lg:hidden">
+      <div className="bb-mobile-drawer__panel">
+        <div className="bb-mobile-drawer__header">
+          <p className="bb-eyebrow">{props.title}</p>
           <button type="button" onClick={props.onClose} className={buttonGhost}>
             <CaretLeft size={18} />
             Close
           </button>
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto p-2">{props.children}</div>
+        <div className="bb-mobile-drawer__body">{props.children}</div>
       </div>
     </div>
   );
@@ -817,9 +813,7 @@ function ModeButton(props: {
       onClick={props.onClick}
       aria-label={props.label}
       title={props.label}
-      className={`inline-flex h-9 w-10 items-center justify-center rounded-full text-sm font-medium transition duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${
-        props.active ? "bg-slate-950 text-white shadow-[0_10px_24px_-18px_rgba(15,23,42,0.9)]" : "text-slate-600 hover:text-slate-950"
-      }`}
+      className={`bb-editor-mode__button ${props.active ? "is-active" : ""}`}
     >
       {props.icon}
     </button>

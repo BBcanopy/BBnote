@@ -145,31 +145,38 @@ test("navigates imports and exports from the avatar menu", async ({ page }) => {
   await createNotebookAndPersistedNote(page);
 
   await page.getByRole("button", { name: /open user menu/i }).click();
-  const notesLink = page.getByRole("link", { name: /^notes$/i });
-  await expect(notesLink).toHaveClass(/bg-emerald-50/);
-  await expect(notesLink).toHaveClass(/text-emerald-950/);
-  await page.getByRole("link", { name: /^exports$/i }).click();
+  const userMenu = page.getByRole("menu");
+  await expect(userMenu.getByRole("link", { name: /^notes$/i })).toHaveAttribute("aria-current", "page");
+  await userMenu.getByRole("button", { name: /^ember/i }).click();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "ember");
+  await userMenu.getByRole("link", { name: /^exports$/i }).click();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "ember");
   await page.getByRole("button", { name: /export all notes/i }).click();
   await expect(page.getByText(/status: completed/i)).toBeVisible();
   await expect(page.getByText(/notebooks:/i)).toBeVisible();
 
   const importArchive = await createImportArchive();
   await page.getByRole("button", { name: /open user menu/i }).click();
-  const exportsLink = page.getByRole("link", { name: /^exports$/i });
-  await expect(exportsLink).toHaveClass(/bg-emerald-50/);
-  await expect(exportsLink).toHaveClass(/text-emerald-950/);
-  await page.getByRole("link", { name: /^imports$/i }).click();
+  const exportsMenu = page.getByRole("menu");
+  await expect(exportsMenu.getByRole("link", { name: /^exports$/i })).toHaveAttribute("aria-current", "page");
+  await exportsMenu.getByRole("button", { name: /^midnight/i }).click();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "midnight");
+  await exportsMenu.getByRole("link", { name: /^imports$/i }).click();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "midnight");
   await page.getByLabel("Source").selectOption("onenote");
   await page.getByLabel("Archive").setInputFiles(importArchive);
   await page.getByRole("button", { name: /start import/i }).click();
   await expect(page.getByText(/status: completed/i)).toBeVisible();
   await expect(page.getByText(/created notes:/i)).toContainText("1");
+  await page.reload();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "midnight");
 });
 
 async function login(page: import("@playwright/test").Page) {
   await page.goto("/");
   await page.getByRole("button", { name: /sign in with oidc/i }).click();
   await page.getByRole("button", { name: /continue to bbnote/i }).click();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "sea");
   await expect(page.getByRole("button", { name: /^new note$/i })).toBeVisible();
   await expect(page.getByText("Notebook workspace")).toHaveCount(0);
   await expect(page.getByText("No note selected").first()).toBeVisible();

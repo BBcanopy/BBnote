@@ -5,7 +5,7 @@ import { fetchAttachmentBlob } from "../api/client";
 
 export function MarkdownPreview(props: { bodyMarkdown: string }) {
   return (
-    <div className="prose prose-slate max-w-none prose-headings:tracking-tight prose-img:rounded-[1rem]">
+    <div className="bb-markdown">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
@@ -52,7 +52,7 @@ function SecureAttachmentImage(props: { src?: string; alt: string }) {
   }, [props.src]);
 
   if (!objectUrl) {
-    return <span className="text-sm text-slate-400">Attachment preview unavailable.</span>;
+    return <span className="bb-markdown__empty">Attachment preview unavailable.</span>;
   }
 
   return <img src={objectUrl} alt={props.alt} />;
@@ -76,7 +76,7 @@ function SecureAttachmentLink(props: { href?: string; children: ReactNode }) {
         window.open(objectUrl, "_blank", "noopener,noreferrer");
         setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
       }}
-      className="text-emerald-700 underline"
+      className="bb-link-button"
     >
       {props.children}
     </button>

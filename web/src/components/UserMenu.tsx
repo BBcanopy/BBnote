@@ -1,15 +1,21 @@
 import { CaretDown, DownloadSimple, NotePencil, SignOut, UploadSimple } from "@phosphor-icons/react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { NavLink, useLocation } from "react-router-dom";
+import type { UserTheme } from "../api/types";
+import { themeOptions } from "../theme/theme";
 
 export function UserMenu(props: {
   name: string | null;
   email: string | null;
+  theme: UserTheme;
   onLogout(): void;
+  onThemeChange(theme: UserTheme): Promise<void>;
 }) {
   const location = useLocation();
   const menuRef = useRef<HTMLDivElement | null>(null);
   const [open, setOpen] = useState(false);
+  const [themePending, setThemePending] = useState<UserTheme | null>(null);
+  const [themeError, setThemeError] = useState<string | null>(null);
 
   useEffect(() => {
     setOpen(false);
@@ -39,30 +45,65 @@ export function UserMenu(props: {
         aria-haspopup="menu"
         aria-expanded={open}
         aria-label="Open user menu"
-        className="inline-flex h-12 items-center gap-3 rounded-full border border-slate-200 bg-white px-2.5 py-2 text-left shadow-[0_16px_40px_-32px_rgba(15,23,42,0.65)] transition duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-[1px] hover:border-slate-300"
+        className="bb-avatar-button"
       >
-        <span className="grid h-8 w-8 place-items-center rounded-full bg-emerald-700 text-sm font-semibold text-white">
+        <span className="bb-avatar-button__letter">
           {initial}
         </span>
-        <span className="hidden min-w-0 sm:block">
-          <span className="block truncate text-sm font-medium text-slate-900">{props.name || "BBNote user"}</span>
-          <span className="block truncate text-xs text-slate-500">{props.email || "Signed in"}</span>
+        <span className="bb-avatar-button__meta">
+          <span className="bb-avatar-button__name">{props.name || "BBNote user"}</span>
+          <span className="bb-avatar-button__email">{props.email || "Signed in"}</span>
         </span>
-        <CaretDown size={16} className={`text-slate-500 transition ${open ? "rotate-180" : ""}`} />
+        <CaretDown size={16} className={`bb-avatar-button__chevron${open ? " is-open" : ""}`} />
       </button>
       {open ? (
         <div
           role="menu"
-          className="absolute right-0 z-30 mt-3 w-[15rem] rounded-[1.6rem] border border-slate-200 bg-white p-2 shadow-[0_24px_60px_-28px_rgba(15,23,42,0.38)]"
+          className="bb-avatar-dropdown"
         >
-          <MenuLink to="/" label="Notes" icon={<NotePencil size={18} />} />
-          <MenuLink to="/imports" label="Imports" icon={<UploadSimple size={18} />} />
-          <MenuLink to="/exports" label="Exports" icon={<DownloadSimple size={18} />} />
-          <div className="my-2 border-t border-slate-100" />
+          <div className="bb-menu-section">
+            <p className="bb-menu-section__label">Theme</p>
+            <div className="bb-theme-grid" role="group" aria-label="Theme switcher">
+              {themeOptions.map((option) => (
+                <button
+                  key={option.id}
+                  type="button"
+                  aria-pressed={props.theme === option.id}
+                  className={`bb-theme-option${props.theme === option.id ? " is-active" : ""}`}
+                  disabled={themePending !== null}
+                  onClick={() => {
+                    setThemeError(null);
+                    setThemePending(option.id);
+                    void props.onThemeChange(option.id)
+                      .catch((error) => {
+                        setThemeError(String(error));
+                      })
+                      .finally(() => {
+                        setThemePending(null);
+                      });
+                  }}
+                >
+                  <span className={`bb-theme-option__swatch bb-theme-option__swatch--${option.id}`} />
+                  <span className="bb-theme-option__copy">
+                    <strong>{option.label}</strong>
+                    <span>{option.description}</span>
+                  </span>
+                </button>
+              ))}
+            </div>
+            {themeError ? <p className="bb-inline-error">{themeError}</p> : null}
+          </div>
+          <div className="bb-menu-section">
+            <p className="bb-menu-section__label">Navigate</p>
+            <MenuLink to="/" label="Notes" icon={<NotePencil size={18} />} />
+            <MenuLink to="/imports" label="Imports" icon={<UploadSimple size={18} />} />
+            <MenuLink to="/exports" label="Exports" icon={<DownloadSimple size={18} />} />
+          </div>
+          <div className="bb-menu-divider" />
           <button
             type="button"
             onClick={props.onLogout}
-            className="flex w-full items-center gap-3 rounded-[1.1rem] px-3 py-3 text-sm text-slate-600 transition duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] hover:bg-slate-50 hover:text-slate-950"
+            className="bb-menu-link bb-menu-link--danger"
           >
             <SignOut size={18} />
             Sign out
@@ -79,11 +120,7 @@ function MenuLink(props: { to: string; label: string; icon: ReactNode }) {
       to={props.to}
       end={props.to === "/"}
       className={({ isActive }) =>
-        `flex items-center gap-3 rounded-[1.1rem] border px-3 py-3 text-sm font-medium transition duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${
-          isActive
-            ? "border-emerald-200 bg-emerald-50 text-emerald-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.35)]"
-            : "border-transparent text-slate-600 hover:border-slate-100 hover:bg-slate-50 hover:text-slate-950"
-        }`
+        `bb-menu-link${isActive ? " is-active" : ""}`
       }
     >
       {props.icon}

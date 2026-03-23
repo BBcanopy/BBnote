@@ -30,31 +30,31 @@ export function ImportPage() {
   }
 
   return (
-    <section className="grid gap-6 md:grid-cols-[1.1fr_0.9fr]">
-      <div className="rounded-[2rem] border border-slate-200/70 bg-white/80 p-6 shadow-[0_20px_50px_-32px_rgba(15,23,42,0.28)]">
-        <p className="text-xs uppercase tracking-[0.3em] text-slate-500">Imports</p>
-        <h1 className="mt-4 text-3xl font-semibold tracking-tight">Bring notes in from existing tools</h1>
-        <p className="mt-3 max-w-[60ch] text-sm leading-relaxed text-slate-600">
+    <section className="grid gap-6 xl:grid-cols-[minmax(0,1.12fr)_minmax(18rem,0.88fr)]">
+      <div className="bb-overview-card">
+        <p className="bb-eyebrow">Imports</p>
+        <h1 className="text-3xl font-semibold tracking-tight text-[color:var(--ink)] md:text-4xl">Bring notes in from existing tools</h1>
+        <p className="max-w-[60ch] text-sm leading-relaxed text-[color:var(--ink-soft)]">
           Upload a OneNote archive or a Synology Note Station export and BBNote will create a new top-level notebook subtree for it.
         </p>
-        <div className="mt-6 grid gap-4">
-          <label className="grid gap-2 text-sm text-slate-700">
-            Source
+        <div className="grid gap-4">
+          <label className="bb-field">
+            <span className="bb-field__label">Source</span>
             <select
               value={source}
               onChange={(event) => setSource(event.target.value as "onenote" | "synology_note_station")}
-              className="rounded-[1.1rem] border border-slate-200 bg-slate-50/80 px-4 py-3 outline-none transition duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] focus:border-emerald-400"
+              className="bb-select"
             >
               <option value="onenote">OneNote</option>
               <option value="synology_note_station">Synology Note Station</option>
             </select>
           </label>
-          <label className="grid gap-2 text-sm text-slate-700">
-            Archive
+          <label className="bb-field">
+            <span className="bb-field__label">Archive</span>
             <input
               type="file"
               onChange={(event) => setFile(event.target.files?.[0] ?? null)}
-              className="rounded-[1.1rem] border border-slate-200 bg-slate-50/80 px-4 py-3 outline-none transition duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] focus:border-emerald-400"
+              className="bb-file-input"
             />
           </label>
         </div>
@@ -62,24 +62,30 @@ export function ImportPage() {
           type="button"
           onClick={() => void handleImport()}
           disabled={!file || busy}
-          className={`mt-6 ${buttonPrimary}`}
+          className={buttonPrimary}
         >
           <UploadSimple size={18} />
           {busy ? "Importing archive" : "Start import"}
         </button>
-        {error ? <p className="mt-4 text-sm text-red-600">{error}</p> : null}
+        {error ? <p className="bb-inline-error">{error}</p> : null}
       </div>
-      <div className="rounded-[2rem] border border-slate-200/70 bg-white/80 p-6 shadow-[0_20px_50px_-32px_rgba(15,23,42,0.28)]">
-        <p className="text-xs uppercase tracking-[0.3em] text-slate-500">Latest job</p>
+      <div className="bb-job-card">
+        <p className="bb-eyebrow">Latest job</p>
         {job ? (
-          <div className="mt-4 space-y-4">
-            <div className="rounded-[1.4rem] border border-slate-200 bg-slate-50/70 px-4 py-4">
-              <p className="text-sm font-medium text-slate-900">Status: {job.status}</p>
-              <p className="mt-2 text-sm text-slate-600">Created notes: {job.createdCount}</p>
-              <p className="text-sm text-slate-600">Warnings: {job.warningCount}</p>
+          <div className="space-y-4">
+            <div className="bb-summary-card px-4 py-4">
+              <p className="text-sm font-medium text-[color:var(--ink)]">Status: {job.status}</p>
+              <p className="mt-2 text-sm text-[color:var(--ink-soft)]">Created notes: {job.createdCount}</p>
+              <p className="text-sm text-[color:var(--ink-soft)]">Warnings: {job.warningCount}</p>
             </div>
             {job.warnings.length > 0 ? (
-              <ul className="space-y-2 rounded-[1.4rem] border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-700">
+              <ul
+                className="space-y-2 rounded-[1.2rem] border px-4 py-4 text-sm text-[color:var(--danger)]"
+                style={{
+                  borderColor: "color-mix(in srgb, var(--danger) 22%, var(--line))",
+                  background: "color-mix(in srgb, var(--danger) 8%, transparent)"
+                }}
+              >
                 {job.warnings.map((warning) => (
                   <li key={warning}>{warning}</li>
                 ))}
@@ -87,7 +93,7 @@ export function ImportPage() {
             ) : null}
           </div>
         ) : (
-          <p className="mt-4 text-sm leading-relaxed text-slate-500">No import has been started in this session yet.</p>
+          <p className="text-sm leading-relaxed text-[color:var(--ink-soft)]">No import has been started in this session yet.</p>
         )}
       </div>
     </section>
