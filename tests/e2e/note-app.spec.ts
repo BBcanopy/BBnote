@@ -4,50 +4,66 @@ import path from "node:path";
 import { expect, test } from "@playwright/test";
 import JSZip from "jszip";
 
-test("signs in through mock oidc, creates a note, searches it, and uploads an attachment", async ({ page }) => {
+test("starts empty, creates notebooks, autosaves notes, and collapses workspace lanes", async ({ page }) => {
   const suffix = Date.now().toString();
-  const folderName = `Project A ${suffix}`;
-  const noteTitle = `Roadmap review ${suffix}`;
+  const notebookName = `Projects ${suffix}`;
+  const subNotebookName = `Roadmaps ${suffix}`;
+  const noteTitle = `Launch plan ${suffix}`;
   const searchTerm = `budget-${suffix}`;
 
   await login(page);
 
-  await page.getByPlaceholder("New folder").fill(folderName);
-  await page.getByRole("button", { name: "Create folder" }).click();
-  await page.getByRole("button", { name: new RegExp(folderName, "i") }).click();
+  await expect(page.getByText("No notebooks yet.")).toBeVisible();
+  await expect(page.getByText(/inbox/i)).toHaveCount(0);
 
-  await page.getByRole("button", { name: /new note/i }).click();
-  await page.getByLabel("Title").fill(noteTitle);
-  await page.getByLabel("Markdown body").fill(`# Budget\n\nalpha launch ${searchTerm}`);
-  await page.getByRole("button", { name: /^save$/i }).click();
+  await page.getByPlaceholder("Notebook name").fill(notebookName);
+  await page.getByRole("button", { name: /new notebook/i }).click();
+  await expect(page.getByRole("button", { name: /open notebooks pane/i })).toBeVisible();
 
+  await page.getByRole("button", { name: /open notebooks pane/i }).click();
+  await page.getByPlaceholder("Notebook name").fill(subNotebookName);
+  await page.getByRole("button", { name: /sub-notebook/i }).click();
+  await expect(page.getByRole("button", { name: /open notebooks pane/i })).toBeVisible();
+
+  await page.getByRole("button", { name: /^new note$/i }).click();
+  await expect(page.getByRole("button", { name: /open notes pane/i })).toBeVisible();
+  await expect(page.getByText(/untitled note/i)).toHaveCount(0);
+
+  await page.getByRole("textbox", { name: "Title" }).first().fill(noteTitle);
+  await page.getByLabel("Markdown").first().fill(`# Budget\n\nalpha launch ${searchTerm}`);
+  await expect(page.getByText(/^Saved /).first()).toBeVisible();
+
+  await page.getByRole("button", { name: /open notes pane/i }).click();
   await expect(page.getByRole("button", { name: new RegExp(noteTitle, "i") })).toBeVisible();
+
   await page.getByPlaceholder("Search notes").fill(searchTerm);
-  await expect(page.getByRole("button", { name: new RegExp(noteTitle, "i") })).toBeVisible();
+  await page.getByRole("button", { name: new RegExp(noteTitle, "i") }).click();
+  await expect(page.getByRole("button", { name: /open notes pane/i })).toBeVisible();
+
+  await page.getByRole("button", { name: /^preview$/i }).click();
+  await expect(page.getByRole("heading", { name: "Budget" })).toBeVisible();
+  await page.getByRole("button", { name: /^markdown$/i }).click();
 
   const uploadFile = await createTempFile("budget.txt", "budget attachment");
   await page.locator('input[type="file"]').first().setInputFiles(uploadFile);
-  await expect(page.getByText("budget.txt")).toBeVisible();
+  await expect(page.getByText("budget.txt").first()).toBeVisible();
 
   await page.getByRole("button", { name: /^link$/i }).click();
-  await page.getByRole("button", { name: /^save$/i }).click();
-  await expect(page.getByRole("textbox", { name: "Markdown body" })).toHaveValue(/budget\.txt/);
+  await expect(page.getByLabel("Markdown").first()).toHaveValue(/budget\.txt/);
 });
 
-test("exports all notes and imports a markdown archive", async ({ page }) => {
+test("navigates imports and exports from the avatar menu", async ({ page }) => {
   await login(page);
+  await createNotebookAndPersistedNote(page);
 
-  await page.getByRole("button", { name: /new note/i }).click();
-  await page.getByLabel("Title").fill("Export ready note");
-  await page.getByLabel("Markdown body").fill("This note should travel well.");
-  await page.getByRole("button", { name: /^save$/i }).click();
-
+  await page.getByRole("button", { name: /open user menu/i }).click();
   await page.getByRole("link", { name: /exports/i }).click();
   await page.getByRole("button", { name: /export all notes/i }).click();
   await expect(page.getByText(/status: completed/i)).toBeVisible();
-  await expect(page.getByRole("button", { name: /download zip/i })).toBeVisible();
+  await expect(page.getByText(/notebooks:/i)).toBeVisible();
 
   const importArchive = await createImportArchive();
+  await page.getByRole("button", { name: /open user menu/i }).click();
   await page.getByRole("link", { name: /imports/i }).click();
   await page.getByLabel("Source").selectOption("onenote");
   await page.getByLabel("Archive").setInputFiles(importArchive);
@@ -60,7 +76,19 @@ async function login(page: import("@playwright/test").Page) {
   await page.goto("/");
   await page.getByRole("button", { name: /sign in with oidc/i }).click();
   await page.getByRole("button", { name: /continue to bbnote/i }).click();
-  await expect(page.getByRole("button", { name: /new note/i })).toBeVisible();
+  await expect(page.getByRole("button", { name: /^new note$/i })).toBeVisible();
+}
+
+async function createNotebookAndPersistedNote(page: import("@playwright/test").Page) {
+  const suffix = Date.now().toString();
+  await page.getByPlaceholder("Notebook name").fill(`Exports ${suffix}`);
+  await page.getByRole("button", { name: /new notebook/i }).click();
+  await page.getByRole("button", { name: /^new note$/i }).click();
+  await page.getByRole("textbox", { name: "Title" }).first().fill(`Export ready note ${suffix}`);
+  await page.getByLabel("Markdown").first().fill("This note should travel well.");
+  await expect(page.getByText(/^Saved /).first()).toBeVisible();
+  await page.getByRole("button", { name: /open notes pane/i }).click();
+  await expect(page.getByRole("button", { name: new RegExp(`Export ready note ${suffix}`, "i") })).toBeVisible();
 }
 
 async function createTempFile(name: string, contents: string) {
