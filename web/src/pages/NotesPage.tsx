@@ -572,7 +572,7 @@ export function NotesPage() {
         </button>
       </section>
 
-      <div className="hidden min-h-[calc(100dvh-7.5rem)] items-stretch gap-4 lg:flex">
+      <div className="hidden min-h-[calc(100dvh-7.5rem)] items-stretch lg:flex">
         {explorerCollapsed ? (
           <CollapsedPaneRail
             label="Notebooks and notes"
