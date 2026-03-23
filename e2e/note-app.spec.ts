@@ -29,7 +29,7 @@ test("starts empty, restores separate notebook and notes lanes, supports row dra
       );
       return labels.join("|");
     })
-    .toBe("New notebook|Collapse notebooks pane");
+    .toBe("Expand all notebooks|Collapse all notebooks|New notebook|Collapse notebooks pane");
   await expect
     .poll(async () => {
       const labels = await page.getByTestId("notes-actions").locator("button").evaluateAll((buttons) =>
@@ -58,6 +58,11 @@ test("starts empty, restores separate notebook and notes lanes, supports row dra
   await page.getByRole("button", { name: /new notebook/i }).click();
   await expect(page.getByRole("button", { name: /open notebooks pane/i })).toHaveCount(0);
   await expect.poll(async () => page.locator('[data-testid^="notebook-drag-"]').count()).toBe(2);
+  await expect(page.locator('[data-testid^="notebook-drag-"]').filter({ hasText: subNotebookName }).first()).toBeVisible();
+
+  await page.getByRole("button", { name: /collapse all notebooks/i }).click();
+  await expect(page.locator('[data-testid^="notebook-drag-"]').filter({ hasText: subNotebookName })).toHaveCount(0);
+  await page.getByRole("button", { name: /expand all notebooks/i }).click();
   await expect(page.locator('[data-testid^="notebook-drag-"]').filter({ hasText: subNotebookName }).first()).toBeVisible();
 
   await page.getByRole("button", { name: new RegExp(`collapse notebook ${notebookName}`, "i") }).click();

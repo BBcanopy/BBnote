@@ -1,5 +1,5 @@
-import { CaretDown, CaretLeft, FolderSimple, FolderSimplePlus } from "@phosphor-icons/react";
-import { useEffect, useMemo, useState, type DragEvent, type KeyboardEvent } from "react";
+import { ArrowsInSimple, ArrowsOutSimple, CaretDown, CaretLeft, FolderSimple, FolderSimplePlus } from "@phosphor-icons/react";
+import { useEffect, useMemo, useRef, useState, type DragEvent, type KeyboardEvent } from "react";
 import type { FolderNode } from "../api/types";
 import type { FolderMoveInstruction, FolderMovePosition } from "../utils/folderTree";
 
@@ -21,6 +21,7 @@ export function FolderTree(props: {
   const [draggedFolderId, setDraggedFolderId] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<DropTarget | null>(null);
   const [expandedFolderIds, setExpandedFolderIds] = useState<Set<string>>(new Set());
+  const initializedExpansionRef = useRef(false);
   const dragging = draggedFolderId !== null;
   const canCreateNotebook = props.pendingName.trim().length > 0;
   const allNotesCount = props.folders.reduce((total, folder) => total + folder.noteCount, 0);
@@ -34,12 +35,14 @@ export function FolderTree(props: {
     }
     return grouped;
   }, [props.folders]);
+  const parentFolderIds = useMemo(
+    () => new Set(props.folders.filter((folder) => (childFoldersByParent.get(folder.id)?.length ?? 0) > 0).map((folder) => folder.id)),
+    [childFoldersByParent, props.folders]
+  );
+  const allParentsExpanded = parentFolderIds.size > 0 && [...parentFolderIds].every((folderId) => expandedFolderIds.has(folderId));
+  const anyParentExpanded = [...parentFolderIds].some((folderId) => expandedFolderIds.has(folderId));
 
   useEffect(() => {
-    const parentFolderIds = new Set(
-      props.folders.filter((folder) => (childFoldersByParent.get(folder.id)?.length ?? 0) > 0).map((folder) => folder.id)
-    );
-
     setExpandedFolderIds((current) => {
       const next = new Set<string>();
       for (const folderId of current) {
@@ -47,14 +50,15 @@ export function FolderTree(props: {
           next.add(folderId);
         }
       }
-      for (const folderId of parentFolderIds) {
-        if (!current.has(folderId)) {
+      if (!initializedExpansionRef.current && parentFolderIds.size > 0) {
+        for (const folderId of parentFolderIds) {
           next.add(folderId);
         }
+        initializedExpansionRef.current = true;
       }
       return next;
     });
-  }, [childFoldersByParent, props.folders]);
+  }, [parentFolderIds]);
 
   useEffect(() => {
     const selectedFolderId = props.selectedFolderId;
@@ -128,11 +132,45 @@ export function FolderTree(props: {
     });
   }
 
+  function expandAllFolders() {
+    setExpandedFolderIds(new Set(parentFolderIds));
+    if (parentFolderIds.size > 0) {
+      initializedExpansionRef.current = true;
+    }
+  }
+
+  function collapseAllFolders() {
+    setExpandedFolderIds(new Set());
+    if (parentFolderIds.size > 0) {
+      initializedExpansionRef.current = true;
+    }
+  }
+
   return (
     <section className="rounded-[2rem] border border-slate-200/70 bg-white/88 p-4 shadow-[0_20px_50px_-32px_rgba(15,23,42,0.18)] backdrop-blur-sm">
       <div className="flex items-center justify-between gap-3">
         <p className="text-xs uppercase tracking-[0.3em] text-slate-500">Notebooks</p>
         <div data-testid="notebooks-actions" className="flex items-center gap-2">
+          <button
+            type="button"
+            aria-label="Expand all notebooks"
+            title="Expand all notebooks"
+            onClick={expandAllFolders}
+            disabled={parentFolderIds.size === 0 || allParentsExpanded}
+            className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-[1px] hover:border-slate-300 hover:text-slate-900 active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:translate-y-0"
+          >
+            <ArrowsOutSimple size={16} />
+          </button>
+          <button
+            type="button"
+            aria-label="Collapse all notebooks"
+            title="Collapse all notebooks"
+            onClick={collapseAllFolders}
+            disabled={parentFolderIds.size === 0 || !anyParentExpanded}
+            className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-[1px] hover:border-slate-300 hover:text-slate-900 active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:translate-y-0"
+          >
+            <ArrowsInSimple size={16} />
+          </button>
           <button
             type="button"
             aria-label="New notebook"
