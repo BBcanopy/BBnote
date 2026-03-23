@@ -2,7 +2,6 @@ import { CaretDown, CaretLeft, FolderSimple, FolderSimplePlus, MagnifyingGlass, 
 import { useMemo, useState, type DragEvent, type KeyboardEvent } from "react";
 import type { FolderNode, NoteSummary } from "../api/types";
 import type { FolderMoveInstruction, FolderMovePosition } from "../utils/folderTree";
-import { buttonPrimary } from "./buttonStyles";
 
 const NOTE_TREE_EXCERPT_LIMIT = 52;
 
@@ -121,7 +120,7 @@ export function NotebookTreePane(props: {
         <div>
           <p className="text-xs uppercase tracking-[0.3em] text-slate-500">Notebooks</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div data-testid="explorer-actions" className="flex items-center gap-2">
           <button
             type="button"
             aria-label="New notebook"
@@ -130,6 +129,15 @@ export function NotebookTreePane(props: {
             className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-[1px] hover:border-emerald-300 hover:text-emerald-700 active:translate-y-0"
           >
             <FolderSimplePlus size={17} />
+          </button>
+          <button
+            type="button"
+            aria-label="New note"
+            title="New note"
+            onClick={props.onCreateNote}
+            className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-[1px] hover:border-emerald-300 hover:text-emerald-700 active:translate-y-0"
+          >
+            <Plus size={17} />
           </button>
           {props.onCollapse ? (
             <button
@@ -141,10 +149,6 @@ export function NotebookTreePane(props: {
               <CaretLeft size={16} />
             </button>
           ) : null}
-          <button type="button" onClick={props.onCreateNote} className={buttonPrimary}>
-            <Plus size={18} />
-            New note
-          </button>
         </div>
       </div>
 

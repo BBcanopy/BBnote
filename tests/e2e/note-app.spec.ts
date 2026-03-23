@@ -19,6 +19,16 @@ test("starts empty, shows a unified notebook tree, supports row dragging, autosa
   await expect(page.getByRole("button", { name: /all notes/i })).toHaveCount(0);
   await expect(page.getByRole("button", { name: /collapse notebooks pane/i })).toBeVisible();
   await expect(page.getByRole("button", { name: /collapse notes pane/i })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /^new note$/i }).first()).toHaveAttribute("title", "New note");
+  expect((await page.getByRole("button", { name: /^new note$/i }).first().textContent())?.trim() ?? "").toBe("");
+  await expect
+    .poll(async () => {
+      const labels = await page.getByTestId("explorer-actions").locator("button").evaluateAll((buttons) =>
+        buttons.map((button) => button.getAttribute("aria-label") ?? button.textContent?.trim() ?? "")
+      );
+      return labels.join("|");
+    })
+    .toBe("New notebook|New note|Collapse notebooks pane");
 
   await page.getByRole("button", { name: /collapse notebooks pane/i }).click();
   await expect(page.getByRole("button", { name: /open notebooks pane/i })).toBeVisible();
