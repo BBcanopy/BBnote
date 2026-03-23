@@ -1,12 +1,10 @@
-import path from "node:path";
-
 export interface AppConfig {
   port: number;
   appBaseUrl: string;
   oidcIssuerUrl: string;
   oidcClientIdWeb: string;
   oidcClientIdAndroid: string;
-  oidcClientSecret: string | null;
+  oidcClientSecret: string;
   oidcScopes: string;
   sessionSecret: string;
   sqlitePath: string;
@@ -18,26 +16,36 @@ export interface AppConfig {
 
 export function buildConfig(): AppConfig {
   const defaultPort = 3000;
-  const defaultAppBaseUrl = process.env.NODE_ENV === "production" ? "http://127.0.0.1:3000" : "http://127.0.0.1:5173";
-  const appBaseUrl = process.env.APP_BASE_URL ?? defaultAppBaseUrl;
-  const defaultMockIssuerUrl = `${appBaseUrl.replace(/\/$/, "")}/mock-oidc`;
-  const oidcIssuerUrl = process.env.OIDC_ISSUER_URL ?? defaultMockIssuerUrl;
 
   return {
     port: defaultPort,
-    appBaseUrl,
-    oidcIssuerUrl,
-    oidcClientIdWeb: process.env.OIDC_CLIENT_ID_WEB ?? "bbnote-web",
-    oidcClientIdAndroid: process.env.OIDC_CLIENT_ID_ANDROID ?? "bbnote-android",
-    oidcClientSecret: process.env.OIDC_CLIENT_SECRET?.trim() || null,
-    oidcScopes: process.env.OIDC_SCOPES ?? "openid profile email",
-    sessionSecret: process.env.SESSION_SECRET ?? "bbnote-dev-session-secret",
-    sqlitePath: process.env.SQLITE_PATH ?? path.resolve("data/db/bbnote.sqlite"),
-    notesRoot: process.env.NOTES_ROOT ?? path.resolve("data/notes"),
-    attachmentsRoot: process.env.ATTACHMENTS_ROOT ?? path.resolve("data/attachments"),
-    exportsRoot: process.env.EXPORTS_ROOT ?? path.resolve("data/exports"),
-    mockOidcEnabled: process.env.MOCK_OIDC_ENABLED
-      ? process.env.MOCK_OIDC_ENABLED === "true"
-      : oidcIssuerUrl === defaultMockIssuerUrl
+    appBaseUrl: requireEnv("APP_BASE_URL"),
+    oidcIssuerUrl: requireEnv("OIDC_ISSUER_URL"),
+    oidcClientIdWeb: requireEnv("OIDC_CLIENT_ID_WEB"),
+    oidcClientIdAndroid: requireEnv("OIDC_CLIENT_ID_ANDROID"),
+    oidcClientSecret: requireEnv("OIDC_CLIENT_SECRET"),
+    oidcScopes: requireEnv("OIDC_SCOPES"),
+    sessionSecret: requireEnv("SESSION_SECRET"),
+    sqlitePath: requireEnv("SQLITE_PATH"),
+    notesRoot: requireEnv("NOTES_ROOT"),
+    attachmentsRoot: requireEnv("ATTACHMENTS_ROOT"),
+    exportsRoot: requireEnv("EXPORTS_ROOT"),
+    mockOidcEnabled: requireBooleanEnv("MOCK_OIDC_ENABLED")
   };
+}
+
+function requireEnv(name: string) {
+  const value = process.env[name]?.trim();
+  if (!value) {
+    throw new Error(`Missing required environment variable: ${name}`);
+  }
+  return value;
+}
+
+function requireBooleanEnv(name: string) {
+  const value = requireEnv(name);
+  if (value !== "true" && value !== "false") {
+    throw new Error(`Environment variable ${name} must be 'true' or 'false'.`);
+  }
+  return value === "true";
 }

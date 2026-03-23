@@ -147,12 +147,9 @@ export class OidcService {
       code: input.code,
       redirect_uri: this.redirectUri,
       client_id: this.config.oidcClientIdWeb,
-      code_verifier: input.flow.codeVerifier
+      code_verifier: input.flow.codeVerifier,
+      client_secret: this.config.oidcClientSecret
     });
-
-    if (this.config.oidcClientSecret) {
-      body.set("client_secret", this.config.oidcClientSecret);
-    }
 
     const response = await fetch(discovery.token_endpoint, {
       method: "POST",

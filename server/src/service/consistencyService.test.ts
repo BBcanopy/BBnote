@@ -18,7 +18,9 @@ describe("consistencyService", () => {
     process.env.OIDC_ISSUER_URL = "http://localhost:3000/mock-oidc";
     process.env.OIDC_CLIENT_ID_WEB = "bbnote-web";
     process.env.OIDC_CLIENT_ID_ANDROID = "bbnote-android";
+    process.env.OIDC_CLIENT_SECRET = "bbnote-dev-client-secret";
     process.env.OIDC_SCOPES = "openid profile email";
+    process.env.SESSION_SECRET = "session-secret";
     process.env.SQLITE_PATH = path.join(tempRoot, "db", "bbnote.sqlite");
     process.env.NOTES_ROOT = path.join(tempRoot, "notes");
     process.env.ATTACHMENTS_ROOT = path.join(tempRoot, "attachments");
@@ -48,7 +50,9 @@ describe("consistencyService", () => {
     delete process.env.OIDC_ISSUER_URL;
     delete process.env.OIDC_CLIENT_ID_WEB;
     delete process.env.OIDC_CLIENT_ID_ANDROID;
+    delete process.env.OIDC_CLIENT_SECRET;
     delete process.env.OIDC_SCOPES;
+    delete process.env.SESSION_SECRET;
     delete process.env.SQLITE_PATH;
     delete process.env.NOTES_ROOT;
     delete process.env.ATTACHMENTS_ROOT;

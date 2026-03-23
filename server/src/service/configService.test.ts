@@ -1,47 +1,55 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { buildConfig } from "./configService.js";
 
+const REQUIRED_ENV = {
+  APP_BASE_URL: "http://127.0.0.1:3000",
+  OIDC_ISSUER_URL: "http://127.0.0.1:3000/mock-oidc",
+  OIDC_CLIENT_ID_WEB: "bbnote-web",
+  OIDC_CLIENT_ID_ANDROID: "bbnote-android",
+  OIDC_CLIENT_SECRET: "bbnote-dev-client-secret",
+  OIDC_SCOPES: "openid profile email",
+  SESSION_SECRET: "bbnote-dev-session-secret",
+  SQLITE_PATH: "/tmp/bbnote.sqlite",
+  NOTES_ROOT: "/tmp/notes",
+  ATTACHMENTS_ROOT: "/tmp/attachments",
+  EXPORTS_ROOT: "/tmp/exports",
+  MOCK_OIDC_ENABLED: "true"
+} as const;
+
+const REQUIRED_ENV_KEYS = Object.keys(REQUIRED_ENV) as Array<keyof typeof REQUIRED_ENV>;
+
 describe("buildConfig", () => {
-  it("provides defaults for local development", () => {
+  beforeEach(() => {
+    for (const [key, value] of Object.entries(REQUIRED_ENV)) {
+      process.env[key] = value;
+    }
+  });
+
+  afterEach(() => {
+    for (const key of REQUIRED_ENV_KEYS) {
+      delete process.env[key];
+    }
+  });
+
+  it("returns explicit environment values", () => {
     const config = buildConfig();
+
     expect(config.port).toBe(3000);
-    expect(config.appBaseUrl).toBe("http://127.0.0.1:5173");
-    expect(config.oidcIssuerUrl).toBe("http://127.0.0.1:5173/mock-oidc");
+    expect(config.appBaseUrl).toBe(REQUIRED_ENV.APP_BASE_URL);
+    expect(config.oidcIssuerUrl).toBe(REQUIRED_ENV.OIDC_ISSUER_URL);
+    expect(config.oidcClientSecret).toBe(REQUIRED_ENV.OIDC_CLIENT_SECRET);
     expect(config.mockOidcEnabled).toBe(true);
-    expect(config.sessionSecret).toBe("bbnote-dev-session-secret");
-    expect(config.notesRoot).toContain("data");
+    expect(config.sessionSecret).toBe(REQUIRED_ENV.SESSION_SECRET);
+    expect(config.notesRoot).toBe(REQUIRED_ENV.NOTES_ROOT);
   });
 
-  it("disables mock oidc by default when a custom issuer is configured", () => {
-    process.env.OIDC_ISSUER_URL = "https://issuer.example.com";
-
-    const config = buildConfig();
-
-    expect(config.oidcIssuerUrl).toBe("https://issuer.example.com");
-    expect(config.mockOidcEnabled).toBe(false);
-
+  it("fails fast when a required value is missing", () => {
     delete process.env.OIDC_ISSUER_URL;
+    expect(() => buildConfig()).toThrow("Missing required environment variable: OIDC_ISSUER_URL");
   });
 
-  it("keeps the listen port fixed while deriving the mock issuer from the base url", () => {
-    process.env.APP_BASE_URL = "https://notes.example.com";
-
-    const config = buildConfig();
-
-    expect(config.port).toBe(3000);
-    expect(config.appBaseUrl).toBe("https://notes.example.com");
-    expect(config.oidcIssuerUrl).toBe("https://notes.example.com/mock-oidc");
-
-    delete process.env.APP_BASE_URL;
-  });
-
-  it("accepts an explicit oidc client secret", () => {
-    process.env.OIDC_CLIENT_SECRET = "super-secret";
-
-    const config = buildConfig();
-
-    expect(config.oidcClientSecret).toBe("super-secret");
-
-    delete process.env.OIDC_CLIENT_SECRET;
+  it("fails fast when the mock oidc flag is not a boolean string", () => {
+    process.env.MOCK_OIDC_ENABLED = "sometimes";
+    expect(() => buildConfig()).toThrow("Environment variable MOCK_OIDC_ENABLED must be 'true' or 'false'.");
   });
 });

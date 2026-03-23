@@ -6,17 +6,18 @@ services:
     ports:
       - "${APP_HOST_PORT:-3000}:3000"
     environment:
-      APP_BASE_URL: ${APP_BASE_URL:-http://127.0.0.1:3000}
-      OIDC_CLIENT_ID_WEB: bbnote-web
-      OIDC_CLIENT_ID_ANDROID: bbnote-android
-      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-}
-      OIDC_SCOPES: openid profile email
-      SESSION_SECRET: ${SESSION_SECRET:-bbnote-dev-session-secret}
-      SQLITE_PATH: /data/db/bbnote.sqlite
-      NOTES_ROOT: /data/notes
-      ATTACHMENTS_ROOT: /data/attachments
-      EXPORTS_ROOT: /data/exports
-      MOCK_OIDC_ENABLED: "true"
+      APP_BASE_URL: ${APP_BASE_URL}
+      OIDC_ISSUER_URL: ${OIDC_ISSUER_URL}
+      OIDC_CLIENT_ID_WEB: ${OIDC_CLIENT_ID_WEB}
+      OIDC_CLIENT_ID_ANDROID: ${OIDC_CLIENT_ID_ANDROID}
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET}
+      OIDC_SCOPES: ${OIDC_SCOPES}
+      SESSION_SECRET: ${SESSION_SECRET}
+      SQLITE_PATH: ${SQLITE_PATH}
+      NOTES_ROOT: ${NOTES_ROOT}
+      ATTACHMENTS_ROOT: ${ATTACHMENTS_ROOT}
+      EXPORTS_ROOT: ${EXPORTS_ROOT}
+      MOCK_OIDC_ENABLED: ${MOCK_OIDC_ENABLED}
     volumes:
       - ./data/db:/data/db
       - ./data/notes:/data/notes
