@@ -8,8 +8,8 @@ test("starts empty, creates notebooks, autosaves notes, and collapses workspace 
   const suffix = Date.now().toString();
   const notebookName = `Projects ${suffix}`;
   const subNotebookName = `Roadmaps ${suffix}`;
-  const noteTitle = `Launch plan ${suffix}`;
-  const searchTerm = `budget-${suffix}`;
+  const noteTitle = `Launch-plan-${suffix}-preview-overflow-check`;
+  const searchTerm = `budget-${suffix}-ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff`;
 
   await login(page);
 
@@ -34,10 +34,17 @@ test("starts empty, creates notebooks, autosaves notes, and collapses workspace 
   await expect(page.getByText(/^Saved /).first()).toBeVisible();
 
   await page.getByRole("button", { name: /open notes pane/i }).click();
-  await expect(page.getByRole("button", { name: new RegExp(noteTitle, "i") })).toBeVisible();
+  const notePreview = page.getByRole("button", { name: new RegExp(noteTitle, "i") }).first();
+  await expect(notePreview).toBeVisible();
+  expect(
+    await notePreview.evaluate((element) => {
+      const noteCard = element as HTMLButtonElement;
+      return noteCard.scrollWidth <= noteCard.clientWidth + 1;
+    })
+  ).toBeTruthy();
 
   await page.getByPlaceholder("Search notes").fill(searchTerm);
-  await page.getByRole("button", { name: new RegExp(noteTitle, "i") }).click();
+  await notePreview.click();
   await expect(page.getByRole("button", { name: /open notes pane/i })).toBeVisible();
 
   await page.getByRole("button", { name: /^preview$/i }).click();

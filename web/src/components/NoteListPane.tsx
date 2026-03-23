@@ -63,13 +63,17 @@ export function NoteListPane(props: {
                 }`}
               >
                 <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="font-medium tracking-tight">{note.title}</p>
-                    <p className={`mt-2 text-sm leading-relaxed ${selected ? "text-slate-300" : "text-slate-500"}`}>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-medium tracking-tight">{note.title}</p>
+                    <p
+                      className={`mt-2 overflow-hidden break-words text-sm leading-relaxed [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:3] ${
+                        selected ? "text-slate-300" : "text-slate-500"
+                      }`}
+                    >
                       {note.excerpt || "Empty note"}
                     </p>
                   </div>
-                  <NotePencil size={18} className={selected ? "text-emerald-300" : "text-slate-400"} />
+                  <NotePencil size={18} className={`shrink-0 ${selected ? "text-emerald-300" : "text-slate-400"}`} />
                 </div>
               </button>
             );
