@@ -42,6 +42,12 @@ test("starts empty, creates notebooks, autosaves notes, and collapses workspace 
       return noteCard.scrollWidth <= noteCard.clientWidth + 1;
     })
   ).toBeTruthy();
+  expect(
+    await notePreview.evaluate((element) => {
+      const excerpt = element.querySelector("p:nth-of-type(2)");
+      return (excerpt?.textContent ?? "").length <= 75;
+    })
+  ).toBeTruthy();
 
   await page.getByPlaceholder("Search notes").fill(searchTerm);
   await notePreview.click();

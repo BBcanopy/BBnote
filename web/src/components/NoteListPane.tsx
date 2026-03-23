@@ -2,6 +2,8 @@ import { MagnifyingGlass, NotePencil, Plus } from "@phosphor-icons/react";
 import type { NoteSummary } from "../api/types";
 import { buttonPrimary } from "./buttonStyles";
 
+const NOTE_PREVIEW_EXCERPT_LIMIT = 72;
+
 export function NoteListPane(props: {
   notes: NoteSummary[];
   search: string;
@@ -51,6 +53,7 @@ export function NoteListPane(props: {
         ) : (
           props.notes.map((note) => {
             const selected = props.selectedNoteId === note.id;
+            const previewExcerpt = formatPreviewExcerpt(note.excerpt);
             return (
               <button
                 key={note.id}
@@ -70,7 +73,7 @@ export function NoteListPane(props: {
                         selected ? "text-slate-300" : "text-slate-500"
                       }`}
                     >
-                      {note.excerpt || "Empty note"}
+                      {previewExcerpt || "Empty note"}
                     </p>
                   </div>
                   <NotePencil size={18} className={`shrink-0 ${selected ? "text-emerald-300" : "text-slate-400"}`} />
@@ -86,4 +89,12 @@ export function NoteListPane(props: {
 
 function SkeletonCard() {
   return <div className="h-24 animate-pulse rounded-[1.4rem] border border-slate-200 bg-slate-100/80" />;
+}
+
+function formatPreviewExcerpt(excerpt: string) {
+  const cleaned = excerpt.replace(/\s+/g, " ").trim();
+  if (cleaned.length <= NOTE_PREVIEW_EXCERPT_LIMIT) {
+    return cleaned;
+  }
+  return `${cleaned.slice(0, NOTE_PREVIEW_EXCERPT_LIMIT).trimEnd()}...`;
 }
