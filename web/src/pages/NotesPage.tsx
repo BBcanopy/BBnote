@@ -592,7 +592,7 @@ export function NotesPage() {
               />
             ) : (
                 <div className="flex shrink-0 items-stretch">
-                  <div data-testid="notebook-pane" className="bb-workspace-lane shrink-0" style={{ width: folderPaneWidth }}>
+                  <div data-testid="notebook-pane" className="bb-workspace-lane bb-workspace-lane--folders shrink-0" style={{ width: folderPaneWidth }}>
                   <FolderTree
                     folders={folders}
                     selectedFolderId={selectedFolderId}
@@ -624,7 +624,7 @@ export function NotesPage() {
               />
             ) : (
                 <div className="flex shrink-0 items-stretch">
-                  <div data-testid="notes-pane" className="bb-workspace-lane shrink-0" style={{ width: notePaneWidth }}>
+                  <div data-testid="notes-pane" className="bb-workspace-lane bb-workspace-lane--notes shrink-0" style={{ width: notePaneWidth }}>
                   <NoteListPane
                     notes={notes}
                     search={search}
@@ -762,7 +762,7 @@ function EditorPanel(props: {
   error: string | null;
 }) {
   return (
-    <section className="bb-editor-panel lg:flex-1">
+    <section className="bb-editor-panel bb-editor-panel--workspace lg:flex-1">
       <div className="bb-editor-header">
         <div className="flex flex-wrap items-center gap-2">
           <button

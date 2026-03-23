@@ -20,6 +20,8 @@ test("keeps desktop lanes viewport-height and only shows the pane grip on border
   const notebookPaneHandle = notebookPaneResizer.locator(".bb-pane-resizer__handle");
   const notesPaneHandle = notesPaneResizer.locator(".bb-pane-resizer__handle");
   const editorPanel = page.locator(".bb-editor-panel").first();
+  const notebookCard = notebookPane.locator(".bb-pane-card").first();
+  const notesCard = notesPane.locator(".bb-pane-card").first();
 
   await expect
     .poll(async () => Number.parseFloat(await notebookPaneHandle.evaluate((element) => getComputedStyle(element).opacity)))
@@ -97,6 +99,18 @@ test("keeps desktop lanes viewport-height and only shows the pane grip on border
       return editorBox.x - (notesBox.x + notesBox.width);
     })
     .toBeLessThan(3);
+  await expect
+    .poll(async () => Number.parseFloat(await notebookCard.evaluate((element) => getComputedStyle(element).borderTopRightRadius)))
+    .toBeLessThan(18);
+  await expect
+    .poll(async () => Number.parseFloat(await notesCard.evaluate((element) => getComputedStyle(element).borderTopLeftRadius)))
+    .toBeLessThan(18);
+  await expect
+    .poll(async () => Number.parseFloat(await notesCard.evaluate((element) => getComputedStyle(element).borderTopRightRadius)))
+    .toBeLessThan(18);
+  await expect
+    .poll(async () => Number.parseFloat(await editorPanel.evaluate((element) => getComputedStyle(element).borderTopLeftRadius)))
+    .toBeLessThan(18);
 
   const notebookPaneWidthBefore = (await notebookPane.boundingBox())?.width ?? 0;
   const notesPaneWidthBefore = (await notesPane.boundingBox())?.width ?? 0;

@@ -915,6 +915,21 @@ button:disabled {
   align-content: start;
 }
 
+@media (min-width: 1024px) {
+  .bb-workspace-lane--folders > .bb-pane-card {
+    border-top-right-radius: 0.95rem;
+    border-bottom-right-radius: 0.95rem;
+  }
+
+  .bb-workspace-lane--notes > .bb-pane-card {
+    border-top-left-radius: 0.95rem;
+    border-bottom-left-radius: 0.95rem;
+    border-top-right-radius: 0.95rem;
+    border-bottom-right-radius: 0.95rem;
+  }
+
+}
+
 .bb-pane-card__header,
 .bb-panel-header {
   display: flex;
@@ -1310,6 +1325,13 @@ button:disabled {
   display: grid;
   gap: 0.9rem;
   min-width: 0;
+}
+
+@media (min-width: 1024px) {
+  .bb-editor-panel--workspace {
+    border-top-left-radius: 0.95rem;
+    border-bottom-left-radius: 0.95rem;
+  }
 }
 
 .bb-editor-panel__content {
