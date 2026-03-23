@@ -122,6 +122,15 @@ export function NotebookTreePane(props: {
           <p className="text-xs uppercase tracking-[0.3em] text-slate-500">Notebooks</p>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            type="button"
+            aria-label="New notebook"
+            title="New notebook"
+            onClick={props.onCreateNotebook}
+            className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-[1px] hover:border-emerald-300 hover:text-emerald-700 active:translate-y-0"
+          >
+            <FolderSimplePlus size={17} />
+          </button>
           {props.onCollapse ? (
             <button
               type="button"
@@ -263,7 +272,7 @@ export function NotebookTreePane(props: {
         )}
       </div>
 
-      <div className="mt-5 grid gap-2 border-t border-slate-200/80 pt-5">
+      <div className="mt-5 border-t border-slate-200/80 pt-5">
         <input
           value={props.pendingName}
           onChange={(event) => props.onPendingNameChange(event.target.value)}
@@ -271,10 +280,6 @@ export function NotebookTreePane(props: {
           placeholder="Notebook name"
           className="w-full rounded-[1.1rem] border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm outline-none transition duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] focus:border-emerald-400"
         />
-        <button type="button" onClick={props.onCreateNotebook} className={buttonPrimary}>
-          <FolderSimplePlus size={18} />
-          New notebook
-        </button>
       </div>
     </section>
   );
