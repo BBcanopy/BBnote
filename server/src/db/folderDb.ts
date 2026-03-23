@@ -12,8 +12,8 @@ export class FolderDb {
   insert(record: FolderRecord) {
     this.connection
       .prepare(`
-        insert into folders (id, owner_id, parent_id, name, storage_dir_name, created_at, updated_at)
-        values (@id, @ownerId, @parentId, @name, @storageDirName, @createdAt, @updatedAt)
+        insert into folders (id, owner_id, parent_id, name, storage_dir_name, sort_order, created_at, updated_at)
+        values (@id, @ownerId, @parentId, @name, @storageDirName, @sortOrder, @createdAt, @updatedAt)
       `)
       .run(record);
   }
@@ -28,6 +28,7 @@ export class FolderDb {
             folders.parent_id as parentId,
             folders.name,
             folders.storage_dir_name as storageDirName,
+            folders.sort_order as sortOrder,
             folders.created_at as createdAt,
             folders.updated_at as updatedAt,
             (
@@ -58,6 +59,7 @@ export class FolderDb {
             parent_id as parentId,
             name,
             storage_dir_name as storageDirName,
+            sort_order as sortOrder,
             created_at as createdAt,
             updated_at as updatedAt
           from folders
@@ -67,14 +69,29 @@ export class FolderDb {
       .get(ownerId, id) as FolderRecord | undefined;
   }
 
-  update(ownerId: string, id: string, input: { name: string; parentId: string | null; updatedAt: string }) {
+  update(ownerId: string, id: string, input: { name: string; parentId: string | null; sortOrder: number; updatedAt: string }) {
     this.connection
       .prepare(`
         update folders
-        set name = @name, parent_id = @parentId, updated_at = @updatedAt
+        set name = @name, parent_id = @parentId, sort_order = @sortOrder, updated_at = @updatedAt
         where owner_id = @ownerId and id = @id
       `)
       .run({ ownerId, id, ...input });
+  }
+
+  getNextSortOrder(ownerId: string, parentId: string | null): number {
+    const parentClause = parentId === null ? "parent_id is null" : "parent_id = @parentId";
+    const row = this.connection
+      .prepare<{ ownerId: string; parentId: string | null }, { maxSortOrder: number | null }>(
+        `
+          select max(sort_order) as maxSortOrder
+          from folders
+          where owner_id = @ownerId and ${parentClause}
+        `
+      )
+      .get({ ownerId, parentId }) as { maxSortOrder: number | null } | undefined;
+
+    return (row?.maxSortOrder ?? -1) + 1;
   }
 
   delete(ownerId: string, id: string) {
@@ -97,26 +114,5 @@ export class FolderDb {
       )
       .get(ownerId, id) as { count: number } | undefined;
     return (row?.count ?? 0) > 0;
-  }
-
-  findInbox(ownerId: string): FolderRecord | undefined {
-    return this.connection
-      .prepare<[string], FolderRecord>(
-        `
-          select
-            id,
-            owner_id as ownerId,
-            parent_id as parentId,
-            name,
-            storage_dir_name as storageDirName,
-            created_at as createdAt,
-            updated_at as updatedAt
-          from folders
-          where owner_id = ? and parent_id is null and name = 'Inbox'
-          order by created_at asc
-          limit 1
-        `
-      )
-      .get(ownerId) as FolderRecord | undefined;
   }
 }

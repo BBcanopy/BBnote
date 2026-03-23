@@ -19,6 +19,19 @@ export class StorageService {
     return path.join(this.config.notesRoot, ownerId, storageDirName);
   }
 
+  noteFilePath(input: {
+    ownerId: string;
+    storageDirName: string;
+    noteId: string;
+    title: string;
+    createdAt: string;
+  }) {
+    const date = input.createdAt.slice(0, 10);
+    const directory = this.noteFolderPath(input.ownerId, input.storageDirName);
+    const filename = buildNoteFileName(date, input.title, input.noteId);
+    return path.join(directory, filename);
+  }
+
   attachmentRootPath(ownerId: string) {
     return path.join(this.config.attachmentsRoot, ownerId);
   }
@@ -35,11 +48,8 @@ export class StorageService {
     createdAt: string;
     bodyMarkdown: string;
   }) {
-    const date = input.createdAt.slice(0, 10);
-    const directory = this.noteFolderPath(input.ownerId, input.storageDirName);
-    await fs.mkdir(directory, { recursive: true });
-    const filename = buildNoteFileName(date, input.title, input.noteId);
-    const filePath = path.join(directory, filename);
+    const filePath = this.noteFilePath(input);
+    await fs.mkdir(path.dirname(filePath), { recursive: true });
     await fs.writeFile(filePath, input.bodyMarkdown, "utf8");
     return filePath;
   }
@@ -49,6 +59,7 @@ export class StorageService {
   }
 
   async writeMarkdown(filePath: string, bodyMarkdown: string) {
+    await fs.mkdir(path.dirname(filePath), { recursive: true });
     await fs.writeFile(filePath, bodyMarkdown, "utf8");
   }
 

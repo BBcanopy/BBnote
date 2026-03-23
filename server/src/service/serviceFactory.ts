@@ -59,7 +59,7 @@ export async function createServices(config: AppConfig, app?: FastifyInstance): 
   const importService = new ImportService(jobDb, folderService, noteService, attachmentService);
   const exportService = new ExportService(config, jobDb, folderDb, noteDb, attachmentDb, storageService);
   const consistencyService = new ConsistencyService(noteDb, attachmentDb, storageService);
-  const authService = new AuthService(config, userDb, sessionDb, folderService, oidcService, cookieService);
+  const authService = new AuthService(config, userDb, sessionDb, oidcService, cookieService);
 
   const services: AppServices = {
     config,

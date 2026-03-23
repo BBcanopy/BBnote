@@ -112,8 +112,7 @@ describe("authController integration", () => {
     });
 
     expect(foldersResponse.statusCode).toBe(200);
-    expect(foldersResponse.json()).toHaveLength(1);
-    expect(foldersResponse.json()[0].name).toBe("Inbox");
+    expect(foldersResponse.json()).toEqual([]);
   });
 });
 

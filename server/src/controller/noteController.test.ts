@@ -51,76 +51,123 @@ describe("noteController integration", () => {
     delete process.env.MOCK_OIDC_ENABLED;
   });
 
-  it("creates inbox automatically, stores notes on disk, and searches through fts", async () => {
-    const folderResponse = await app.inject({
+  it("requires notebooks for persisted notes and rewrites markdown paths when title or notebook changes", async () => {
+    const listResponse = await app.inject({
       method: "GET",
       url: "/api/v1/folders",
       headers: authHeaders(token)
     });
-    expect(folderResponse.statusCode).toBe(200);
-    const [inbox] = folderResponse.json();
-    expect(inbox.name).toBe("Inbox");
+    expect(listResponse.statusCode).toBe(200);
+    expect(listResponse.json()).toEqual([]);
 
-    const nestedFolderResponse = await app.inject({
+    const missingNotebookResponse = await app.inject({
+      method: "POST",
+      url: "/api/v1/notes",
+      headers: authHeaders(token),
+      payload: {
+        title: "Missing notebook",
+        bodyMarkdown: ""
+      }
+    });
+    expect(missingNotebookResponse.statusCode).toBe(400);
+
+    const topLevelNotebookResponse = await app.inject({
       method: "POST",
       url: "/api/v1/folders",
       headers: authHeaders(token),
       payload: {
-        name: "项目 计划",
-        parentId: inbox.id
+        name: "Projects",
+        parentId: null
       }
     });
-    expect(nestedFolderResponse.statusCode).toBe(201);
-    const nestedFolder = nestedFolderResponse.json();
+    expect(topLevelNotebookResponse.statusCode).toBe(201);
+    const topLevelNotebook = topLevelNotebookResponse.json();
+
+    const nestedNotebookResponse = await app.inject({
+      method: "POST",
+      url: "/api/v1/folders",
+      headers: authHeaders(token),
+      payload: {
+        name: "Roadmaps",
+        parentId: topLevelNotebook.id
+      }
+    });
+    expect(nestedNotebookResponse.statusCode).toBe(201);
+    const nestedNotebook = nestedNotebookResponse.json();
+
+    const archiveNotebookResponse = await app.inject({
+      method: "POST",
+      url: "/api/v1/folders",
+      headers: authHeaders(token),
+      payload: {
+        name: "Archive",
+        parentId: null
+      }
+    });
+    expect(archiveNotebookResponse.statusCode).toBe(201);
+    const archiveNotebook = archiveNotebookResponse.json();
+
+    const blankTitleResponse = await app.inject({
+      method: "POST",
+      url: "/api/v1/notes",
+      headers: authHeaders(token),
+      payload: {
+        folderId: nestedNotebook.id,
+        title: "   ",
+        bodyMarkdown: ""
+      }
+    });
+    expect(blankTitleResponse.statusCode).toBe(400);
 
     const createResponse = await app.inject({
       method: "POST",
       url: "/api/v1/notes",
       headers: authHeaders(token),
       payload: {
-        folderId: nestedFolder.id,
-        title: "会议记录 与 预算规划",
-        bodyMarkdown: "# 预算\n\n需要在本周内完成规划。"
+        folderId: nestedNotebook.id,
+        title: "Meeting outline",
+        bodyMarkdown: "# Budget\n\nPlan the Q2 launch."
       }
     });
     expect(createResponse.statusCode).toBe(201);
     const created = createResponse.json();
 
-    const noteRow = app.bbnote.database.connection
+    const firstRow = app.bbnote.database.connection
       .prepare<[string], { filePath: string }>("select file_path as filePath from notes where id = ?")
       .get(created.id);
+    expect(firstRow?.filePath).toContain("Roadmaps");
+    expect(firstRow?.filePath).toContain("Meeting-outline");
+    expect(firstRow?.filePath).toContain(created.id);
+    await expect(fs.readFile(firstRow!.filePath, "utf8")).resolves.toContain("Plan the Q2 launch.");
 
-    expect(noteRow?.filePath).toContain("项目-计划");
-    expect(noteRow?.filePath).toContain(created.id);
-    expect(noteRow?.filePath).toContain("会议记录-与-预算规划");
-    await expect(fs.readFile(noteRow!.filePath, "utf8")).resolves.toContain("预算");
-
-    const listResponse = await app.inject({
+    const searchResponse = await app.inject({
       method: "GET",
-      url: `/api/v1/notes?q=${encodeURIComponent("预算")}&folderId=${nestedFolder.id}`,
+      url: `/api/v1/notes?q=${encodeURIComponent("Budget")}&folderId=${nestedNotebook.id}`,
       headers: authHeaders(token)
     });
-    expect(listResponse.statusCode).toBe(200);
-    const listPayload = listResponse.json();
-    expect(listPayload.items).toHaveLength(1);
-    expect(listPayload.items[0].title).toContain("预算");
+    expect(searchResponse.statusCode).toBe(200);
+    expect(searchResponse.json().items).toHaveLength(1);
 
-    const updated = await app.inject({
+    const updateResponse = await app.inject({
       method: "PUT",
       url: `/api/v1/notes/${created.id}`,
       headers: authHeaders(token),
       payload: {
-        folderId: nestedFolder.id,
-        title: "改名后的标题",
-        bodyMarkdown: "更新后的正文"
+        folderId: archiveNotebook.id,
+        title: "Launch review",
+        bodyMarkdown: "Moved into archive."
       }
     });
-    expect(updated.statusCode).toBe(200);
+    expect(updateResponse.statusCode).toBe(200);
 
-    const noteRowAfterUpdate = app.bbnote.database.connection
+    const updatedRow = app.bbnote.database.connection
       .prepare<[string], { filePath: string }>("select file_path as filePath from notes where id = ?")
       .get(created.id);
-    expect(noteRowAfterUpdate?.filePath).toBe(noteRow?.filePath);
+    expect(updatedRow?.filePath).not.toBe(firstRow?.filePath);
+    expect(updatedRow?.filePath).toContain("Archive");
+    expect(updatedRow?.filePath).toContain("Launch-review");
+    await expect(fs.readFile(updatedRow!.filePath, "utf8")).resolves.toContain("Moved into archive.");
+    await expect(fs.access(firstRow!.filePath)).rejects.toThrow();
   });
 });
 

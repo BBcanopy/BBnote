@@ -6,14 +6,12 @@ import type { AuthenticatedUser, AuthSessionView } from "./models.js";
 import type { OidcService } from "./oidcService.js";
 import type { SessionDb } from "../db/sessionDb.js";
 import type { UserDb } from "../db/userDb.js";
-import type { FolderService } from "./folderService.js";
 
 export class AuthService {
   constructor(
     private readonly config: AppConfig,
     private readonly users: UserDb,
     private readonly sessions: SessionDb,
-    private readonly folderService: FolderService,
     private readonly oidcService: OidcService,
     readonly cookieService: CookieService
   ) {}
@@ -43,7 +41,6 @@ export class AuthService {
       throw new Error("Session user not found.");
     }
 
-    await this.folderService.ensureInbox(user.id);
     return {
       ownerId: user.id,
       issuer: user.issuer,
@@ -175,8 +172,6 @@ export class AuthService {
       created_at: now,
       updated_at: now
     });
-
-    await this.folderService.ensureInbox(ownerId);
 
     return {
       ownerId,

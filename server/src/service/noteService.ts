@@ -73,6 +73,7 @@ export class NoteService {
     this.noteDb.update(ownerId, noteId, {
       folderId: record.folderId,
       title: record.title,
+      filePath: record.filePath,
       updatedAt: record.updatedAt,
       lastOpenedAt: new Date().toISOString()
     });
@@ -96,7 +97,7 @@ export class NoteService {
 
   async createNote(input: {
     ownerId: string;
-    folderId?: string;
+    folderId: string;
     title: string;
     bodyMarkdown: string;
     createdAt?: string;
@@ -105,16 +106,17 @@ export class NoteService {
     sourceId?: string | null;
     sourceTagsJson?: string;
   }) {
-    const folder =
-      (input.folderId ? this.folderDb.getById(input.ownerId, input.folderId) : undefined) ??
-      this.folderDb.findInbox(input.ownerId);
+    const folder = this.folderDb.getById(input.ownerId, input.folderId);
     if (!folder) {
       throw new Error("Folder not found.");
+    }
+    const trimmedTitle = input.title.trim();
+    if (!trimmedTitle) {
+      throw new Error("Note title is required.");
     }
     const noteId = randomUUID();
     const createdAt = input.createdAt ?? new Date().toISOString();
     const updatedAt = input.updatedAt ?? createdAt;
-    const trimmedTitle = input.title.trim() || "Untitled note";
     const filePath = await this.storageService.createNoteFile({
       ownerId: input.ownerId,
       storageDirName: folder.storageDirName,
@@ -154,7 +156,7 @@ export class NoteService {
   async updateNote(input: {
     ownerId: string;
     noteId: string;
-    folderId?: string;
+    folderId: string;
     title: string;
     bodyMarkdown: string;
   }) {
@@ -162,22 +164,36 @@ export class NoteService {
     if (!record) {
       throw new Error("Note not found.");
     }
-    const folder =
-      (input.folderId ? this.folderDb.getById(input.ownerId, input.folderId) : undefined) ??
-      this.folderDb.getById(input.ownerId, record.folderId);
+    const folder = this.folderDb.getById(input.ownerId, input.folderId);
     if (!folder) {
       throw new Error("Folder not found.");
     }
+    const trimmedTitle = input.title.trim();
+    if (!trimmedTitle) {
+      throw new Error("Note title is required.");
+    }
 
     const previousBody = await this.storageService.readMarkdown(record.filePath);
-    await this.storageService.writeMarkdown(record.filePath, input.bodyMarkdown);
+    const nextFilePath = this.storageService.noteFilePath({
+      ownerId: input.ownerId,
+      storageDirName: folder.storageDirName,
+      noteId: input.noteId,
+      title: trimmedTitle,
+      createdAt: record.createdAt
+    });
 
     try {
+      if (nextFilePath === record.filePath) {
+        await this.storageService.writeMarkdown(record.filePath, input.bodyMarkdown);
+      } else {
+        await this.storageService.writeMarkdown(nextFilePath, input.bodyMarkdown);
+      }
+
       const updatedAt = new Date().toISOString();
-      const trimmedTitle = input.title.trim() || "Untitled note";
       this.noteDb.update(input.ownerId, input.noteId, {
         folderId: folder.id,
         title: trimmedTitle,
+        filePath: nextFilePath,
         updatedAt,
         lastOpenedAt: new Date().toISOString()
       });
@@ -188,8 +204,15 @@ export class NoteService {
         title: trimmedTitle,
         body: stripMarkdown(input.bodyMarkdown)
       });
+      if (nextFilePath !== record.filePath) {
+        await this.storageService.deleteFile(record.filePath);
+      }
     } catch (error) {
-      await this.storageService.writeMarkdown(record.filePath, previousBody);
+      if (nextFilePath === record.filePath) {
+        await this.storageService.writeMarkdown(record.filePath, previousBody);
+      } else {
+        await this.storageService.deleteFile(nextFilePath);
+      }
       throw error;
     }
     return this.getNote(input.ownerId, input.noteId);
