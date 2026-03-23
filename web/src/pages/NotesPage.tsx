@@ -851,7 +851,7 @@ function EditorPanel(props: {
               onChange={(event) => props.onBodyChange(event.target.value)}
               placeholder="Write in Markdown"
               disabled={!props.editorNote}
-              className="bb-textarea bb-code min-h-[30rem] text-sm leading-7"
+              className="bb-textarea bb-note-content min-h-[30rem] text-sm leading-7"
             />
           </label>
         ) : (

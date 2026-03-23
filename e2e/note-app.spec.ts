@@ -235,7 +235,9 @@ test("starts empty, restores separate notebook and notes lanes, supports row dra
   await expect(page.getByText(/untitled note/i)).toHaveCount(0);
 
   await page.getByRole("textbox", { name: "Title" }).first().fill(noteTitle);
-  await page.getByPlaceholder("Write in Markdown").first().fill(`# Budget\n\nalpha launch ${searchTerm}`);
+  const bodyTextarea = page.getByPlaceholder("Write in Markdown").first();
+  expect(await bodyTextarea.evaluate((element) => getComputedStyle(element).fontFamily)).toContain("Lato");
+  await bodyTextarea.fill(`# Budget\n\nalpha launch ${searchTerm}`);
   await expect(page.getByText(/^Saved /)).toHaveCount(0);
   await expect(page.locator(".bb-editor-header .bb-editor-mode")).toHaveCount(0);
   await expect(page.locator(".bb-editor-body-header .bb-editor-mode").first()).toBeVisible();
@@ -330,6 +332,7 @@ test("starts empty, restores separate notebook and notes lanes, supports row dra
   await expect(page.getByRole("button", { name: /^markdown$/i })).toHaveAttribute("title", "Markdown");
   await expect(page.getByRole("button", { name: /^preview$/i })).toHaveAttribute("title", "Preview");
   await page.getByRole("button", { name: /^preview$/i }).click();
+  expect(await page.locator(".bb-markdown").first().evaluate((element) => getComputedStyle(element).fontFamily)).toContain("Lato");
   await expect(page.getByRole("heading", { name: "Budget" })).toBeVisible();
   await page.getByRole("button", { name: /^markdown$/i }).click();
 

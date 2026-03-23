@@ -4,6 +4,8 @@ import "@fontsource/geist-sans/600.css";
 import "@fontsource/geist-sans/700.css";
 import "@fontsource/ibm-plex-mono/400.css";
 import "@fontsource/ibm-plex-mono/500.css";
+import "@fontsource/lato/400.css";
+import "@fontsource/lato/700.css";
 import "./styles/index.css";
 import React from "react";
 import ReactDOM from "react-dom/client";
