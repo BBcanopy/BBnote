@@ -11,12 +11,16 @@ export interface SessionRow {
 export class SessionDb {
   constructor(private readonly connection: Database.Database) {}
 
-  insert(row: SessionRow) {
+  upsert(row: SessionRow) {
     this.connection
       .prepare(
         `
         insert into sessions (id, owner_id, created_at, updated_at, expires_at)
         values (@id, @owner_id, @created_at, @updated_at, @expires_at)
+        on conflict(id) do update set
+          owner_id = excluded.owner_id,
+          updated_at = excluded.updated_at,
+          expires_at = excluded.expires_at
       `
       )
       .run(row);

@@ -1,23 +1,28 @@
 import fs from "node:fs/promises";
+import net from "node:net";
 import os from "node:os";
 import path from "node:path";
+import type { AddressInfo } from "node:net";
 import type { FastifyInstance } from "fastify";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { buildApp } from "../app.js";
 
 describe("authController integration", () => {
-  let app: FastifyInstance;
+  let app: FastifyInstance | undefined;
   let tempRoot = "";
+  let baseUrl = "";
 
   beforeEach(async () => {
     tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "bbnote-"));
-    process.env.APP_BASE_URL = "http://localhost:3000";
-    process.env.OIDC_ISSUER_URL = "http://localhost:3000/mock-oidc";
+    const port = await getAvailablePort();
+    baseUrl = `http://127.0.0.1:${port}`;
+    process.env.APP_BASE_URL = baseUrl;
+    process.env.OIDC_ISSUER_URL = `${baseUrl}/mock-oidc`;
     process.env.OIDC_CLIENT_ID_WEB = "bbnote-web";
     process.env.OIDC_CLIENT_ID_ANDROID = "bbnote-android";
     process.env.OIDC_CLIENT_SECRET = "bbnote-dev-client-secret";
     process.env.OIDC_SCOPES = "openid profile email";
-    process.env.SESSION_SECRET = "session-secret";
+    process.env.SESSION_SECRET = "bbnote-dev-session-secret-0123456789";
     process.env.SQLITE_PATH = path.join(tempRoot, "db", "bbnote.sqlite");
     process.env.NOTES_ROOT = path.join(tempRoot, "notes");
     process.env.ATTACHMENTS_ROOT = path.join(tempRoot, "attachments");
@@ -25,10 +30,13 @@ describe("authController integration", () => {
     process.env.MOCK_OIDC_ENABLED = "true";
 
     app = await buildApp();
+    await app.listen({ host: "127.0.0.1", port });
   });
 
   afterEach(async () => {
-    await app.close();
+    if (app) {
+      await app.close();
+    }
     await fs.rm(tempRoot, { recursive: true, force: true });
     delete process.env.APP_BASE_URL;
     delete process.env.OIDC_ISSUER_URL;
@@ -45,57 +53,57 @@ describe("authController integration", () => {
   });
 
   it("signs in through server-managed oidc and authenticates protected routes via session cookie", async () => {
-    const loginResponse = await app.inject({
-      method: "GET",
-      url: "/api/v1/auth/login?returnTo=%2Fmigration"
+    const cookieJar = new Map<string, string>();
+
+    const loginResponse = await fetch(`${baseUrl}/api/v1/auth/login?returnTo=%2Fimports`, {
+      redirect: "manual"
     });
 
-    expect(loginResponse.statusCode).toBe(302);
-    const authFlowCookie = getCookieValue(loginResponse.headers["set-cookie"], "bbnote_auth_flow");
-    expect(authFlowCookie).toBeTruthy();
+    expect(loginResponse.status).toBe(302);
+    mergeCookies(cookieJar, loginResponse.headers.getSetCookie());
+    expect(cookieJar.has("bbnote_auth_return_to")).toBe(true);
+    expect(cookieJar.has("bbnote_oidc_state")).toBe(true);
+    expect(cookieJar.has("bbnote_oidc_verifier")).toBe(true);
 
-    const authorizeLocation = new URL(String(loginResponse.headers.location));
+    const authorizeLocation = new URL(String(loginResponse.headers.get("location")), baseUrl);
     const authorizePayload = new URLSearchParams(authorizeLocation.searchParams);
     authorizePayload.set("name", "Avery Stone");
     authorizePayload.set("email", "avery@example.com");
 
-    const authorizeResponse = await app.inject({
+    const authorizeResponse = await fetch(authorizeLocation, {
       method: "POST",
-      url: authorizeLocation.pathname,
       headers: {
         "content-type": "application/x-www-form-urlencoded"
       },
-      payload: authorizePayload.toString()
+      body: authorizePayload.toString(),
+      redirect: "manual"
     });
 
-    expect(authorizeResponse.statusCode).toBe(302);
-    const callbackUrl = new URL(String(authorizeResponse.headers.location));
+    expect(authorizeResponse.status).toBe(302);
+    const callbackUrl = new URL(String(authorizeResponse.headers.get("location")), baseUrl);
     expect(callbackUrl.pathname).toBe("/auth/callback");
 
-    const callbackResponse = await app.inject({
-      method: "GET",
-      url: `${callbackUrl.pathname}${callbackUrl.search}`,
+    const callbackResponse = await fetch(callbackUrl, {
       headers: {
-        cookie: authFlowCookie!
+        cookie: serializeCookies(cookieJar)
+      },
+      redirect: "manual"
+    });
+
+    expect(callbackResponse.status).toBe(302);
+    mergeCookies(cookieJar, callbackResponse.headers.getSetCookie());
+    expect(callbackResponse.headers.get("location")).toBe(`${baseUrl}/imports`);
+    expect(cookieJar.has("bbnote_session")).toBe(true);
+    expect(cookieJar.has("bbnote_auth_return_to")).toBe(false);
+
+    const sessionResponse = await fetch(`${baseUrl}/api/v1/auth/session`, {
+      headers: {
+        cookie: serializeCookies(cookieJar)
       }
     });
 
-    expect(callbackResponse.statusCode).toBe(302);
-    expect(callbackResponse.headers.location).toBe("http://localhost:3000/migration");
-
-    const sessionCookie = getCookieValue(callbackResponse.headers["set-cookie"], "bbnote_session");
-    expect(sessionCookie).toBeTruthy();
-
-    const sessionResponse = await app.inject({
-      method: "GET",
-      url: "/api/v1/auth/session",
-      headers: {
-        cookie: sessionCookie!
-      }
-    });
-
-    expect(sessionResponse.statusCode).toBe(200);
-    expect(sessionResponse.json()).toEqual({
+    expect(sessionResponse.status).toBe(200);
+    expect(await sessionResponse.json()).toEqual({
       authenticated: true,
       user: {
         email: "avery@example.com",
@@ -104,35 +112,32 @@ describe("authController integration", () => {
       }
     });
 
-    const foldersResponse = await app.inject({
-      method: "GET",
-      url: "/api/v1/folders",
+    const foldersResponse = await fetch(`${baseUrl}/api/v1/folders`, {
       headers: {
-        cookie: sessionCookie!
+        cookie: serializeCookies(cookieJar)
       }
     });
 
-    expect(foldersResponse.statusCode).toBe(200);
-    expect(foldersResponse.json()).toEqual([]);
+    expect(foldersResponse.status).toBe(200);
+    expect(await foldersResponse.json()).toEqual([]);
   });
 
   it("stores the selected theme as a user preference", async () => {
-    const sessionCookie = await signInAndGetSessionCookie(app);
+    const cookieJar = await signIn(baseUrl);
 
-    const updateResponse = await app.inject({
+    const updateResponse = await fetch(`${baseUrl}/api/v1/auth/theme`, {
       method: "PATCH",
-      url: "/api/v1/auth/theme",
       headers: {
-        cookie: sessionCookie,
+        cookie: serializeCookies(cookieJar),
         "content-type": "application/json"
       },
-      payload: JSON.stringify({
+      body: JSON.stringify({
         theme: "midnight"
       })
     });
 
-    expect(updateResponse.statusCode).toBe(200);
-    expect(updateResponse.json()).toEqual({
+    expect(updateResponse.status).toBe(200);
+    expect(await updateResponse.json()).toEqual({
       authenticated: true,
       user: {
         email: "avery@example.com",
@@ -141,16 +146,14 @@ describe("authController integration", () => {
       }
     });
 
-    const sessionResponse = await app.inject({
-      method: "GET",
-      url: "/api/v1/auth/session",
+    const sessionResponse = await fetch(`${baseUrl}/api/v1/auth/session`, {
       headers: {
-        cookie: sessionCookie
+        cookie: serializeCookies(cookieJar)
       }
     });
 
-    expect(sessionResponse.statusCode).toBe(200);
-    expect(sessionResponse.json()).toEqual({
+    expect(sessionResponse.status).toBe(200);
+    expect(await sessionResponse.json()).toEqual({
       authenticated: true,
       user: {
         email: "avery@example.com",
@@ -161,40 +164,75 @@ describe("authController integration", () => {
   });
 });
 
-function getCookieValue(setCookieHeader: string | string[] | undefined, cookieName: string) {
-  const cookies = Array.isArray(setCookieHeader) ? setCookieHeader : setCookieHeader ? [setCookieHeader] : [];
-  const match = cookies.find((entry) => entry.startsWith(`${cookieName}=`));
-  return match ? match.split(";", 1)[0] : null;
-}
-
-async function signInAndGetSessionCookie(app: FastifyInstance) {
-  const loginResponse = await app.inject({
-    method: "GET",
-    url: "/api/v1/auth/login?returnTo=%2F"
+async function signIn(baseUrl: string) {
+  const cookieJar = new Map<string, string>();
+  const loginResponse = await fetch(`${baseUrl}/api/v1/auth/login?returnTo=%2F`, {
+    redirect: "manual"
   });
-  const authFlowCookie = getCookieValue(loginResponse.headers["set-cookie"], "bbnote_auth_flow");
-  const authorizeLocation = new URL(String(loginResponse.headers.location));
+  mergeCookies(cookieJar, loginResponse.headers.getSetCookie());
+
+  const authorizeLocation = new URL(String(loginResponse.headers.get("location")), baseUrl);
   const authorizePayload = new URLSearchParams(authorizeLocation.searchParams);
   authorizePayload.set("name", "Avery Stone");
   authorizePayload.set("email", "avery@example.com");
 
-  const authorizeResponse = await app.inject({
+  const authorizeResponse = await fetch(authorizeLocation, {
     method: "POST",
-    url: authorizeLocation.pathname,
     headers: {
       "content-type": "application/x-www-form-urlencoded"
     },
-    payload: authorizePayload.toString()
+    body: authorizePayload.toString(),
+    redirect: "manual"
   });
 
-  const callbackUrl = new URL(String(authorizeResponse.headers.location));
-  const callbackResponse = await app.inject({
-    method: "GET",
-    url: `${callbackUrl.pathname}${callbackUrl.search}`,
+  const callbackUrl = new URL(String(authorizeResponse.headers.get("location")), baseUrl);
+  const callbackResponse = await fetch(callbackUrl, {
     headers: {
-      cookie: authFlowCookie!
-    }
+      cookie: serializeCookies(cookieJar)
+    },
+    redirect: "manual"
   });
 
-  return getCookieValue(callbackResponse.headers["set-cookie"], "bbnote_session")!;
+  mergeCookies(cookieJar, callbackResponse.headers.getSetCookie());
+  return cookieJar;
+}
+
+function mergeCookies(cookieJar: Map<string, string>, setCookies: string[]) {
+  for (const entry of setCookies) {
+    const [cookiePair, ...attributes] = entry.split(";");
+    const [name, value] = cookiePair.split("=", 2);
+    const maxAge = attributes.find((attribute) => attribute.trimStart().startsWith("Max-Age="));
+    if (maxAge?.trim() === "Max-Age=0") {
+      cookieJar.delete(name);
+      continue;
+    }
+
+    cookieJar.set(name, `${name}=${value}`);
+  }
+}
+
+function serializeCookies(cookieJar: Map<string, string>) {
+  return [...cookieJar.values()].join("; ");
+}
+
+async function getAvailablePort() {
+  return new Promise<number>((resolve, reject) => {
+    const server = net.createServer();
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", () => {
+      const address = server.address();
+      if (!address || typeof address === "string") {
+        reject(new Error("Failed to allocate a TCP port."));
+        return;
+      }
+
+      server.close((error) => {
+        if (error) {
+          reject(error);
+          return;
+        }
+        resolve((address as AddressInfo).port);
+      });
+    });
+  });
 }

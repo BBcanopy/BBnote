@@ -1,8 +1,7 @@
 import crypto from "node:crypto";
-import { createPublicKey } from "node:crypto";
-import { exportJWK, importPKCS8, jwtVerify, SignJWT } from "jose";
-import type { JWTPayload } from "jose";
 import type { AppConfig } from "./configService.js";
+
+type JsonWebKeyLike = Record<string, unknown>;
 
 interface AuthorizationCodeRecord {
   clientId: string;
@@ -16,6 +15,15 @@ interface AuthorizationCodeRecord {
   name: string;
 }
 
+interface AccessTokenRecord {
+  issuer: string;
+  subject: string;
+  email: string;
+  name: string;
+  audience: string;
+  expiresAt: number;
+}
+
 function pkceChallenge(verifier: string) {
   return crypto.createHash("sha256").update(verifier).digest("base64url");
 }
@@ -23,22 +31,19 @@ function pkceChallenge(verifier: string) {
 export class MockOidcService {
   private readonly issuer: string;
   private readonly authorizationCodes = new Map<string, AuthorizationCodeRecord>();
-  private readonly keyPromise: Promise<CryptoKey>;
-  private readonly jwkPromise: Promise<Record<string, unknown>>;
+  private readonly accessTokens = new Map<string, AccessTokenRecord>();
+  private readonly keyPair = crypto.generateKeyPairSync("rsa", {
+    modulusLength: 2048
+  });
+  private readonly publicJwk = {
+    ...(this.keyPair.publicKey.export({ format: "jwk" }) as JsonWebKeyLike),
+    kid: "bbnote-mock",
+    use: "sig",
+    alg: "RS256"
+  };
 
   constructor(private readonly config: AppConfig) {
     this.issuer = `${config.appBaseUrl.replace(/\/$/, "")}/mock-oidc`;
-    const { privateKey, publicKey } = crypto.generateKeyPairSync("rsa", {
-      modulusLength: 2048
-    });
-    const privateKeyPem = privateKey.export({ format: "pem", type: "pkcs8" }).toString();
-    this.keyPromise = importPKCS8(privateKeyPem, "RS256");
-    this.jwkPromise = exportJWK(publicKey).then((jwk) => ({
-      ...jwk,
-      kid: "bbnote-mock",
-      use: "sig",
-      alg: "RS256"
-    }));
   }
 
   matchesIssuer(issuerUrl: string) {
@@ -50,20 +55,21 @@ export class MockOidcService {
       issuer: this.issuer,
       authorization_endpoint: `${this.issuer}/authorize`,
       token_endpoint: `${this.issuer}/token`,
+      userinfo_endpoint: `${this.issuer}/userinfo`,
       jwks_uri: `${this.issuer}/jwks`,
       response_types_supported: ["code"],
       grant_types_supported: ["authorization_code"],
       subject_types_supported: ["public"],
       id_token_signing_alg_values_supported: ["RS256"],
       scopes_supported: ["openid", "profile", "email"],
-      token_endpoint_auth_methods_supported: ["none"],
+      token_endpoint_auth_methods_supported: ["client_secret_post"],
       claims_supported: ["sub", "iss", "aud", "name", "email", "nonce"]
     };
   }
 
   async jwks() {
     return {
-      keys: [await this.jwkPromise]
+      keys: [this.publicJwk]
     };
   }
 
@@ -141,6 +147,7 @@ export class MockOidcService {
   async exchangeAuthorizationCode(input: {
     code: string;
     clientId: string;
+    clientSecret?: string;
     redirectUri: string;
     codeVerifier: string;
   }) {
@@ -150,6 +157,9 @@ export class MockOidcService {
     }
     if (code.clientId !== input.clientId || code.redirectUri !== input.redirectUri) {
       throw new Error("Authorization code parameters do not match.");
+    }
+    if (input.clientSecret && input.clientSecret !== this.config.oidcClientSecret) {
+      throw new Error("Invalid client secret.");
     }
     if (code.codeChallengeMethod !== "S256" || pkceChallenge(input.codeVerifier) !== code.codeChallenge) {
       throw new Error("Invalid PKCE verifier.");
@@ -174,20 +184,20 @@ export class MockOidcService {
     });
   }
 
-  async verifyAccessToken(token: string): Promise<JWTPayload> {
-    const jwk = await this.jwkPromise;
-    const result = await jwtVerify(
-      token,
-      createPublicKey({
-        key: jwk as any,
-        format: "jwk"
-      }),
-      {
-        issuer: this.issuer,
-        audience: [this.config.oidcClientIdWeb, this.config.oidcClientIdAndroid]
-      }
-    );
-    return result.payload;
+  async userinfo(accessToken: string) {
+    const token = this.accessTokens.get(accessToken);
+    if (!token || token.expiresAt <= Date.now()) {
+      this.accessTokens.delete(accessToken);
+      throw new Error("Invalid access token.");
+    }
+
+    return {
+      iss: token.issuer,
+      sub: token.subject,
+      email: token.email,
+      name: token.name,
+      aud: token.audience
+    };
   }
 
   private async buildTokens(input: {
@@ -198,34 +208,54 @@ export class MockOidcService {
     nonce?: string;
   }) {
     const now = Math.floor(Date.now() / 1000);
-    const key = await this.keyPromise;
-    const baseClaims = {
+    const accessToken = this.signJwt({
       iss: this.issuer,
       sub: input.subject,
       aud: input.clientId,
       email: input.email,
-      name: input.name
-    };
-    const accessToken = await new SignJWT(baseClaims)
-      .setProtectedHeader({ alg: "RS256", kid: "bbnote-mock" })
-      .setIssuedAt(now)
-      .setExpirationTime(now + 3600)
-      .sign(key);
-    const idToken = await new SignJWT({
-      ...baseClaims,
-      nonce: input.nonce
-    })
-      .setProtectedHeader({ alg: "RS256", kid: "bbnote-mock" })
-      .setIssuedAt(now)
-      .setExpirationTime(now + 3600)
-      .sign(key);
+      name: input.name,
+      iat: now,
+      exp: now + 3600
+    });
+    this.accessTokens.set(accessToken, {
+      issuer: this.issuer,
+      subject: input.subject,
+      email: input.email,
+      name: input.name,
+      audience: input.clientId,
+      expiresAt: (now + 3600) * 1000
+    });
+
+    const idToken = this.signJwt({
+      iss: this.issuer,
+      sub: input.subject,
+      aud: input.clientId,
+      email: input.email,
+      name: input.name,
+      nonce: input.nonce,
+      iat: now,
+      exp: now + 3600
+    });
+
     return {
       access_token: accessToken,
       id_token: idToken,
       token_type: "Bearer",
-      expires_in: 3600,
-      scope: "openid profile email"
+      expires_in: 3600
     };
+  }
+
+  private signJwt(payload: Record<string, unknown>) {
+    const header = {
+      alg: "RS256",
+      kid: "bbnote-mock",
+      typ: "JWT"
+    };
+    const encodedHeader = Buffer.from(JSON.stringify(header), "utf8").toString("base64url");
+    const encodedPayload = Buffer.from(JSON.stringify(payload), "utf8").toString("base64url");
+    const input = `${encodedHeader}.${encodedPayload}`;
+    const signature = crypto.sign("RSA-SHA256", Buffer.from(input, "utf8"), this.keyPair.privateKey).toString("base64url");
+    return `${input}.${signature}`;
   }
 }
 

@@ -25,7 +25,7 @@ export function buildConfig(): AppConfig {
     oidcClientIdAndroid: requireEnv("OIDC_CLIENT_ID_ANDROID"),
     oidcClientSecret: requireEnv("OIDC_CLIENT_SECRET"),
     oidcScopes: requireEnv("OIDC_SCOPES"),
-    sessionSecret: requireEnv("SESSION_SECRET"),
+    sessionSecret: requireSessionSecret(),
     sqlitePath: requireEnv("SQLITE_PATH"),
     notesRoot: requireEnv("NOTES_ROOT"),
     attachmentsRoot: requireEnv("ATTACHMENTS_ROOT"),
@@ -48,4 +48,12 @@ function requireBooleanEnv(name: string) {
     throw new Error(`Environment variable ${name} must be 'true' or 'false'.`);
   }
   return value === "true";
+}
+
+function requireSessionSecret() {
+  const value = requireEnv("SESSION_SECRET");
+  if (value.length < 32) {
+    throw new Error("Environment variable SESSION_SECRET must be at least 32 characters long.");
+  }
+  return value;
 }

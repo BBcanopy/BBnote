@@ -1,5 +1,9 @@
+import cookie from "@fastify/cookie";
 import cors from "@fastify/cors";
+import jwt from "@fastify/jwt";
 import multipart from "@fastify/multipart";
+import oauth2 from "@fastify/oauth2";
+import session from "@fastify/session";
 import swagger from "@fastify/swagger";
 import swaggerUi from "@fastify/swagger-ui";
 import Fastify from "fastify";
@@ -14,9 +18,10 @@ import { registerHealthController } from "./controller/healthController.js";
 import { registerImportController } from "./controller/importController.js";
 import { registerMockOidcController } from "./controller/mockOidcController.js";
 import { registerNoteController } from "./controller/noteController.js";
-import { SESSION_COOKIE_NAME } from "./service/cookieService.js";
+import { OIDC_STATE_COOKIE_NAME, OIDC_VERIFIER_COOKIE_NAME, SESSION_COOKIE_NAME, authCookieOptions } from "./service/authConstants.js";
 import { buildConfig } from "./service/configService.js";
 import { createServices } from "./service/serviceFactory.js";
+import { SqliteSessionStore } from "./service/sqliteSessionStore.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -36,7 +41,56 @@ export async function buildApp() {
   const services = await createServices(config, app);
   app.decorate("bbnote", services);
   app.decorateRequest("auth", null);
+  const secureCookies = config.appBaseUrl.startsWith("https://");
+  const baseCookieOptions = authCookieOptions(secureCookies);
 
+  app.register(cookie);
+  app.register(session, {
+    secret: config.sessionSecret,
+    cookieName: SESSION_COOKIE_NAME,
+    cookie: baseCookieOptions,
+    store: new SqliteSessionStore(services.sessionDb, baseCookieOptions),
+    saveUninitialized: false,
+    rolling: false
+  });
+  app.register(jwt, {
+    secret: config.sessionSecret
+  });
+  app.register(oauth2, {
+    name: "oidc",
+    scope: config.oidcScopes.split(/\s+/).filter(Boolean),
+    credentials: {
+      client: {
+        id: config.oidcClientIdWeb,
+        secret: config.oidcClientSecret
+      },
+      ...(config.mockOidcEnabled
+        ? {
+            auth: {
+              tokenHost: config.appBaseUrl.replace(/\/$/, ""),
+              authorizePath: "/mock-oidc/authorize",
+              tokenPath: "/mock-oidc/token"
+            }
+          }
+        : {}),
+      options: {
+        authorizationMethod: "body",
+        bodyFormat: "form"
+      }
+    },
+    callbackUri: `${config.appBaseUrl.replace(/\/$/, "")}/auth/callback`,
+    ...(!config.mockOidcEnabled
+      ? {
+          discovery: {
+            issuer: config.oidcIssuerUrl
+          }
+        }
+      : {}),
+    pkce: "S256",
+    redirectStateCookieName: OIDC_STATE_COOKIE_NAME,
+    verifierCookieName: OIDC_VERIFIER_COOKIE_NAME,
+    cookie: baseCookieOptions
+  });
   app.register(cors, {
     origin: true
   });
