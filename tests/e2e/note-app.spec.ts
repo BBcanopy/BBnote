@@ -117,8 +117,9 @@ test("starts empty, restores separate notebook and notes lanes, supports row dra
 
   await page.getByPlaceholder("Search notes").fill(searchTerm);
   await notePreview.click();
-  await expect(page.getByRole("button", { name: /open notebooks pane/i })).toBeVisible();
-  await expect(page.getByRole("button", { name: /open notes pane/i })).toBeVisible();
+  await expect(page.getByRole("button", { name: /open notebooks and notes panes/i })).toBeVisible();
+  await expect(page.getByRole("button", { name: /open notebooks pane/i })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /open notes pane/i })).toHaveCount(0);
 
   await expect(page.getByRole("button", { name: /^markdown$/i })).toHaveAttribute("title", "Markdown");
   await expect(page.getByRole("button", { name: /^preview$/i })).toHaveAttribute("title", "Preview");

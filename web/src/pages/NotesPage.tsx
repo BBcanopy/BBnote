@@ -85,6 +85,7 @@ export function NotesPage() {
     [editorNote]
   );
   const canPersistEditor = Boolean(editorNote?.folderId && editorNote.title.trim().length > 0);
+  const explorerCollapsed = folderPaneCollapsed && notePaneCollapsed;
 
   useEffect(() => {
     if (!auth.user) {
@@ -460,49 +461,66 @@ export function NotesPage() {
       </section>
 
       <div className="hidden min-h-[calc(100dvh-7.5rem)] gap-4 lg:flex">
-        {folderPaneCollapsed ? (
+        {explorerCollapsed ? (
           <CollapsedPaneRail
             label="Notebooks"
-            detail={selectedFolder?.name ?? "Browse"}
-            onOpen={() => setFolderPaneCollapsed(false)}
+            detail={selectedFolder?.name ?? "All Notes"}
+            subdetail={editorNote?.title.trim() || "Draft"}
+            ariaLabel="Open notebooks and notes panes"
+            titleText={`Notebooks: ${selectedFolder?.name ?? "All Notes"}${editorNote?.title.trim() ? ` / ${editorNote.title.trim()}` : ""}`}
+            onOpen={() => {
+              setFolderPaneCollapsed(false);
+              setNotePaneCollapsed(false);
+            }}
             icon={<FolderSimple size={18} />}
           />
         ) : (
-          <div className="w-[320px] shrink-0">
-            <FolderTree
-              folders={folders}
-              selectedFolderId={selectedFolderId}
-              pendingName={pendingFolderName}
-              onPendingNameChange={setPendingFolderName}
-              onCreateNotebook={() => void handleCreateNotebook()}
-              onMoveNotebook={(move) => void handleMoveNotebook(move)}
-              onCollapse={() => setFolderPaneCollapsed(true)}
-              onSelectFolder={handleSelectFolder}
-            />
-          </div>
-        )}
+          <>
+            {folderPaneCollapsed ? (
+              <CollapsedPaneRail
+                label="Notebooks"
+                detail={selectedFolder?.name ?? "Browse"}
+                onOpen={() => setFolderPaneCollapsed(false)}
+                icon={<FolderSimple size={18} />}
+              />
+            ) : (
+              <div className="w-[320px] shrink-0">
+                <FolderTree
+                  folders={folders}
+                  selectedFolderId={selectedFolderId}
+                  pendingName={pendingFolderName}
+                  onPendingNameChange={setPendingFolderName}
+                  onCreateNotebook={() => void handleCreateNotebook()}
+                  onMoveNotebook={(move) => void handleMoveNotebook(move)}
+                  onCollapse={() => setFolderPaneCollapsed(true)}
+                  onSelectFolder={handleSelectFolder}
+                />
+              </div>
+            )}
 
-        {notePaneCollapsed ? (
-          <CollapsedPaneRail
-            label="Notes"
-            detail={editorNote?.title.trim() || "Draft"}
-            onOpen={() => setNotePaneCollapsed(false)}
-            icon={<ListBullets size={18} />}
-          />
-        ) : (
-          <div className="w-[340px] shrink-0">
-            <NoteListPane
-              notes={notes}
-              search={search}
-              onSearchChange={setSearch}
-              selectedNoteId={selectedNoteId}
-              onSelectNote={handleSelectNote}
-              onCreateNote={handleCreateDraft}
-              onCollapse={() => setNotePaneCollapsed(true)}
-              loading={loadingNotes}
-              notebookName={selectedFolder?.name ?? null}
-            />
-          </div>
+            {notePaneCollapsed ? (
+              <CollapsedPaneRail
+                label="Notes"
+                detail={editorNote?.title.trim() || "Draft"}
+                onOpen={() => setNotePaneCollapsed(false)}
+                icon={<ListBullets size={18} />}
+              />
+            ) : (
+              <div className="w-[340px] shrink-0">
+                <NoteListPane
+                  notes={notes}
+                  search={search}
+                  onSearchChange={setSearch}
+                  selectedNoteId={selectedNoteId}
+                  onSelectNote={handleSelectNote}
+                  onCreateNote={handleCreateDraft}
+                  onCollapse={() => setNotePaneCollapsed(true)}
+                  loading={loadingNotes}
+                  notebookName={selectedFolder?.name ?? null}
+                />
+              </div>
+            )}
+          </>
         )}
 
         <EditorPanel
@@ -726,15 +744,18 @@ function EditorPanel(props: {
 function CollapsedPaneRail(props: {
   label: string;
   detail: string;
+  subdetail?: string | null;
   icon: ReactNode;
   onOpen(): void;
+  ariaLabel?: string;
+  titleText?: string;
 }) {
   return (
     <button
       type="button"
       onClick={props.onOpen}
-      aria-label={`Open ${props.label} pane`}
-      title={`${props.label}: ${props.detail}`}
+      aria-label={props.ariaLabel ?? `Open ${props.label} pane`}
+      title={props.titleText ?? `${props.label}: ${props.detail}`}
       className="group flex w-[5.2rem] shrink-0 flex-col items-center gap-3 rounded-[1.7rem] border border-slate-200/80 bg-white/92 px-2.5 py-3.5 text-slate-700 shadow-[0_18px_44px_-34px_rgba(15,23,42,0.24)] transition duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-[1px] hover:border-slate-300"
     >
       <span className="inline-flex h-11 w-11 items-center justify-center rounded-[1.15rem] border border-emerald-100 bg-emerald-50/90 text-emerald-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.65)]">
@@ -745,6 +766,11 @@ function CollapsedPaneRail(props: {
         <span className="block max-w-full truncate text-[11px] font-medium text-slate-500">
           {props.detail}
         </span>
+        {props.subdetail ? (
+          <span className="block max-w-full truncate text-[11px] text-slate-400">
+            {props.subdetail}
+          </span>
+        ) : null}
       </span>
       <span className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 bg-slate-50 text-slate-400 transition duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:border-slate-950 group-hover:bg-slate-950 group-hover:text-white">
         <CaretRight size={15} />
