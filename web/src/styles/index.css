@@ -31,7 +31,7 @@
   --brand-end: #235e5b;
   --scrim: rgba(16, 32, 34, 0.22);
   --ease: cubic-bezier(0.16, 1, 0.3, 1);
-  --font-content: "Lato", "Segoe UI", sans-serif;
+  --font-content: "Open Sans", "Segoe UI", sans-serif;
   color: var(--ink);
   font-family: "Geist Sans", "Segoe UI Variable Display", "Segoe UI", sans-serif;
 }
