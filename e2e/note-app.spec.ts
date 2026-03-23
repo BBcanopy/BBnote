@@ -26,7 +26,29 @@ test("starts empty, restores separate notebook and notes lanes, supports row dra
   await expect(page.getByRole("button", { name: /collapse notes pane/i })).toBeVisible();
   const notebookPane = page.getByTestId("notebook-pane");
   const notesPane = page.getByTestId("notes-pane");
+  const notebookPaneHandle = page.getByTestId("notebook-pane-resizer").locator(".bb-pane-resizer__handle");
+  const notesPaneHandle = page.getByTestId("notes-pane-resizer").locator(".bb-pane-resizer__handle");
   await expect(notebookPane.locator("p.bb-eyebrow")).toHaveCount(0);
+  await expect
+    .poll(async () => {
+      const paneBox = await notebookPane.boundingBox();
+      const handleBox = await notebookPaneHandle.boundingBox();
+      if (!paneBox || !handleBox) {
+        return Number.POSITIVE_INFINITY;
+      }
+      return Math.abs(handleBox.x + handleBox.width / 2 - (paneBox.x + paneBox.width));
+    })
+    .toBeLessThan(4);
+  await expect
+    .poll(async () => {
+      const paneBox = await notesPane.boundingBox();
+      const handleBox = await notesPaneHandle.boundingBox();
+      if (!paneBox || !handleBox) {
+        return Number.POSITIVE_INFINITY;
+      }
+      return Math.abs(handleBox.x + handleBox.width / 2 - (paneBox.x + paneBox.width));
+    })
+    .toBeLessThan(4);
   const notebookPaneWidthBefore = (await notebookPane.boundingBox())?.width ?? 0;
   const notesPaneWidthBefore = (await notesPane.boundingBox())?.width ?? 0;
   await dragResizer(page, page.getByTestId("notebook-pane-resizer"), 72);
