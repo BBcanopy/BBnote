@@ -1509,18 +1509,20 @@ button:disabled {
   overflow: visible;
   width: 1rem;
   min-width: 1rem;
+  margin-inline: -0.5rem;
   padding: 0;
   border: none;
   background: transparent;
   color: var(--ink-soft);
   cursor: col-resize;
   touch-action: none;
+  z-index: 2;
 }
 
 .bb-pane-resizer__handle {
   position: absolute;
   top: 50%;
-  left: 0;
+  left: 50%;
   z-index: 1;
   display: inline-grid;
   grid-auto-flow: column;

@@ -86,7 +86,7 @@ test("keeps desktop lanes viewport-height and only shows the pane grip on border
       }
       return notesBox.x - (notebookBox.x + notebookBox.width);
     })
-    .toBeLessThan(20);
+    .toBeLessThan(3);
   await expect
     .poll(async () => {
       const notesBox = await notesPane.boundingBox();
@@ -96,7 +96,7 @@ test("keeps desktop lanes viewport-height and only shows the pane grip on border
       }
       return editorBox.x - (notesBox.x + notesBox.width);
     })
-    .toBeLessThan(20);
+    .toBeLessThan(3);
 
   const notebookPaneWidthBefore = (await notebookPane.boundingBox())?.width ?? 0;
   const notesPaneWidthBefore = (await notesPane.boundingBox())?.width ?? 0;
