@@ -90,6 +90,7 @@ async function login(page: import("@playwright/test").Page) {
   await page.getByRole("button", { name: /sign in with oidc/i }).click();
   await page.getByRole("button", { name: /continue to bbnote/i }).click();
   await expect(page.getByRole("button", { name: /^new note$/i })).toBeVisible();
+  await expect(page.getByText("Notebook workspace")).toHaveCount(0);
 }
 
 async function createNotebookAndPersistedNote(page: import("@playwright/test").Page) {

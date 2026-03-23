@@ -12,10 +12,7 @@ export function PageNav(props: {
         <div className="rounded-full bg-emerald-700/10 p-2.5 text-emerald-700">
           <NotePencil size={20} weight="bold" />
         </div>
-        <div>
-          <p className="text-xs uppercase tracking-[0.3em] text-slate-500">BBNote</p>
-          <p className="text-sm font-medium tracking-tight text-slate-900">Notebook workspace</p>
-        </div>
+        <p className="text-xs uppercase tracking-[0.3em] text-slate-500">BBNote</p>
       </div>
       <UserMenu name={props.user?.name ?? null} email={props.user?.email ?? null} onLogout={props.onLogout} />
     </header>
