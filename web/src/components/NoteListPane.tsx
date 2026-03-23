@@ -3,7 +3,7 @@ import { useEffect, useState, type DragEvent } from "react";
 import type { NoteSummary } from "../api/types";
 import type { NoteMoveInstruction, NoteMovePosition } from "../utils/noteOrder";
 
-const NOTE_PREVIEW_EXCERPT_LIMIT = 54;
+const NOTE_PREVIEW_EXCERPT_LIMIT = 42;
 
 interface NoteDropTarget {
   targetId: string;
@@ -79,7 +79,7 @@ export function NoteListPane(props: {
   }
 
   return (
-    <section className="bb-pane-card">
+    <section className="bb-pane-card bb-pane-card--notes">
       <div className="bb-pane-card__header justify-end">
         <div data-testid="notes-actions" className="flex items-center gap-2">
           <button
@@ -112,7 +112,7 @@ export function NoteListPane(props: {
           className="text-sm"
         />
       </label>
-      <div className="space-y-2">
+      <div className="bb-note-list">
         {props.loading ? (
           <>
             <SkeletonCard />
@@ -175,16 +175,16 @@ function renderNote(
     <button
       type="button"
       onClick={() => helpers.onSelectNote(note.id)}
-      className={`bb-note-card w-full px-3.5 py-3 text-left ${selected ? "is-active" : ""}`}
+      className={`bb-note-card w-full text-left ${selected ? "is-active" : ""}`}
     >
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium tracking-tight">{note.title}</p>
-          <p className={`mt-1 overflow-hidden break-words text-[13px] leading-5 [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2] ${selected ? "text-white/72" : "text-[color:var(--ink-soft)]"}`}>
+      <div className="bb-note-card__layout">
+        <div className="bb-note-card__copy">
+          <p className="bb-note-card__title">{note.title}</p>
+          <p className="bb-note-card__excerpt">
             {previewExcerpt || "Empty note"}
           </p>
         </div>
-        <div className="flex shrink-0 items-center gap-1.5">
+        <div className="flex shrink-0 items-center gap-1">
           {helpers.canReorder ? (
             <span className="bb-note-drag-handle" aria-hidden="true">
               <DotsSixVertical size={16} />
@@ -199,11 +199,11 @@ function renderNote(
   );
 
   if (!helpers.canReorder) {
-    return <div key={note.id}>{noteCard}</div>;
+    return <div key={note.id} className="min-w-0">{noteCard}</div>;
   }
 
   return (
-    <div key={note.id} className="space-y-1">
+    <div key={note.id} className="min-w-0 space-y-0.5">
       <NoteDropZone
         testId={buildNoteTestId("before", note.title)}
         noteId={note.id}
@@ -218,7 +218,7 @@ function renderNote(
         data-testid={buildNoteTestId("drag", note.title)}
         onDragStart={(event) => helpers.onDragStart(event, note.id)}
         onDragEnd={helpers.onDragEnd}
-        className={helpers.dropTarget?.targetId === note.id ? "bb-tree-drop-target rounded-[1.15rem]" : "rounded-[1.15rem]"}
+        className={helpers.dropTarget?.targetId === note.id ? "bb-tree-drop-target min-w-0 rounded-[1.15rem]" : "min-w-0 rounded-[1.15rem]"}
       >
         {noteCard}
       </div>

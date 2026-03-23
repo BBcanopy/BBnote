@@ -254,8 +254,24 @@ test("starts empty, restores separate notebook and notes lanes, supports row dra
   ).toBeTruthy();
   expect(
     await notePreview.evaluate((element) => {
-      const excerpt = element.querySelector("p:nth-of-type(2)");
-      return (excerpt?.textContent ?? "").length <= 57;
+      const excerpt = element.querySelector(".bb-note-card__excerpt") as HTMLElement | null;
+      if (!excerpt) {
+        return false;
+      }
+      const style = getComputedStyle(excerpt);
+      return style.overflow === "hidden" && style.textOverflow === "ellipsis" && style.whiteSpace === "nowrap";
+    })
+  ).toBeTruthy();
+  expect(
+    await notePreview.evaluate((element) => {
+      const noteCard = element as HTMLButtonElement;
+      return noteCard.getBoundingClientRect().height < 88;
+    })
+  ).toBeTruthy();
+  expect(
+    await notePreview.evaluate((element) => {
+      const excerpt = element.querySelector(".bb-note-card__excerpt");
+      return (excerpt?.textContent ?? "").length <= 45;
     })
   ).toBeTruthy();
 

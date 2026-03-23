@@ -960,6 +960,24 @@ button:disabled {
   background: color-mix(in srgb, var(--surface-strong) 92%, white);
 }
 
+.bb-pane-card--notes {
+  gap: 0.6rem;
+  padding: 0.65rem;
+}
+
+.bb-pane-card--notes .bb-search-shell {
+  min-height: 2.45rem;
+  padding: 0.1rem 0.76rem;
+  border-radius: 0.95rem;
+}
+
+.bb-note-list {
+  display: grid;
+  align-content: start;
+  gap: 0.42rem;
+  min-width: 0;
+}
+
 .bb-search-shell input,
 .bb-input,
 .bb-select,
@@ -1104,6 +1122,11 @@ button:disabled {
     box-shadow 220ms var(--ease);
 }
 
+.bb-note-card {
+  overflow: hidden;
+  padding: 0.66rem 0.76rem;
+}
+
 .bb-tree-drop-target {
   border-radius: 1.15rem;
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
@@ -1124,6 +1147,48 @@ button:disabled {
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.18),
     0 20px 34px -24px rgba(18, 34, 36, 0.42);
+}
+
+.bb-note-card__layout {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.7rem;
+  min-width: 0;
+}
+
+.bb-note-card__copy {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+}
+
+.bb-note-card__title,
+.bb-note-card__excerpt {
+  margin: 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bb-note-card__title {
+  white-space: nowrap;
+  font-size: 0.92rem;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+}
+
+.bb-note-card__excerpt {
+  margin-top: 0.2rem;
+  white-space: nowrap;
+  overflow-wrap: anywhere;
+  color: var(--ink-soft);
+  font-size: 0.78rem;
+  line-height: 1.32;
+}
+
+.bb-note-card.is-active .bb-note-card__excerpt {
+  color: rgba(255, 255, 255, 0.72);
 }
 
 .bb-tree-row {
@@ -1154,12 +1219,18 @@ button:disabled {
   border-color: rgba(255, 255, 255, 0.18);
 }
 
+.bb-note-card .bb-note-icon {
+  width: 1.72rem;
+  height: 1.72rem;
+  border-radius: 0.72rem;
+}
+
 .bb-note-drag-handle {
   display: inline-grid;
   place-items: center;
-  width: 1.65rem;
-  height: 1.65rem;
-  border-radius: 0.8rem;
+  width: 1.3rem;
+  height: 1.3rem;
+  border-radius: 0.64rem;
   color: var(--ink-soft);
   background: color-mix(in srgb, var(--surface-strong) 80%, transparent);
   border: 1px solid color-mix(in srgb, var(--line) 82%, transparent);
