@@ -148,8 +148,7 @@ export function FolderTree(props: {
 
   return (
     <section className="bb-pane-card">
-      <div className="bb-pane-card__header">
-        <p className="bb-eyebrow">Notebooks</p>
+      <div className="bb-pane-card__header justify-end">
         <div data-testid="notebooks-actions" className="flex items-center gap-2">
           <button
             type="button"

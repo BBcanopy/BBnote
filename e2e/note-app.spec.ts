@@ -26,6 +26,7 @@ test("starts empty, restores separate notebook and notes lanes, supports row dra
   await expect(page.getByRole("button", { name: /collapse notes pane/i })).toBeVisible();
   const notebookPane = page.getByTestId("notebook-pane");
   const notesPane = page.getByTestId("notes-pane");
+  await expect(notebookPane.locator("p.bb-eyebrow")).toHaveCount(0);
   const notebookPaneWidthBefore = (await notebookPane.boundingBox())?.width ?? 0;
   const notesPaneWidthBefore = (await notesPane.boundingBox())?.width ?? 0;
   await dragResizer(page, page.getByTestId("notebook-pane-resizer"), 72);
