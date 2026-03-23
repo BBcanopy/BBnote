@@ -3,6 +3,7 @@ import { useState } from "react";
 import { createImportJob } from "../api/client";
 import type { ImportJob } from "../api/types";
 import { useAuth } from "../auth/AuthProvider";
+import { buttonPrimary } from "../components/buttonStyles";
 
 export function ImportPage() {
   const auth = useAuth();
@@ -34,7 +35,7 @@ export function ImportPage() {
         <p className="text-xs uppercase tracking-[0.3em] text-slate-500">Imports</p>
         <h1 className="mt-4 text-3xl font-semibold tracking-tight">Bring notes in from existing tools</h1>
         <p className="mt-3 max-w-[60ch] text-sm leading-relaxed text-slate-600">
-          Upload a OneNote archive or a Synology Note Station export and BBNote will create a new top-level folder subtree for it.
+          Upload a OneNote archive or a Synology Note Station export and BBNote will create a new top-level notebook subtree for it.
         </p>
         <div className="mt-6 grid gap-4">
           <label className="grid gap-2 text-sm text-slate-700">
@@ -61,7 +62,7 @@ export function ImportPage() {
           type="button"
           onClick={() => void handleImport()}
           disabled={!file || busy}
-          className="mt-6 inline-flex items-center gap-2 rounded-full bg-slate-950 px-5 py-3 text-sm text-white transition duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-[1px] active:translate-y-0 active:scale-[0.98]"
+          className={`mt-6 ${buttonPrimary}`}
         >
           <UploadSimple size={18} />
           {busy ? "Importing archive" : "Start import"}

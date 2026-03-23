@@ -1,10 +1,12 @@
 import { DownloadSimple, FileArrowUp, FileText, ImageSquare, Link } from "@phosphor-icons/react";
 import type { ReactNode } from "react";
 import type { AttachmentRef } from "../api/types";
+import { buttonDanger, buttonPrimary, buttonSecondary } from "./buttonStyles";
 
 export function AttachmentList(props: {
   attachments: AttachmentRef[];
   uploading: boolean;
+  disabled: boolean;
   onUpload(files: FileList | null): void;
   onInsertLink(attachment: AttachmentRef): void;
   onInsertImage(attachment: AttachmentRef): void;
@@ -16,12 +18,16 @@ export function AttachmentList(props: {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="text-sm font-medium tracking-tight text-slate-900">Attachments</p>
-          <p className="mt-1 text-xs uppercase tracking-[0.25em] text-slate-400">Images and files</p>
         </div>
-        <label className="inline-flex cursor-pointer items-center gap-2 rounded-full bg-emerald-700 px-4 py-2 text-sm text-white transition duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-[1px] hover:bg-emerald-600 active:translate-y-0 active:scale-[0.98]">
+        <label className={`${buttonPrimary} ${props.disabled ? "cursor-not-allowed opacity-60" : "cursor-pointer"}`}>
           <FileArrowUp size={18} />
           {props.uploading ? "Uploading" : "Upload"}
-          <input type="file" className="hidden" onChange={(event) => props.onUpload(event.target.files)} />
+          <input
+            type="file"
+            disabled={props.disabled}
+            className="hidden"
+            onChange={(event) => props.onUpload(event.target.files)}
+          />
         </label>
       </div>
       <div className="mt-4 space-y-3">
@@ -45,23 +51,31 @@ export function AttachmentList(props: {
                     </div>
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    <InlineAction label="Link" icon={<Link size={16} />} onClick={() => props.onInsertLink(attachment)} />
+                    <InlineAction
+                      label="Link"
+                      icon={<Link size={16} />}
+                      disabled={props.disabled}
+                      onClick={() => props.onInsertLink(attachment)}
+                    />
                     {isImage ? (
                       <InlineAction
                         label="Image"
                         icon={<ImageSquare size={16} />}
+                        disabled={props.disabled}
                         onClick={() => props.onInsertImage(attachment)}
                       />
                     ) : null}
                     <InlineAction
                       label="Download"
                       icon={<DownloadSimple size={16} />}
+                      disabled={props.disabled}
                       onClick={() => props.onDownload(attachment)}
                     />
                     <button
                       type="button"
                       onClick={() => props.onDelete(attachment.id)}
-                      className="rounded-full border border-slate-200 px-3 py-1.5 text-xs text-slate-500 transition duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-[1px] hover:border-red-200 hover:text-red-600 active:translate-y-0 active:scale-[0.98]"
+                      disabled={props.disabled}
+                      className={`${buttonDanger} h-8 px-3 text-xs`}
                     >
                       Remove
                     </button>
@@ -76,12 +90,13 @@ export function AttachmentList(props: {
   );
 }
 
-function InlineAction(props: { label: string; icon: ReactNode; onClick(): void }) {
+function InlineAction(props: { label: string; icon: ReactNode; disabled?: boolean; onClick(): void }) {
   return (
     <button
       type="button"
       onClick={props.onClick}
-      className="inline-flex items-center gap-2 rounded-full border border-slate-200 px-3 py-1.5 text-xs text-slate-600 transition duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-[1px] hover:border-slate-300 hover:text-slate-950 active:translate-y-0 active:scale-[0.98]"
+      disabled={props.disabled}
+      className={`${buttonSecondary} h-8 px-3 text-xs`}
     >
       {props.icon}
       {props.label}

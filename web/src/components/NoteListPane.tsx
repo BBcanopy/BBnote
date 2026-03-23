@@ -1,5 +1,6 @@
 import { MagnifyingGlass, NotePencil, Plus } from "@phosphor-icons/react";
 import type { NoteSummary } from "../api/types";
+import { buttonPrimary } from "./buttonStyles";
 
 export function NoteListPane(props: {
   notes: NoteSummary[];
@@ -9,18 +10,19 @@ export function NoteListPane(props: {
   onSelectNote(noteId: string): void;
   onCreateNote(): void;
   loading: boolean;
+  notebookName: string | null;
 }) {
   return (
-    <section className="rounded-[2rem] border border-slate-200/70 bg-white/80 p-5 shadow-[0_20px_50px_-32px_rgba(15,23,42,0.28)]">
+    <section className="rounded-[2rem] border border-slate-200/70 bg-white/88 p-5 shadow-[0_20px_50px_-32px_rgba(15,23,42,0.18)] backdrop-blur-sm">
       <div className="flex items-center justify-between gap-4">
         <div>
           <p className="text-xs uppercase tracking-[0.3em] text-slate-500">Notes</p>
-          <p className="mt-2 text-sm text-slate-600">Search runs through titles and markdown body text.</p>
+          <p className="mt-2 text-sm font-medium tracking-tight text-slate-900">{props.notebookName ?? "All notes"}</p>
         </div>
         <button
           type="button"
           onClick={props.onCreateNote}
-          className="inline-flex items-center gap-2 rounded-full bg-slate-950 px-4 py-2 text-sm text-white transition duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-[1px] active:translate-y-0 active:scale-[0.98]"
+          className={buttonPrimary}
         >
           <Plus size={18} />
           New note
@@ -44,7 +46,7 @@ export function NoteListPane(props: {
           </>
         ) : props.notes.length === 0 ? (
           <div className="rounded-[1.4rem] border border-dashed border-slate-200 bg-slate-50/70 px-4 py-5 text-sm leading-relaxed text-slate-500">
-            No notes match this folder and search combination yet.
+            No notes yet.
           </div>
         ) : (
           props.notes.map((note) => {
@@ -81,4 +83,3 @@ export function NoteListPane(props: {
 function SkeletonCard() {
   return <div className="h-24 animate-pulse rounded-[1.4rem] border border-slate-200 bg-slate-100/80" />;
 }
-

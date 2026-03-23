@@ -3,6 +3,7 @@ import { useState } from "react";
 import { createExportJob, downloadExport } from "../api/client";
 import type { ExportJob } from "../api/types";
 import { useAuth } from "../auth/AuthProvider";
+import { buttonPrimary, buttonSecondary } from "../components/buttonStyles";
 
 export function ExportPage() {
   const auth = useAuth();
@@ -45,13 +46,13 @@ export function ExportPage() {
         <p className="text-xs uppercase tracking-[0.3em] text-slate-500">Exports</p>
         <h1 className="mt-4 text-3xl font-semibold tracking-tight">Take everything out as Markdown</h1>
         <p className="mt-3 max-w-[60ch] text-sm leading-relaxed text-slate-600">
-          Export jobs package your notes into nested folders with YAML front matter and relative asset paths.
+          Export jobs package your notes into nested notebooks with YAML front matter and relative asset paths.
         </p>
         <button
           type="button"
           onClick={() => void handleCreateExport()}
           disabled={busy}
-          className="mt-6 inline-flex items-center gap-2 rounded-full bg-slate-950 px-5 py-3 text-sm text-white transition duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-[1px] active:translate-y-0 active:scale-[0.98]"
+          className={`mt-6 ${buttonPrimary}`}
         >
           <DownloadSimple size={18} />
           {busy ? "Building export" : "Export all notes"}
@@ -65,13 +66,13 @@ export function ExportPage() {
             <div className="rounded-[1.4rem] border border-slate-200 bg-slate-50/70 px-4 py-4">
               <p className="text-sm font-medium text-slate-900">Status: {job.status}</p>
               <p className="mt-2 text-sm text-slate-600">Notes: {job.summary.noteCount}</p>
-              <p className="text-sm text-slate-600">Folders: {job.summary.folderCount}</p>
+              <p className="text-sm text-slate-600">Notebooks: {job.summary.folderCount}</p>
               <p className="text-sm text-slate-600">Attachments: {job.summary.attachmentCount}</p>
             </div>
             <button
               type="button"
               onClick={() => void handleDownload()}
-              className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-700 transition duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-[1px] active:translate-y-0 active:scale-[0.98]"
+              className={buttonSecondary}
             >
               <DownloadSimple size={18} />
               Download ZIP
