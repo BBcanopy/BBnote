@@ -4,7 +4,7 @@ import path from "node:path";
 import { expect, test } from "@playwright/test";
 import JSZip from "jszip";
 
-test("starts empty, shows a unified notebook tree, supports row dragging, autosaves notes, and collapses the explorer", async ({ page }) => {
+test("starts empty, restores separate notebook and notes lanes, supports row dragging, autosaves notes, and collapses both lanes", async ({ page }) => {
   const suffix = Date.now().toString();
   const notebookName = `Projects ${suffix}`;
   const subNotebookName = `Roadmaps ${suffix}`;
@@ -18,22 +18,34 @@ test("starts empty, shows a unified notebook tree, supports row dragging, autosa
   await expect(page.getByText(/inbox/i)).toHaveCount(0);
   await expect(page.getByRole("button", { name: /all notes/i })).toHaveCount(0);
   await expect(page.getByRole("button", { name: /collapse notebooks pane/i })).toBeVisible();
-  await expect(page.getByRole("button", { name: /collapse notes pane/i })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /collapse notes pane/i })).toBeVisible();
   await expect(page.getByRole("button", { name: /^new note$/i }).first()).toHaveAttribute("title", "New note");
   expect((await page.getByRole("button", { name: /^new note$/i }).first().textContent())?.trim() ?? "").toBe("");
   await expect
     .poll(async () => {
-      const labels = await page.getByTestId("explorer-actions").locator("button").evaluateAll((buttons) =>
+      const labels = await page.getByTestId("notebooks-actions").locator("button").evaluateAll((buttons) =>
         buttons.map((button) => button.getAttribute("aria-label") ?? button.textContent?.trim() ?? "")
       );
       return labels.join("|");
     })
-    .toBe("New notebook|New note|Collapse notebooks pane");
+    .toBe("New notebook|Collapse notebooks pane");
+  await expect
+    .poll(async () => {
+      const labels = await page.getByTestId("notes-actions").locator("button").evaluateAll((buttons) =>
+        buttons.map((button) => button.getAttribute("aria-label") ?? button.textContent?.trim() ?? "")
+      );
+      return labels.join("|");
+    })
+    .toBe("New note|Collapse notes pane");
 
   await page.getByRole("button", { name: /collapse notebooks pane/i }).click();
   await expect(page.getByRole("button", { name: /open notebooks pane/i })).toBeVisible();
   await page.getByRole("button", { name: /open notebooks pane/i }).click();
   await expect(page.getByRole("button", { name: /collapse notebooks pane/i })).toBeVisible();
+  await page.getByRole("button", { name: /collapse notes pane/i }).click();
+  await expect(page.getByRole("button", { name: /open notes pane/i })).toBeVisible();
+  await page.getByRole("button", { name: /open notes pane/i }).click();
+  await expect(page.getByRole("button", { name: /collapse notes pane/i })).toBeVisible();
   await expect(page.getByRole("button", { name: /sub-notebook/i })).toHaveCount(0);
 
   await page.getByPlaceholder("Notebook name").fill(notebookName);
@@ -71,6 +83,7 @@ test("starts empty, shows a unified notebook tree, supports row dragging, autosa
   );
 
   await page.getByRole("button", { name: /^new note$/i }).click();
+  await expect(page.getByRole("button", { name: /open notebooks pane/i })).toHaveCount(0);
   await expect(page.getByRole("button", { name: /open notes pane/i })).toHaveCount(0);
   await expect(page.getByText(/untitled note/i)).toHaveCount(0);
 
@@ -96,7 +109,7 @@ test("starts empty, shows a unified notebook tree, supports row dragging, autosa
   await page.getByPlaceholder("Search notes").fill(searchTerm);
   await notePreview.click();
   await expect(page.getByRole("button", { name: /open notebooks pane/i })).toBeVisible();
-  await expect(page.getByRole("button", { name: /open notes pane/i })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /open notes pane/i })).toBeVisible();
 
   await expect(page.getByRole("button", { name: /^markdown$/i })).toHaveAttribute("title", "Markdown");
   await expect(page.getByRole("button", { name: /^preview$/i })).toHaveAttribute("title", "Preview");
