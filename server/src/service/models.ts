@@ -1,14 +1,19 @@
+export const userThemeValues = ["sea", "ember", "midnight"] as const;
+export type UserTheme = (typeof userThemeValues)[number];
+
 export interface AuthenticatedUser {
   ownerId: string;
   issuer: string;
   subject: string;
   email: string | null;
   name: string | null;
+  theme: UserTheme;
 }
 
 export interface SessionUser {
   email: string | null;
   name: string | null;
+  theme: UserTheme;
 }
 
 export interface AuthSessionView {

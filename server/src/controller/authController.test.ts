@@ -47,7 +47,7 @@ describe("authController integration", () => {
   it("signs in through server-managed oidc and authenticates protected routes via session cookie", async () => {
     const loginResponse = await app.inject({
       method: "GET",
-      url: "/api/v1/auth/login?returnTo=%2Fimports"
+      url: "/api/v1/auth/login?returnTo=%2Fmigration"
     });
 
     expect(loginResponse.statusCode).toBe(302);
@@ -81,7 +81,7 @@ describe("authController integration", () => {
     });
 
     expect(callbackResponse.statusCode).toBe(302);
-    expect(callbackResponse.headers.location).toBe("http://localhost:3000/imports");
+    expect(callbackResponse.headers.location).toBe("http://localhost:3000/migration");
 
     const sessionCookie = getCookieValue(callbackResponse.headers["set-cookie"], "bbnote_session");
     expect(sessionCookie).toBeTruthy();
@@ -99,7 +99,8 @@ describe("authController integration", () => {
       authenticated: true,
       user: {
         email: "avery@example.com",
-        name: "Avery Stone"
+        name: "Avery Stone",
+        theme: "sea"
       }
     });
 
@@ -114,10 +115,86 @@ describe("authController integration", () => {
     expect(foldersResponse.statusCode).toBe(200);
     expect(foldersResponse.json()).toEqual([]);
   });
+
+  it("stores the selected theme as a user preference", async () => {
+    const sessionCookie = await signInAndGetSessionCookie(app);
+
+    const updateResponse = await app.inject({
+      method: "PATCH",
+      url: "/api/v1/auth/theme",
+      headers: {
+        cookie: sessionCookie,
+        "content-type": "application/json"
+      },
+      payload: JSON.stringify({
+        theme: "midnight"
+      })
+    });
+
+    expect(updateResponse.statusCode).toBe(200);
+    expect(updateResponse.json()).toEqual({
+      authenticated: true,
+      user: {
+        email: "avery@example.com",
+        name: "Avery Stone",
+        theme: "midnight"
+      }
+    });
+
+    const sessionResponse = await app.inject({
+      method: "GET",
+      url: "/api/v1/auth/session",
+      headers: {
+        cookie: sessionCookie
+      }
+    });
+
+    expect(sessionResponse.statusCode).toBe(200);
+    expect(sessionResponse.json()).toEqual({
+      authenticated: true,
+      user: {
+        email: "avery@example.com",
+        name: "Avery Stone",
+        theme: "midnight"
+      }
+    });
+  });
 });
 
 function getCookieValue(setCookieHeader: string | string[] | undefined, cookieName: string) {
   const cookies = Array.isArray(setCookieHeader) ? setCookieHeader : setCookieHeader ? [setCookieHeader] : [];
   const match = cookies.find((entry) => entry.startsWith(`${cookieName}=`));
   return match ? match.split(";", 1)[0] : null;
+}
+
+async function signInAndGetSessionCookie(app: FastifyInstance) {
+  const loginResponse = await app.inject({
+    method: "GET",
+    url: "/api/v1/auth/login?returnTo=%2F"
+  });
+  const authFlowCookie = getCookieValue(loginResponse.headers["set-cookie"], "bbnote_auth_flow");
+  const authorizeLocation = new URL(String(loginResponse.headers.location));
+  const authorizePayload = new URLSearchParams(authorizeLocation.searchParams);
+  authorizePayload.set("name", "Avery Stone");
+  authorizePayload.set("email", "avery@example.com");
+
+  const authorizeResponse = await app.inject({
+    method: "POST",
+    url: authorizeLocation.pathname,
+    headers: {
+      "content-type": "application/x-www-form-urlencoded"
+    },
+    payload: authorizePayload.toString()
+  });
+
+  const callbackUrl = new URL(String(authorizeResponse.headers.location));
+  const callbackResponse = await app.inject({
+    method: "GET",
+    url: `${callbackUrl.pathname}${callbackUrl.search}`,
+    headers: {
+      cookie: authFlowCookie!
+    }
+  });
+
+  return getCookieValue(callbackResponse.headers["set-cookie"], "bbnote_session")!;
 }

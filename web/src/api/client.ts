@@ -4,7 +4,8 @@ import type {
   FolderNode,
   ImportJob,
   NoteDetail,
-  PaginatedNotes
+  PaginatedNotes,
+  UserTheme
 } from "./types";
 
 interface RequestOptions {
@@ -45,6 +46,13 @@ export function getAuthSession() {
 export function logoutAuthSession() {
   return request<void>("/api/v1/auth/logout", {
     method: "POST"
+  });
+}
+
+export function updateUserTheme(theme: UserTheme) {
+  return request<AuthSession>("/api/v1/auth/theme", {
+    method: "PATCH",
+    body: JSON.stringify({ theme })
   });
 }
 

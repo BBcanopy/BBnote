@@ -4,7 +4,83 @@ import path from "node:path";
 import { expect, test } from "@playwright/test";
 import JSZip from "jszip";
 
+test("keeps desktop lanes viewport-height and only shows the pane grip on border hover", async ({ page }) => {
+  await page.setViewportSize({ width: 1900, height: 1000 });
+
+  await login(page);
+
+  await expect(page.getByRole("button", { name: /collapse notebooks pane/i })).toBeVisible();
+  await expect(page.getByRole("button", { name: /collapse notes pane/i })).toBeVisible();
+
+  const viewport = page.viewportSize();
+  const notebookPane = page.getByTestId("notebook-pane");
+  const notesPane = page.getByTestId("notes-pane");
+  const notebookPaneResizer = page.getByTestId("notebook-pane-resizer");
+  const notesPaneResizer = page.getByTestId("notes-pane-resizer");
+  const notebookPaneHandle = notebookPaneResizer.locator(".bb-pane-resizer__handle");
+  const notesPaneHandle = notesPaneResizer.locator(".bb-pane-resizer__handle");
+
+  await expect
+    .poll(async () => Number.parseFloat(await notebookPaneHandle.evaluate((element) => getComputedStyle(element).opacity)))
+    .toBeLessThan(0.05);
+  await expect
+    .poll(async () => Number.parseFloat(await notesPaneHandle.evaluate((element) => getComputedStyle(element).opacity)))
+    .toBeLessThan(0.05);
+
+  await notebookPaneResizer.hover();
+  await expect
+    .poll(async () => Number.parseFloat(await notebookPaneHandle.evaluate((element) => getComputedStyle(element).opacity)))
+    .toBeGreaterThan(0.95);
+  await expect
+    .poll(async () => {
+      const paneBox = await notebookPane.boundingBox();
+      const handleBox = await notebookPaneHandle.boundingBox();
+      if (!paneBox || !handleBox) {
+        return Number.POSITIVE_INFINITY;
+      }
+      return Math.abs(handleBox.x + handleBox.width / 2 - (paneBox.x + paneBox.width));
+    })
+    .toBeLessThan(4);
+
+  await notesPaneResizer.hover();
+  await expect
+    .poll(async () => Number.parseFloat(await notesPaneHandle.evaluate((element) => getComputedStyle(element).opacity)))
+    .toBeGreaterThan(0.95);
+  await expect
+    .poll(async () => Number.parseFloat(await notebookPaneHandle.evaluate((element) => getComputedStyle(element).opacity)))
+    .toBeLessThan(0.05);
+  await expect
+    .poll(async () => {
+      const paneBox = await notesPane.boundingBox();
+      const handleBox = await notesPaneHandle.boundingBox();
+      if (!paneBox || !handleBox) {
+        return Number.POSITIVE_INFINITY;
+      }
+      return Math.abs(handleBox.x + handleBox.width / 2 - (paneBox.x + paneBox.width));
+    })
+    .toBeLessThan(4);
+
+  await expect
+    .poll(async () => (await notebookPane.boundingBox())?.height ?? 0)
+    .toBeGreaterThan((viewport?.height ?? 0) - 4);
+  await expect
+    .poll(async () => (await notesPane.boundingBox())?.height ?? 0)
+    .toBeGreaterThan((viewport?.height ?? 0) - 4);
+
+  const notebookPaneWidthBefore = (await notebookPane.boundingBox())?.width ?? 0;
+  const notesPaneWidthBefore = (await notesPane.boundingBox())?.width ?? 0;
+  await dragResizer(page, notebookPaneResizer, 72);
+  await dragResizer(page, notesPaneResizer, 88);
+  await expect
+    .poll(async () => ((await notebookPane.boundingBox())?.width ?? 0) - notebookPaneWidthBefore)
+    .toBeGreaterThan(40);
+  await expect
+    .poll(async () => ((await notesPane.boundingBox())?.width ?? 0) - notesPaneWidthBefore)
+    .toBeGreaterThan(48);
+});
+
 test("starts empty, restores separate notebook and notes lanes, supports row dragging, autosaves notes, and collapses both lanes", async ({ page }) => {
+  await page.setViewportSize({ width: 1900, height: 1000 });
   const suffix = Date.now().toString();
   const notebookName = `Projects ${suffix}`;
   const subNotebookName = `Roadmaps ${suffix}`;
@@ -15,11 +91,27 @@ test("starts empty, restores separate notebook and notes lanes, supports row dra
   await login(page);
 
   await expect(page.getByText("No notebooks yet.")).toBeVisible();
+  const topbarBox = await page.locator(".bb-topbar").boundingBox();
+  const viewport = page.viewportSize();
+  expect(topbarBox?.width ?? 0).toBeGreaterThan(((viewport?.width ?? 0) * 0.85));
   await expect(page.getByText(/inbox/i)).toHaveCount(0);
   const allNotesButton = page.getByRole("button", { name: /all notes/i }).first();
   await expect(allNotesButton).toBeVisible();
   await expect(page.getByRole("button", { name: /collapse notebooks pane/i })).toBeVisible();
   await expect(page.getByRole("button", { name: /collapse notes pane/i })).toBeVisible();
+  const notebookPane = page.getByTestId("notebook-pane");
+  const notesPane = page.getByTestId("notes-pane");
+  await expect(notebookPane.locator("p.bb-eyebrow")).toHaveCount(0);
+  const notebookPaneWidthBefore = (await notebookPane.boundingBox())?.width ?? 0;
+  const notesPaneWidthBefore = (await notesPane.boundingBox())?.width ?? 0;
+  await dragResizer(page, page.getByTestId("notebook-pane-resizer"), 72);
+  await dragResizer(page, page.getByTestId("notes-pane-resizer"), 88);
+  await expect
+    .poll(async () => ((await notebookPane.boundingBox())?.width ?? 0) - notebookPaneWidthBefore)
+    .toBeGreaterThan(40);
+  await expect
+    .poll(async () => ((await notesPane.boundingBox())?.width ?? 0) - notesPaneWidthBefore)
+    .toBeGreaterThan(48);
   await expect(page.getByRole("button", { name: /^new note$/i }).first()).toHaveAttribute("title", "New note");
   expect((await page.getByRole("button", { name: /^new note$/i }).first().textContent())?.trim() ?? "").toBe("");
   await expect
@@ -77,7 +169,9 @@ test("starts empty, restores separate notebook and notes lanes, supports row dra
 
   const archiveNotebookRow = page.getByTestId(buildNotebookTestId("drag", archiveNotebookName));
   await expect(archiveNotebookRow).toBeVisible();
-  await archiveNotebookRow.dragTo(
+  await dragToDropZone(
+    page,
+    archiveNotebookRow,
     page.getByTestId(buildNotebookTestId("before", notebookName))
   );
   await expect
@@ -140,36 +234,60 @@ test("starts empty, restores separate notebook and notes lanes, supports row dra
   await expect(page.getByPlaceholder("Write in Markdown").first()).toHaveValue(/budget\.txt/);
 });
 
-test("navigates imports and exports from the avatar menu", async ({ page }) => {
+test("opens migration from the avatar menu and runs both export and import flows", async ({ page }) => {
   await login(page);
   await createNotebookAndPersistedNote(page);
 
+  await expect(page.getByRole("navigation", { name: /primary navigation/i }).getByRole("link", { name: /^notes$/i })).toBeVisible();
+  await expect(page.getByRole("navigation", { name: /primary navigation/i }).getByRole("link", { name: /^imports$/i })).toHaveCount(0);
+  await expect(page.getByRole("navigation", { name: /primary navigation/i }).getByRole("link", { name: /^exports$/i })).toHaveCount(0);
+  await expect(page.getByRole("navigation", { name: /primary navigation/i }).getByRole("link", { name: /^migration$/i })).toHaveCount(0);
+  await expect
+    .poll(async () => ((await page.getByRole("button", { name: /open user menu/i }).textContent()) ?? "").trim().length)
+    .toBe(1);
+
   await page.getByRole("button", { name: /open user menu/i }).click();
-  const notesLink = page.getByRole("link", { name: /^notes$/i });
-  await expect(notesLink).toHaveClass(/bg-emerald-50/);
-  await expect(notesLink).toHaveClass(/text-emerald-950/);
-  await page.getByRole("link", { name: /^exports$/i }).click();
+  const userMenu = page.getByRole("menu");
+  await expect(userMenu.getByRole("link", { name: /^notes$/i })).toHaveAttribute("aria-current", "page");
+  await expect(userMenu.getByRole("link", { name: /^migration$/i })).toBeVisible();
+  await expect(userMenu.getByRole("link", { name: /^imports$/i })).toHaveCount(0);
+  await expect(userMenu.getByRole("link", { name: /^exports$/i })).toHaveCount(0);
+  await userMenu.getByRole("button", { name: /^ember/i }).click();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "ember");
+  await userMenu.getByRole("link", { name: /^migration$/i }).click();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "ember");
+  await expect(page).toHaveURL(/\/migration$/);
+  await expect(page.getByRole("heading", { name: /bring notes in, package everything out/i })).toBeVisible();
   await page.getByRole("button", { name: /export all notes/i }).click();
-  await expect(page.getByText(/status: completed/i)).toBeVisible();
-  await expect(page.getByText(/notebooks:/i)).toBeVisible();
+  const exportJobPanel = page.getByTestId("export-job-panel");
+  await expect(exportJobPanel).toContainText(/status/i);
+  await expect(exportJobPanel).toContainText(/notebooks/i);
+  await expect(exportJobPanel.getByRole("button", { name: /download zip/i })).toBeVisible();
 
   const importArchive = await createImportArchive();
   await page.getByRole("button", { name: /open user menu/i }).click();
-  const exportsLink = page.getByRole("link", { name: /^exports$/i });
-  await expect(exportsLink).toHaveClass(/bg-emerald-50/);
-  await expect(exportsLink).toHaveClass(/text-emerald-950/);
-  await page.getByRole("link", { name: /^imports$/i }).click();
+  const migrationMenu = page.getByRole("menu");
+  await expect(migrationMenu.getByRole("link", { name: /^migration$/i })).toHaveAttribute("aria-current", "page");
+  await migrationMenu.getByRole("button", { name: /^midnight/i }).click();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "midnight");
+  await page.getByRole("button", { name: /open user menu/i }).click();
   await page.getByLabel("Source").selectOption("onenote");
   await page.getByLabel("Archive").setInputFiles(importArchive);
   await page.getByRole("button", { name: /start import/i }).click();
-  await expect(page.getByText(/status: completed/i)).toBeVisible();
-  await expect(page.getByText(/created notes:/i)).toContainText("1");
+  const importJobPanel = page.getByTestId("import-job-panel");
+  await expect(importJobPanel).toContainText(/status/i);
+  await expect(importJobPanel).toContainText(/created notes/i);
+  await expect(importJobPanel).toContainText("1");
+  await page.reload();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "midnight");
+  await expect(page).toHaveURL(/\/migration$/);
 });
 
 async function login(page: import("@playwright/test").Page) {
   await page.goto("/");
   await page.getByRole("button", { name: /sign in with oidc/i }).click();
   await page.getByRole("button", { name: /continue to bbnote/i }).click();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "sea");
   await expect(page.getByRole("button", { name: /^new note$/i })).toBeVisible();
   await expect(page.getByText("Notebook workspace")).toHaveCount(0);
   await expect(page.getByText("No note selected").first()).toBeVisible();
@@ -206,4 +324,47 @@ async function createImportArchive() {
   const filePath = path.join(directory, "import.zip");
   await fs.writeFile(filePath, await zip.generateAsync({ type: "nodebuffer" }));
   return filePath;
+}
+
+async function dragResizer(page: import("@playwright/test").Page, handle: import("@playwright/test").Locator, deltaX: number) {
+  const box = await handle.boundingBox();
+  if (!box) {
+    throw new Error("Expected resize handle to be visible.");
+  }
+
+  const startX = box.x + box.width / 2;
+  const startY = box.y + box.height / 2;
+  await page.mouse.move(startX, startY);
+  await page.mouse.down();
+  await page.mouse.move(startX + deltaX, startY, { steps: 12 });
+  await page.mouse.up();
+}
+
+async function dragToDropZone(
+  page: import("@playwright/test").Page,
+  source: import("@playwright/test").Locator,
+  target: import("@playwright/test").Locator
+) {
+  const sourceBox = await source.boundingBox();
+  if (!sourceBox) {
+    throw new Error("Expected drag source to be visible.");
+  }
+
+  const startX = sourceBox.x + sourceBox.width / 2;
+  const startY = sourceBox.y + sourceBox.height / 2;
+  await page.mouse.move(startX, startY);
+  await page.mouse.down();
+  await page.mouse.move(startX, startY + 12, { steps: 4 });
+
+  await expect
+    .poll(async () => (await target.boundingBox())?.height ?? 0)
+    .toBeGreaterThan(4);
+
+  const targetBox = await target.boundingBox();
+  if (!targetBox) {
+    throw new Error("Expected drop zone to be visible.");
+  }
+
+  await page.mouse.move(targetBox.x + targetBox.width / 2, targetBox.y + targetBox.height / 2, { steps: 12 });
+  await page.mouse.up();
 }
