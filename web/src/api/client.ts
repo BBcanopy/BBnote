@@ -85,7 +85,7 @@ export function listNotes(params: {
   folderId?: string;
   cursor?: string;
   limit?: number;
-  sort?: "updatedAt" | "createdAt" | "title";
+  sort?: "updatedAt" | "createdAt" | "title" | "priority";
   order?: "asc" | "desc";
 }) {
   const search = new URLSearchParams();
@@ -112,6 +112,13 @@ export function getNote(noteId: string) {
 export function updateNote(noteId: string, payload: { folderId: string; title: string; bodyMarkdown: string }) {
   return request<NoteDetail>(`/api/v1/notes/${noteId}`, {
     method: "PUT",
+    body: JSON.stringify(payload)
+  });
+}
+
+export function reorderNotes(payload: { folderId: string; orderedNoteIds: string[] }) {
+  return request<void>("/api/v1/notes/reorder", {
+    method: "PATCH",
     body: JSON.stringify(payload)
   });
 }

@@ -73,21 +73,6 @@ export function MigrationPage() {
 
   return (
     <section className="bb-migration-layout">
-      <header className="bb-migration-hero">
-        <div className="bb-migration-hero__copy">
-          <p className="bb-eyebrow">Migration</p>
-          <h1 className="bb-migration-hero__title">Bring notes in, package everything out.</h1>
-          <p className="bb-migration-hero__body">
-            Move an archive in from another tool or generate a clean Markdown bundle for handoff, backup, or a fresh start.
-          </p>
-        </div>
-        <div className="bb-migration-hero__stats" aria-label="Migration capabilities">
-          <MigrationStat label="Sources" value="OneNote + Synology" />
-          <MigrationStat label="Export format" value="Markdown bundle" />
-          <MigrationStat label="Attachments" value="Included" />
-        </div>
-      </header>
-
       <div className="bb-migration-grid">
         <article className="bb-migration-card">
           <div className="bb-migration-card__header">
@@ -224,15 +209,6 @@ export function MigrationPage() {
         </article>
       </div>
     </section>
-  );
-}
-
-function MigrationStat(props: { label: string; value: string }) {
-  return (
-    <div className="bb-migration-stat">
-      <span className="bb-migration-stat__label">{props.label}</span>
-      <strong className="bb-migration-stat__value">{props.value}</strong>
-    </div>
   );
 }
 

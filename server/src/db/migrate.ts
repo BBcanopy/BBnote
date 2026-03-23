@@ -34,6 +34,7 @@ export function runMigrations(connection: Database.Database) {
       folder_id text not null,
       title text not null,
       file_path text not null,
+      sort_order integer not null default 0,
       created_at text not null,
       updated_at text not null,
       last_opened_at text,
@@ -124,4 +125,56 @@ export function runMigrations(connection: Database.Database) {
   if (!folderColumns.includes("sort_order")) {
     connection.exec("alter table folders add column sort_order integer not null default 0;");
   }
+
+  const noteColumns = connection
+    .prepare<[], { name: string }>("pragma table_info(notes)")
+    .all()
+    .map((column) => column.name);
+
+  if (!noteColumns.includes("sort_order")) {
+    connection.exec("alter table notes add column sort_order integer not null default 0;");
+    backfillNoteSortOrder(connection);
+    connection.exec("create index if not exists idx_notes_owner_folder_sort on notes(owner_id, folder_id, sort_order asc);");
+  } else {
+    connection.exec("create index if not exists idx_notes_owner_folder_sort on notes(owner_id, folder_id, sort_order asc);");
+  }
+}
+
+function backfillNoteSortOrder(connection: Database.Database) {
+  const notes = connection
+    .prepare<
+      [],
+      {
+        id: string;
+        ownerId: string;
+        folderId: string;
+        updatedAt: string;
+        createdAt: string;
+      }
+    >(
+      `
+        select
+          id,
+          owner_id as ownerId,
+          folder_id as folderId,
+          updated_at as updatedAt,
+          created_at as createdAt
+        from notes
+        order by owner_id asc, folder_id asc, updated_at desc, created_at desc, id desc
+      `
+    )
+    .all();
+
+  const nextSortOrder = new Map<string, number>();
+  const updateNoteSortOrder = connection.prepare("update notes set sort_order = ? where id = ?");
+  const transaction = connection.transaction(() => {
+    for (const note of notes) {
+      const key = `${note.ownerId}:${note.folderId}`;
+      const sortOrder = nextSortOrder.get(key) ?? 0;
+      updateNoteSortOrder.run(sortOrder, note.id);
+      nextSortOrder.set(key, sortOrder + 1);
+    }
+  });
+
+  transaction();
 }

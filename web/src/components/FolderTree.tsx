@@ -1,5 +1,5 @@
 import { ArrowsInSimple, ArrowsOutSimple, CaretDown, CaretLeft, FolderSimple, FolderSimplePlus } from "@phosphor-icons/react";
-import { useEffect, useMemo, useRef, useState, type DragEvent, type KeyboardEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import type { FolderNode } from "../api/types";
 import type { FolderMoveInstruction, FolderMovePosition } from "../utils/folderTree";
 
@@ -11,8 +11,6 @@ interface DropTarget {
 export function FolderTree(props: {
   folders: FolderNode[];
   selectedFolderId: string | null;
-  pendingName: string;
-  onPendingNameChange(value: string): void;
   onCreateNotebook(): void;
   onMoveNotebook(move: FolderMoveInstruction): void;
   onSelectFolder(folderId: string | null): void;
@@ -23,7 +21,6 @@ export function FolderTree(props: {
   const [expandedFolderIds, setExpandedFolderIds] = useState<Set<string>>(new Set());
   const initializedExpansionRef = useRef(false);
   const dragging = draggedFolderId !== null;
-  const canCreateNotebook = props.pendingName.trim().length > 0;
   const allNotesCount = props.folders.reduce((total, folder) => total + folder.noteCount, 0);
   const folderById = useMemo(() => new Map(props.folders.map((folder) => [folder.id, folder])), [props.folders]);
   const childFoldersByParent = useMemo(() => {
@@ -113,13 +110,6 @@ export function FolderTree(props: {
     setDropTarget(null);
   }
 
-  function handlePendingNameKeyDown(event: KeyboardEvent<HTMLInputElement>) {
-    if (event.key === "Enter") {
-      event.preventDefault();
-      props.onCreateNotebook();
-    }
-  }
-
   function toggleFolder(folderId: string) {
     setExpandedFolderIds((current) => {
       const next = new Set(current);
@@ -175,7 +165,6 @@ export function FolderTree(props: {
             aria-label="New notebook"
             title="New notebook"
             onClick={props.onCreateNotebook}
-            disabled={!canCreateNotebook}
             className="bb-icon-button bb-icon-button--accent"
           >
             <FolderSimplePlus size={17} />
@@ -226,16 +215,6 @@ export function FolderTree(props: {
             })
           )
         )}
-      </div>
-
-      <div className="border-t pt-4" style={{ borderColor: "var(--line)" }}>
-        <input
-          value={props.pendingName}
-          onChange={(event) => props.onPendingNameChange(event.target.value)}
-          onKeyDown={handlePendingNameKeyDown}
-          placeholder="Notebook name"
-          className="bb-input"
-        />
       </div>
     </section>
   );

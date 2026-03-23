@@ -20,8 +20,13 @@ const noteListQuerySchema = z.object({
   folderId: z.string().uuid().optional(),
   cursor: z.string().optional(),
   limit: z.coerce.number().int().positive().max(100).optional(),
-  sort: z.enum(["updatedAt", "createdAt", "title"]).optional(),
+  sort: z.enum(["updatedAt", "createdAt", "title", "priority"]).optional(),
   order: z.enum(["asc", "desc"]).optional()
+});
+
+const noteReorderBodySchema = z.object({
+  folderId: z.string().uuid(),
+  orderedNoteIds: z.array(z.string().uuid()).min(1)
 });
 
 export function registerNoteController(app: FastifyInstance, services: AppServices) {
@@ -40,7 +45,7 @@ export function registerNoteController(app: FastifyInstance, services: AppServic
           folderId: { type: "string", format: "uuid" },
           cursor: { type: "string" },
           limit: { type: "integer", minimum: 1, maximum: 100 },
-          sort: { type: "string", enum: ["updatedAt", "createdAt", "title"] },
+          sort: { type: "string", enum: ["updatedAt", "createdAt", "title", "priority"] },
           order: { type: "string", enum: ["asc", "desc"] }
         }
       }
@@ -56,6 +61,48 @@ export function registerNoteController(app: FastifyInstance, services: AppServic
       sort: query.sort,
       order: query.order
     });
+  });
+
+  app.patch("/api/v1/notes/reorder", {
+    preHandler: guard,
+    schema: {
+      tags: ["Notes"],
+      summary: "Reorder notes within a notebook",
+      security: sessionCookieSecurity,
+      body: {
+        type: "object",
+        required: ["folderId", "orderedNoteIds"],
+        properties: {
+          folderId: { type: "string", format: "uuid" },
+          orderedNoteIds: {
+            type: "array",
+            minItems: 1,
+            items: { type: "string", format: "uuid" }
+          }
+        }
+      },
+      response: {
+        204: { type: "null" },
+        400: errorMessageSchema
+      }
+    }
+  }, async (request, reply) => {
+    const parsedBody = noteReorderBodySchema.safeParse(request.body);
+    if (!parsedBody.success) {
+      return reply.code(400).send({ message: parsedBody.error.message });
+    }
+
+    try {
+      await services.noteService.reorderNotes({
+        ownerId: request.auth!.ownerId,
+        folderId: parsedBody.data.folderId,
+        orderedNoteIds: parsedBody.data.orderedNoteIds
+      });
+    } catch (error) {
+      return reply.code(400).send({ message: String(error instanceof Error ? error.message : error) });
+    }
+
+    return reply.code(204).send();
   });
 
   app.post("/api/v1/notes", {
