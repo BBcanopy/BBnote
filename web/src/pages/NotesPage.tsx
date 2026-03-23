@@ -477,8 +477,7 @@ export function NotesPage() {
               onCreateNotebook={() => void handleCreateNotebook()}
               onMoveNotebook={(move) => void handleMoveNotebook(move)}
               onCollapse={() => setFolderPaneCollapsed(true)}
-              onSelectFolder={(folderId) => handleSelectFolder(folderId)}
-              onClearSelection={() => handleSelectFolder(null)}
+              onSelectFolder={handleSelectFolder}
             />
           </div>
         )}
@@ -561,8 +560,7 @@ export function NotesPage() {
           onPendingNameChange={setPendingFolderName}
           onCreateNotebook={() => void handleCreateNotebook()}
           onMoveNotebook={(move) => void handleMoveNotebook(move)}
-          onSelectFolder={(folderId) => handleSelectFolder(folderId)}
-          onClearSelection={() => handleSelectFolder(null)}
+          onSelectFolder={handleSelectFolder}
         />
       </MobileDrawer>
 

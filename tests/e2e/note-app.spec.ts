@@ -16,6 +16,7 @@ test("starts empty, creates notebooks, supports row dragging, autosaves notes, a
 
   await expect(page.getByText("No notebooks yet.")).toBeVisible();
   await expect(page.getByText(/inbox/i)).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /all notes/i })).toHaveCount(0);
   await expect(page.getByRole("button", { name: /collapse notebooks pane/i })).toBeVisible();
   await expect(page.getByRole("button", { name: /collapse notes pane/i })).toBeVisible();
 
@@ -41,7 +42,7 @@ test("starts empty, creates notebooks, supports row dragging, autosaves notes, a
   await expect.poll(async () => page.locator('[data-testid^="notebook-drag-"]').count()).toBe(2);
   await expect(page.locator('[data-testid^="notebook-drag-"]').filter({ hasText: subNotebookName }).first()).toBeVisible();
 
-  await page.getByRole("button", { name: /all notes/i }).click();
+  await page.getByRole("button", { name: new RegExp(subNotebookName, "i") }).click();
   await page.getByPlaceholder("Notebook name").fill(archiveNotebookName);
   await page.getByRole("button", { name: /new notebook/i }).click();
   await expect.poll(async () => page.locator('[data-testid^="notebook-drag-"]').count()).toBe(3);
@@ -63,9 +64,6 @@ test("starts empty, creates notebooks, supports row dragging, autosaves notes, a
   await archiveNotebookRow.dragTo(
     page.getByTestId(buildNotebookTestId("drag", notebookName))
   );
-
-  const draggedNotebook = page.getByRole("button", { name: new RegExp(archiveNotebookName, "i") }).first();
-  await draggedNotebook.click();
 
   await page.getByRole("button", { name: /^new note$/i }).click();
   await expect(page.getByRole("button", { name: /open notes pane/i })).toHaveCount(0);

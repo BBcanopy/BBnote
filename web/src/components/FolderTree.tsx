@@ -16,8 +16,7 @@ export function FolderTree(props: {
   onPendingNameChange(value: string): void;
   onCreateNotebook(): void;
   onMoveNotebook(move: FolderMoveInstruction): void;
-  onSelectFolder(folderId: string): void;
-  onClearSelection(): void;
+  onSelectFolder(folderId: string | null): void;
   onCollapse?(): void;
 }) {
   const [draggedFolderId, setDraggedFolderId] = useState<string | null>(null);
@@ -88,19 +87,6 @@ export function FolderTree(props: {
       </div>
 
       <div className="mt-5 space-y-2">
-        <button
-          type="button"
-          onClick={props.onClearSelection}
-          className={`flex w-full items-center gap-3 rounded-[1.2rem] px-4 py-3 text-left transition duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${
-            props.selectedFolderId === null
-              ? "bg-slate-950 text-white"
-              : "bg-slate-50/70 text-slate-700 hover:-translate-y-[1px] hover:bg-white"
-          }`}
-        >
-          <FolderSimple size={18} className={props.selectedFolderId === null ? "text-emerald-300" : "text-slate-400"} />
-          <span className="flex-1 truncate">All notes</span>
-        </button>
-
         {props.folders.length === 0 ? (
           <div className="rounded-[1.3rem] border border-dashed border-slate-200 bg-slate-50/70 px-4 py-5 text-sm text-slate-500">No notebooks yet.</div>
         ) : (
@@ -135,7 +121,7 @@ export function FolderTree(props: {
                 >
                   <button
                     type="button"
-                    onClick={() => props.onSelectFolder(folder.id)}
+                    onClick={() => props.onSelectFolder(selected ? null : folder.id)}
                     className={`flex w-full items-center gap-2.5 rounded-[1.2rem] px-4 py-3 text-left transition duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${
                       selected ? "bg-slate-950 text-white" : "bg-slate-50/70 text-slate-700 hover:-translate-y-[1px] hover:bg-white"
                     }`}
