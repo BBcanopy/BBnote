@@ -33,15 +33,18 @@ test("starts empty, creates notebooks, supports notebook dragging, autosaves not
   await page.getByPlaceholder("Notebook name").fill(notebookName);
   await page.getByRole("button", { name: /new notebook/i }).click();
   await expect(page.getByRole("button", { name: /open notebooks pane/i })).toHaveCount(0);
+  await expect.poll(async () => page.locator('[data-testid^="notebook-drag-"]').count()).toBe(1);
 
   await page.getByPlaceholder("Notebook name").fill(subNotebookName);
   await page.getByRole("button", { name: /new notebook/i }).click();
   await expect(page.getByRole("button", { name: /open notebooks pane/i })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: new RegExp(subNotebookName, "i") }).first()).toBeVisible();
+  await expect.poll(async () => page.locator('[data-testid^="notebook-drag-"]').count()).toBe(2);
+  await expect(page.locator('[data-testid^="notebook-drag-"]').filter({ hasText: subNotebookName }).first()).toBeVisible();
 
   await page.getByRole("button", { name: /all notes/i }).click();
   await page.getByPlaceholder("Notebook name").fill(archiveNotebookName);
   await page.getByRole("button", { name: /new notebook/i }).click();
+  await expect.poll(async () => page.locator('[data-testid^="notebook-drag-"]').count()).toBe(3);
 
   await page.getByTestId(buildNotebookTestId("drag", archiveNotebookName)).dragTo(
     page.getByTestId(buildNotebookTestId("before", notebookName))

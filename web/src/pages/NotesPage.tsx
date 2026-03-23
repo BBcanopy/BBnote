@@ -1,12 +1,12 @@
 import {
   CaretLeft,
+  CaretRight,
   CircleNotch,
   Eye,
   FolderSimple,
   ListBullets,
   PencilSimple,
   Plus,
-  Rows,
   Trash
 } from "@phosphor-icons/react";
 import { startTransition, useDeferredValue, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
@@ -736,18 +736,20 @@ function CollapsedPaneRail(props: {
       type="button"
       onClick={props.onOpen}
       aria-label={`Open ${props.label} pane`}
-      className="flex w-[6.75rem] shrink-0 flex-col items-center gap-3 rounded-[1.75rem] border border-slate-200/70 bg-white/90 px-3 py-4 text-slate-700 shadow-[0_20px_50px_-36px_rgba(15,23,42,0.18)] transition duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-[1px] hover:border-slate-300"
+      title={`${props.label}: ${props.detail}`}
+      className="group flex w-[5.2rem] shrink-0 flex-col items-center gap-3 rounded-[1.7rem] border border-slate-200/80 bg-white/92 px-2.5 py-3.5 text-slate-700 shadow-[0_18px_44px_-34px_rgba(15,23,42,0.24)] transition duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-[1px] hover:border-slate-300"
     >
-      <span className="rounded-full bg-emerald-50 p-3 text-emerald-700">{props.icon}</span>
+      <span className="inline-flex h-11 w-11 items-center justify-center rounded-[1.15rem] border border-emerald-100 bg-emerald-50/90 text-emerald-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.65)]">
+        {props.icon}
+      </span>
       <span className="space-y-2 text-center">
         <span className="block text-[11px] uppercase tracking-[0.24em] text-slate-400">{props.label}</span>
-        <span className="block overflow-hidden text-xs font-medium leading-4 text-slate-600 [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2]">
+        <span className="block max-w-full truncate text-[11px] font-medium text-slate-500">
           {props.detail}
         </span>
       </span>
-      <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-medium text-slate-500">
-        <Rows size={14} />
-        Open
+      <span className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 bg-slate-50 text-slate-400 transition duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:border-slate-950 group-hover:bg-slate-950 group-hover:text-white">
+        <CaretRight size={15} />
       </span>
     </button>
   );
