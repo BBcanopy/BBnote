@@ -1,5 +1,11 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
+import {
+  createUuidParamsSchema,
+  errorMessageSchema,
+  passthroughObjectSchema,
+  sessionCookieSecurity
+} from "./openapi.js";
 import { authenticate } from "./authenticate.js";
 import type { AppServices } from "../service/serviceFactory.js";
 
@@ -21,7 +27,25 @@ const noteListQuerySchema = z.object({
 export function registerNoteController(app: FastifyInstance, services: AppServices) {
   const guard = authenticate(services);
 
-  app.get("/api/v1/notes", { preHandler: guard }, async (request) => {
+  app.get("/api/v1/notes", {
+    preHandler: guard,
+    schema: {
+      tags: ["Notes"],
+      summary: "List or search notes",
+      security: sessionCookieSecurity,
+      querystring: {
+        type: "object",
+        properties: {
+          q: { type: "string" },
+          folderId: { type: "string", format: "uuid" },
+          cursor: { type: "string" },
+          limit: { type: "integer", minimum: 1, maximum: 100 },
+          sort: { type: "string", enum: ["updatedAt", "createdAt", "title"] },
+          order: { type: "string", enum: ["asc", "desc"] }
+        }
+      }
+    }
+  }, async (request) => {
     const query = noteListQuerySchema.parse(request.query);
     return services.noteService.listNotes({
       ownerId: request.auth!.ownerId,
@@ -34,10 +58,30 @@ export function registerNoteController(app: FastifyInstance, services: AppServic
     });
   });
 
-  app.post("/api/v1/notes", { preHandler: guard }, async (request, reply) => {
+  app.post("/api/v1/notes", {
+    preHandler: guard,
+    schema: {
+      tags: ["Notes"],
+      summary: "Create a note",
+      security: sessionCookieSecurity,
+      body: {
+        type: "object",
+        required: ["folderId", "title", "bodyMarkdown"],
+        properties: {
+          folderId: { type: "string", format: "uuid" },
+          title: { type: "string" },
+          bodyMarkdown: { type: "string" }
+        }
+      },
+      response: {
+        201: passthroughObjectSchema,
+        400: errorMessageSchema
+      }
+    }
+  }, async (request, reply) => {
     const parsedBody = noteBodySchema.safeParse(request.body);
     if (!parsedBody.success) {
-      return reply.code(400).send(parsedBody.error.message);
+      return reply.code(400).send({ message: parsedBody.error.message });
     }
     const body = parsedBody.data;
     const note = await services.noteService.createNote({
@@ -49,16 +93,45 @@ export function registerNoteController(app: FastifyInstance, services: AppServic
     return reply.code(201).send(note);
   });
 
-  app.get("/api/v1/notes/:id", { preHandler: guard }, async (request) => {
+  app.get("/api/v1/notes/:id", {
+    preHandler: guard,
+    schema: {
+      tags: ["Notes"],
+      summary: "Get a note",
+      security: sessionCookieSecurity,
+      params: createUuidParamsSchema("id", "Note identifier")
+    }
+  }, async (request) => {
     const params = z.object({ id: z.string().uuid() }).parse(request.params);
     return services.noteService.getNote(request.auth!.ownerId, params.id);
   });
 
-  app.put("/api/v1/notes/:id", { preHandler: guard }, async (request, reply) => {
+  app.put("/api/v1/notes/:id", {
+    preHandler: guard,
+    schema: {
+      tags: ["Notes"],
+      summary: "Update a note",
+      security: sessionCookieSecurity,
+      params: createUuidParamsSchema("id", "Note identifier"),
+      body: {
+        type: "object",
+        required: ["folderId", "title", "bodyMarkdown"],
+        properties: {
+          folderId: { type: "string", format: "uuid" },
+          title: { type: "string" },
+          bodyMarkdown: { type: "string" }
+        }
+      },
+      response: {
+        200: passthroughObjectSchema,
+        400: errorMessageSchema
+      }
+    }
+  }, async (request, reply) => {
     const params = z.object({ id: z.string().uuid() }).parse(request.params);
     const parsedBody = noteBodySchema.safeParse(request.body);
     if (!parsedBody.success) {
-      return reply.code(400).send(parsedBody.error.message);
+      return reply.code(400).send({ message: parsedBody.error.message });
     }
     const body = parsedBody.data;
     return services.noteService.updateNote({
@@ -70,7 +143,15 @@ export function registerNoteController(app: FastifyInstance, services: AppServic
     });
   });
 
-  app.delete("/api/v1/notes/:id", { preHandler: guard }, async (request, reply) => {
+  app.delete("/api/v1/notes/:id", {
+    preHandler: guard,
+    schema: {
+      tags: ["Notes"],
+      summary: "Delete a note",
+      security: sessionCookieSecurity,
+      params: createUuidParamsSchema("id", "Note identifier")
+    }
+  }, async (request, reply) => {
     const params = z.object({ id: z.string().uuid() }).parse(request.params);
     await services.noteService.deleteNote(request.auth!.ownerId, params.id);
     return reply.code(204).send();

@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
+import { errorMessageSchema } from "./openapi.js";
 import { AUTH_FLOW_COOKIE_NAME, SESSION_COOKIE_NAME } from "../service/cookieService.js";
 import type { AppServices } from "../service/serviceFactory.js";
 
@@ -15,14 +16,42 @@ const callbackQuerySchema = z.object({
 });
 
 export function registerAuthController(app: FastifyInstance, services: AppServices) {
-  app.get("/api/v1/auth/login", async (request, reply) => {
+  app.get("/api/v1/auth/login", {
+    schema: {
+      tags: ["Public"],
+      summary: "Start the OIDC login flow",
+      querystring: {
+        type: "object",
+        properties: {
+          returnTo: { type: "string" }
+        }
+      }
+    }
+  }, async (request, reply) => {
     const query = loginQuerySchema.parse(request.query);
     const { redirectUrl, flowCookie } = await services.authService.startLogin(query.returnTo);
 
     return reply.header("Set-Cookie", flowCookie).redirect(redirectUrl);
   });
 
-  app.get("/auth/callback", async (request, reply) => {
+  app.get("/auth/callback", {
+    schema: {
+      tags: ["Public"],
+      summary: "Complete the OIDC login flow",
+      querystring: {
+        type: "object",
+        properties: {
+          code: { type: "string" },
+          state: { type: "string" },
+          error: { type: "string" },
+          error_description: { type: "string" }
+        }
+      },
+      response: {
+        400: errorMessageSchema
+      }
+    }
+  }, async (request, reply) => {
     const query = callbackQuerySchema.parse(request.query);
 
     try {
@@ -39,11 +68,21 @@ export function registerAuthController(app: FastifyInstance, services: AppServic
     }
   });
 
-  app.get("/api/v1/auth/session", async (request) => {
+  app.get("/api/v1/auth/session", {
+    schema: {
+      tags: ["Public"],
+      summary: "Get the current session state"
+    }
+  }, async (request) => {
     return services.authService.getSessionState(request);
   });
 
-  app.post("/api/v1/auth/logout", async (request, reply) => {
+  app.post("/api/v1/auth/logout", {
+    schema: {
+      tags: ["Public"],
+      summary: "Clear the current session"
+    }
+  }, async (request, reply) => {
     const clearCookie = await services.authService.logout(request);
     return reply.header("Set-Cookie", clearCookie).code(204).send();
   });

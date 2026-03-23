@@ -1,5 +1,4 @@
 import { SignIn } from "@phosphor-icons/react";
-import { Link } from "react-router-dom";
 
 export function AuthSplash(props: { onLogin(): void; busy: boolean }) {
   return (
@@ -24,12 +23,12 @@ export function AuthSplash(props: { onLogin(): void; busy: boolean }) {
             <SignIn size={18} weight="bold" />
             {props.busy ? "Preparing sign-in" : "Sign in with OIDC"}
           </button>
-          <Link
-            to="/docs"
+          <a
+            href="/docs"
             className="inline-flex h-11 items-center justify-center whitespace-nowrap rounded-full border border-slate-200 bg-white px-5 text-sm font-medium text-slate-700 transition duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-[1px] hover:border-slate-300 hover:text-slate-950 active:translate-y-0 active:scale-[0.98]"
           >
             Read API docs
-          </Link>
+          </a>
         </div>
       </article>
     </section>
