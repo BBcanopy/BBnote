@@ -23,4 +23,3 @@ COPY server/package.json server/package.json
 COPY android/package.json android/package.json
 EXPOSE 3000
 CMD ["node", "server/dist/main.js"]
-

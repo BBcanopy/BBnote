@@ -14,7 +14,7 @@
     "test": "npm run test --workspace server && npm run test --workspace web",
     "test:server": "npm run test --workspace server",
     "test:web": "npm run test --workspace web",
-    "test:e2e": "playwright test",
+    "test:e2e": "playwright test --config e2e/playwright.config.ts",
     "server:consistency-check": "npm run cli --workspace server -- consistency-check"
   },
   "devDependencies": {
@@ -23,4 +23,3 @@
     "typescript": "^5.9.2"
   }
 }
-
