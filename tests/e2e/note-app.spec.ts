@@ -4,7 +4,7 @@ import path from "node:path";
 import { expect, test } from "@playwright/test";
 import JSZip from "jszip";
 
-test("starts empty, creates notebooks, supports row dragging, autosaves notes, and collapses workspace lanes", async ({ page }) => {
+test("starts empty, shows a unified notebook tree, supports row dragging, autosaves notes, and collapses the explorer", async ({ page }) => {
   const suffix = Date.now().toString();
   const notebookName = `Projects ${suffix}`;
   const subNotebookName = `Roadmaps ${suffix}`;
@@ -18,12 +18,7 @@ test("starts empty, creates notebooks, supports row dragging, autosaves notes, a
   await expect(page.getByText(/inbox/i)).toHaveCount(0);
   await expect(page.getByRole("button", { name: /all notes/i })).toHaveCount(0);
   await expect(page.getByRole("button", { name: /collapse notebooks pane/i })).toBeVisible();
-  await expect(page.getByRole("button", { name: /collapse notes pane/i })).toBeVisible();
-
-  await page.getByRole("button", { name: /collapse notes pane/i }).click();
-  await expect(page.getByRole("button", { name: /open notes pane/i })).toBeVisible();
-  await page.getByRole("button", { name: /open notes pane/i }).click();
-  await expect(page.getByRole("button", { name: /collapse notes pane/i })).toBeVisible();
+  await expect(page.getByRole("button", { name: /collapse notes pane/i })).toHaveCount(0);
 
   await page.getByRole("button", { name: /collapse notebooks pane/i }).click();
   await expect(page.getByRole("button", { name: /open notebooks pane/i })).toBeVisible();
@@ -91,9 +86,8 @@ test("starts empty, creates notebooks, supports row dragging, autosaves notes, a
   await page.getByPlaceholder("Search notes").fill(searchTerm);
   await notePreview.click();
   await expect(page.getByRole("button", { name: /open notebooks pane/i })).toBeVisible();
-  await expect(page.getByRole("button", { name: /open notes pane/i })).toBeVisible();
+  await expect(page.getByRole("button", { name: /open notes pane/i })).toHaveCount(0);
 
-  await page.getByRole("button", { name: /open notes pane/i }).click();
   await expect(page.getByRole("button", { name: /^markdown$/i })).toHaveAttribute("title", "Markdown");
   await expect(page.getByRole("button", { name: /^preview$/i })).toHaveAttribute("title", "Preview");
   await page.getByRole("button", { name: /^preview$/i }).click();

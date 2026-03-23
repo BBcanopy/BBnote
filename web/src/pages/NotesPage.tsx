@@ -4,7 +4,6 @@ import {
   CircleNotch,
   Eye,
   FolderSimple,
-  ListBullets,
   PencilSimple,
   Plus,
   Trash
@@ -27,9 +26,8 @@ import type { AttachmentRef, FolderNode, NoteDetail, NoteSummary } from "../api/
 import { useAuth } from "../auth/AuthProvider";
 import { AttachmentList } from "../components/AttachmentList";
 import { buttonDanger, buttonGhost, buttonPrimary, buttonSecondary } from "../components/buttonStyles";
-import { FolderTree } from "../components/FolderTree";
 import { MarkdownPreview } from "../components/MarkdownPreview";
-import { NoteListPane } from "../components/NoteListPane";
+import { NotebookTreePane } from "../components/NotebookTreePane";
 import { buildFolderMutations, moveFolders, type FolderMoveInstruction } from "../utils/folderTree";
 
 type EditorPane = "markdown" | "preview";
@@ -57,10 +55,8 @@ export function NotesPage() {
   const [editorNote, setEditorNote] = useState<EditorState | null>(null);
   const [search, setSearch] = useState("");
   const [editorPane, setEditorPane] = useState<EditorPane>("markdown");
-  const [folderPaneCollapsed, setFolderPaneCollapsed] = useState(false);
-  const [notePaneCollapsed, setNotePaneCollapsed] = useState(false);
-  const [mobileFoldersOpen, setMobileFoldersOpen] = useState(false);
-  const [mobileNotesOpen, setMobileNotesOpen] = useState(false);
+  const [treePaneCollapsed, setTreePaneCollapsed] = useState(false);
+  const [mobileTreeOpen, setMobileTreeOpen] = useState(false);
   const [loadingNotes, setLoadingNotes] = useState(false);
   const [loadingEditor, setLoadingEditor] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -71,6 +67,7 @@ export function NotesPage() {
   const saveInFlightRef = useRef(false);
   const editorSessionRef = useRef(0);
   const noteLoadRef = useRef(0);
+  const notesRefreshRef = useRef(0);
 
   const selectedFolder = useMemo(
     () => folders.find((folder) => folder.id === selectedFolderId) ?? null,
@@ -98,7 +95,7 @@ export function NotesPage() {
       return;
     }
     void refreshNotes();
-  }, [auth.user, deferredSearch, selectedFolderId]);
+  }, [auth.user, deferredSearch]);
 
   useEffect(() => {
     if (!auth.user || !selectedNoteId) {
@@ -212,7 +209,7 @@ export function NotesPage() {
 
       if (selectedFolderId && !nextFolders.some((folder) => folder.id === selectedFolderId)) {
         setSelectedFolderId(null);
-        setFolderPaneCollapsed(false);
+        setTreePaneCollapsed(false);
       }
 
       if (editorNote?.folderId && !nextFolders.some((folder) => folder.id === editorNote.folderId)) {
@@ -224,17 +221,34 @@ export function NotesPage() {
   }
 
   async function refreshNotes() {
+    const refreshId = ++notesRefreshRef.current;
+
     try {
       setLoadingNotes(true);
-      const payload = await listNotes({
-        folderId: selectedFolderId ?? undefined,
-        q: deferredSearch || undefined
-      });
-      setNotes(payload.items);
+      const collected: NoteSummary[] = [];
+      let cursor: string | undefined;
+
+      do {
+        const payload = await listNotes({
+          q: deferredSearch || undefined,
+          cursor,
+          limit: 100
+        });
+        collected.push(...payload.items);
+        cursor = payload.nextCursor ?? undefined;
+      } while (cursor);
+
+      if (refreshId === notesRefreshRef.current) {
+        setNotes(collected);
+      }
     } catch (notesError) {
-      setError(String(notesError));
+      if (refreshId === notesRefreshRef.current) {
+        setError(String(notesError));
+      }
     } finally {
-      setLoadingNotes(false);
+      if (refreshId === notesRefreshRef.current) {
+        setLoadingNotes(false);
+      }
     }
   }
 
@@ -253,9 +267,8 @@ export function NotesPage() {
       setPendingFolderName("");
       await refreshFolders();
       setSelectedFolderId(created.id);
-      setFolderPaneCollapsed(false);
-      setNotePaneCollapsed(false);
-      setMobileFoldersOpen(false);
+      setTreePaneCollapsed(false);
+      setMobileTreeOpen(false);
 
       setEditorNote((current) => {
         if (!current || current.folderId) {
@@ -323,24 +336,22 @@ export function NotesPage() {
     setEditorNote(createDraft(selectedFolderId));
     setLastSyncedContentKey(null);
     setEditorPane("markdown");
-    setFolderPaneCollapsed(false);
-    setNotePaneCollapsed(false);
-    setMobileNotesOpen(false);
+    setTreePaneCollapsed(false);
+    setMobileTreeOpen(false);
   }
 
   function handleSelectFolder(folderId: string | null) {
     setSelectedFolderId(folderId);
-    setFolderPaneCollapsed(false);
-    setNotePaneCollapsed(false);
-    setMobileFoldersOpen(false);
+    setTreePaneCollapsed(false);
+    setMobileTreeOpen(false);
     setSelectedNoteId(null);
   }
 
-  function handleSelectNote(noteId: string) {
+  function handleSelectNote(noteId: string, folderId: string) {
+    setSelectedFolderId(folderId);
     setSelectedNoteId(noteId);
-    setFolderPaneCollapsed(true);
-    setNotePaneCollapsed(true);
-    setMobileNotesOpen(false);
+    setTreePaneCollapsed(true);
+    setMobileTreeOpen(false);
   }
 
   function handleEditorFolderChange(nextFolderId: string | null) {
@@ -362,8 +373,7 @@ export function NotesPage() {
       setEditorNote(null);
       setSelectedNoteId(null);
       setLastSyncedContentKey(null);
-      setFolderPaneCollapsed(false);
-      setNotePaneCollapsed(false);
+      setTreePaneCollapsed(false);
       await refreshNotes();
     } catch (deleteError) {
       setError(String(deleteError));
@@ -445,13 +455,9 @@ export function NotesPage() {
   return (
     <>
       <section className="mb-4 flex flex-wrap gap-2 lg:hidden">
-        <button type="button" onClick={() => setMobileFoldersOpen(true)} className={buttonSecondary}>
+        <button type="button" onClick={() => setMobileTreeOpen(true)} className={buttonSecondary}>
           <FolderSimple size={18} />
           Notebooks
-        </button>
-        <button type="button" onClick={() => setMobileNotesOpen(true)} className={buttonSecondary}>
-          <ListBullets size={18} />
-          Notes
         </button>
         <button type="button" onClick={handleCreateDraft} className={buttonPrimary}>
           <Plus size={18} />
@@ -460,47 +466,31 @@ export function NotesPage() {
       </section>
 
       <div className="hidden min-h-[calc(100dvh-7.5rem)] gap-4 lg:flex">
-        {folderPaneCollapsed ? (
+        {treePaneCollapsed ? (
           <CollapsedPaneRail
             label="Notebooks"
-            detail={selectedFolder?.name ?? "All notes"}
-            onOpen={() => setFolderPaneCollapsed(false)}
+            detail={editorNote?.title.trim() || selectedFolder?.name || "Browse"}
+            onOpen={() => setTreePaneCollapsed(false)}
             icon={<FolderSimple size={18} />}
           />
         ) : (
-          <div className="w-[320px] shrink-0">
-            <FolderTree
+          <div className="w-[380px] shrink-0">
+            <NotebookTreePane
               folders={folders}
-              selectedFolderId={selectedFolderId}
-              pendingName={pendingFolderName}
-              onPendingNameChange={setPendingFolderName}
-              onCreateNotebook={() => void handleCreateNotebook()}
-              onMoveNotebook={(move) => void handleMoveNotebook(move)}
-              onCollapse={() => setFolderPaneCollapsed(true)}
-              onSelectFolder={handleSelectFolder}
-            />
-          </div>
-        )}
-
-        {notePaneCollapsed ? (
-          <CollapsedPaneRail
-            label="Notes"
-            detail={editorNote?.title.trim() || "Draft"}
-            onOpen={() => setNotePaneCollapsed(false)}
-            icon={<ListBullets size={18} />}
-          />
-        ) : (
-          <div className="w-[340px] shrink-0">
-            <NoteListPane
               notes={notes}
               search={search}
-              onSearchChange={setSearch}
+              selectedFolderId={selectedFolderId}
               selectedNoteId={selectedNoteId}
-              onSelectNote={handleSelectNote}
-              onCreateNote={handleCreateDraft}
-              onCollapse={() => setNotePaneCollapsed(true)}
+              pendingName={pendingFolderName}
               loading={loadingNotes}
-              notebookName={selectedFolder?.name ?? null}
+              onSearchChange={setSearch}
+              onPendingNameChange={setPendingFolderName}
+              onCreateNotebook={() => void handleCreateNotebook()}
+              onCreateNote={handleCreateDraft}
+              onMoveNotebook={(move) => void handleMoveNotebook(move)}
+              onCollapse={() => setTreePaneCollapsed(true)}
+              onSelectFolder={handleSelectFolder}
+              onSelectNote={handleSelectNote}
             />
           </div>
         )}
@@ -552,28 +542,22 @@ export function NotesPage() {
         />
       </div>
 
-      <MobileDrawer open={mobileFoldersOpen} title="Notebooks" onClose={() => setMobileFoldersOpen(false)}>
-        <FolderTree
+      <MobileDrawer open={mobileTreeOpen} title="Notebooks" onClose={() => setMobileTreeOpen(false)}>
+        <NotebookTreePane
           folders={folders}
-          selectedFolderId={selectedFolderId}
-          pendingName={pendingFolderName}
-          onPendingNameChange={setPendingFolderName}
-          onCreateNotebook={() => void handleCreateNotebook()}
-          onMoveNotebook={(move) => void handleMoveNotebook(move)}
-          onSelectFolder={handleSelectFolder}
-        />
-      </MobileDrawer>
-
-      <MobileDrawer open={mobileNotesOpen} title="Notes" onClose={() => setMobileNotesOpen(false)}>
-        <NoteListPane
           notes={notes}
           search={search}
-          onSearchChange={setSearch}
+          selectedFolderId={selectedFolderId}
           selectedNoteId={selectedNoteId}
-          onSelectNote={handleSelectNote}
-          onCreateNote={handleCreateDraft}
+          pendingName={pendingFolderName}
           loading={loadingNotes}
-          notebookName={selectedFolder?.name ?? null}
+          onSearchChange={setSearch}
+          onPendingNameChange={setPendingFolderName}
+          onCreateNotebook={() => void handleCreateNotebook()}
+          onCreateNote={handleCreateDraft}
+          onMoveNotebook={(move) => void handleMoveNotebook(move)}
+          onSelectFolder={handleSelectFolder}
+          onSelectNote={handleSelectNote}
         />
       </MobileDrawer>
     </>
