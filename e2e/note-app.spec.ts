@@ -134,12 +134,22 @@ test("starts empty, restores separate notebook and notes lanes, supports row dra
     .toBe("New note|Collapse notes pane");
 
   await page.getByRole("button", { name: /collapse notebooks pane/i }).click();
-  await expect(page.getByRole("button", { name: /open notebooks pane/i })).toBeVisible();
-  await page.getByRole("button", { name: /open notebooks pane/i }).click();
+  const collapsedNotebookRail = page.getByRole("button", { name: /open notebooks pane/i });
+  await expect(collapsedNotebookRail).toBeVisible();
+  await expect
+    .poll(async () => (await collapsedNotebookRail.boundingBox())?.width ?? Number.POSITIVE_INFINITY)
+    .toBeLessThan(60);
+  expect((await collapsedNotebookRail.textContent())?.trim() ?? "").toBe("");
+  await collapsedNotebookRail.click();
   await expect(page.getByRole("button", { name: /collapse notebooks pane/i })).toBeVisible();
   await page.getByRole("button", { name: /collapse notes pane/i }).click();
-  await expect(page.getByRole("button", { name: /open notes pane/i })).toBeVisible();
-  await page.getByRole("button", { name: /open notes pane/i }).click();
+  const collapsedNotesRail = page.getByRole("button", { name: /open notes pane/i });
+  await expect(collapsedNotesRail).toBeVisible();
+  await expect
+    .poll(async () => (await collapsedNotesRail.boundingBox())?.width ?? Number.POSITIVE_INFINITY)
+    .toBeLessThan(60);
+  expect((await collapsedNotesRail.textContent())?.trim() ?? "").toBe("");
+  await collapsedNotesRail.click();
   await expect(page.getByRole("button", { name: /collapse notes pane/i })).toBeVisible();
   await expect(page.getByRole("button", { name: /sub-notebook/i })).toHaveCount(0);
   await expect(page.getByPlaceholder("Notebook name")).toHaveCount(0);
@@ -277,7 +287,12 @@ test("starts empty, restores separate notebook and notes lanes, supports row dra
 
   await page.getByPlaceholder("Search notes").fill(searchTerm);
   await notePreview.click();
-  await expect(page.getByRole("button", { name: /open notebooks and notes panes/i })).toBeVisible();
+  const collapsedWorkspaceRail = page.getByRole("button", { name: /open notebooks and notes panes/i });
+  await expect(collapsedWorkspaceRail).toBeVisible();
+  await expect
+    .poll(async () => (await collapsedWorkspaceRail.boundingBox())?.width ?? Number.POSITIVE_INFINITY)
+    .toBeLessThan(60);
+  expect((await collapsedWorkspaceRail.textContent())?.trim() ?? "").toBe("");
   await expect(page.getByRole("button", { name: /open notebooks pane/i })).toHaveCount(0);
   await expect(page.getByRole("button", { name: /open notes pane/i })).toHaveCount(0);
 

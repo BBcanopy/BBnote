@@ -575,25 +575,20 @@ export function NotesPage() {
       <div className="hidden min-h-[calc(100dvh-7.5rem)] items-stretch gap-4 lg:flex">
         {explorerCollapsed ? (
           <CollapsedPaneRail
-            label="Notebooks"
-            detail={selectedFolder?.name ?? "All Notes"}
-            subdetail={editorNote?.title.trim() || "Draft"}
+            label="Notebooks and notes"
             ariaLabel="Open notebooks and notes panes"
-            titleText={`Notebooks: ${selectedFolder?.name ?? "All Notes"}${editorNote?.title.trim() ? ` / ${editorNote.title.trim()}` : ""}`}
+            titleText="Open notebooks and notes panes"
             onOpen={() => {
               setFolderPaneCollapsed(false);
               setNotePaneCollapsed(false);
             }}
-            icon={<FolderSimple size={18} />}
           />
         ) : (
           <>
             {folderPaneCollapsed ? (
               <CollapsedPaneRail
                 label="Notebooks"
-                detail={selectedFolder?.name ?? "Browse"}
                 onOpen={() => setFolderPaneCollapsed(false)}
-                icon={<FolderSimple size={18} />}
               />
             ) : (
                 <div className="flex shrink-0 items-stretch">
@@ -625,9 +620,7 @@ export function NotesPage() {
             {notePaneCollapsed ? (
               <CollapsedPaneRail
                 label="Notes"
-                detail={editorNote?.title.trim() || "Draft"}
                 onOpen={() => setNotePaneCollapsed(false)}
-                icon={<ListBullets size={18} />}
               />
             ) : (
                 <div className="flex shrink-0 items-stretch">
@@ -896,9 +889,6 @@ function EditorPanel(props: {
 
 function CollapsedPaneRail(props: {
   label: string;
-  detail: string;
-  subdetail?: string | null;
-  icon: ReactNode;
   onOpen(): void;
   ariaLabel?: string;
   titleText?: string;
@@ -908,20 +898,10 @@ function CollapsedPaneRail(props: {
       type="button"
       onClick={props.onOpen}
       aria-label={props.ariaLabel ?? `Open ${props.label} pane`}
-      title={props.titleText ?? `${props.label}: ${props.detail}`}
+      title={props.titleText ?? `Open ${props.label} pane`}
       className="bb-collapsed-rail"
     >
-      <span className="bb-collapsed-rail__icon">
-        {props.icon}
-      </span>
-      <span className="bb-collapsed-rail__meta">
-        <span className="bb-eyebrow text-[11px]">{props.label}</span>
-        <strong>{props.detail}</strong>
-        {props.subdetail ? (
-          <span>{props.subdetail}</span>
-        ) : null}
-      </span>
-      <span className="bb-collapsed-rail__action">
+      <span className="bb-collapsed-rail__action" aria-hidden="true">
         <CaretRight size={15} />
       </span>
     </button>
