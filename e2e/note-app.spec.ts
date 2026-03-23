@@ -361,16 +361,20 @@ test("starts empty, restores separate notebook and notes lanes, supports row dra
 test("opens migration from the avatar menu and runs both export and import flows", async ({ page }) => {
   await login(page);
   await createNotebookAndPersistedNote(page);
+  const userMenuButton = page.getByRole("button", { name: /open user menu/i });
 
   await expect(page.getByRole("navigation", { name: /primary navigation/i }).getByRole("link", { name: /^notes$/i })).toBeVisible();
   await expect(page.getByRole("navigation", { name: /primary navigation/i }).getByRole("link", { name: /^imports$/i })).toHaveCount(0);
   await expect(page.getByRole("navigation", { name: /primary navigation/i }).getByRole("link", { name: /^exports$/i })).toHaveCount(0);
   await expect(page.getByRole("navigation", { name: /primary navigation/i }).getByRole("link", { name: /^migration$/i })).toHaveCount(0);
   await expect
-    .poll(async () => ((await page.getByRole("button", { name: /open user menu/i }).textContent()) ?? "").trim().length)
+    .poll(async () => ((await userMenuButton.textContent()) ?? "").trim().length)
     .toBe(1);
+  await expect
+    .poll(async () => userMenuButton.evaluate((element) => getComputedStyle(element).borderTopWidth))
+    .toBe("0px");
 
-  await page.getByRole("button", { name: /open user menu/i }).click();
+  await userMenuButton.click();
   const userMenu = page.getByRole("menu");
   await expect(userMenu.getByRole("link", { name: /^notes$/i })).toHaveAttribute("aria-current", "page");
   await expect(userMenu.getByRole("link", { name: /^migration$/i })).toBeVisible();
@@ -389,12 +393,12 @@ test("opens migration from the avatar menu and runs both export and import flows
   await expect(exportJobPanel.getByRole("button", { name: /download zip/i })).toBeVisible();
 
   const importArchive = await createImportArchive();
-  await page.getByRole("button", { name: /open user menu/i }).click();
+  await userMenuButton.click();
   const migrationMenu = page.getByRole("menu");
   await expect(migrationMenu.getByRole("link", { name: /^migration$/i })).toHaveAttribute("aria-current", "page");
   await migrationMenu.getByRole("button", { name: /^midnight/i }).click();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "midnight");
-  await page.getByRole("button", { name: /open user menu/i }).click();
+  await userMenuButton.click();
   await page.getByLabel("Source").selectOption("onenote");
   await page.getByLabel("Archive").setInputFiles(importArchive);
   await page.getByRole("button", { name: /start import/i }).click();
