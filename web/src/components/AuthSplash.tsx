@@ -14,9 +14,6 @@ export function AuthSplash(props: { onLogin(): void; busy: boolean }) {
           </span>
         </div>
         <h1 className="mt-6 text-center text-4xl font-semibold tracking-tight text-slate-950 sm:text-5xl">BBNote</h1>
-        <p className="mt-3 text-center text-sm leading-relaxed text-slate-600">
-          Markdown in files. Metadata in SQLite.
-        </p>
         <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
           <button
             type="button"

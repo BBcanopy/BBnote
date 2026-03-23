@@ -6,6 +6,7 @@ test("shows the minimal auth splash and docs page", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "BBNote" })).toBeVisible();
   await expect(page.getByRole("button", { name: /sign in with oidc/i })).toBeVisible();
   await expect(page.getByRole("link", { name: /read api docs/i })).toBeVisible();
+  await expect(page.getByText("Markdown in files. Metadata in SQLite.")).toHaveCount(0);
 
   await page.getByRole("link", { name: /read api docs/i }).click();
 
