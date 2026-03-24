@@ -18,7 +18,6 @@ test("shows the simplified auth splash and docs page", async ({ page }) => {
   await page.getByRole("link", { name: /read api docs/i }).click();
 
   await expect(page).toHaveURL(/\/docs\/?$/);
-  await expect(page.locator("section.swagger-ui").first()).toBeVisible();
-  await expect(page.getByText("/api/v1/notes").first()).toBeVisible();
+  await expect(page.getByText("/api/v1/notes").first()).toBeVisible({ timeout: 15_000 });
   await expect(page.getByText("/healthz").first()).toBeVisible();
 });

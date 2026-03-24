@@ -7,6 +7,7 @@ import session from "@fastify/session";
 import swagger from "@fastify/swagger";
 import swaggerUi from "@fastify/swagger-ui";
 import Fastify from "fastify";
+import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import fastifyStatic from "@fastify/static";
@@ -126,7 +127,7 @@ export async function buildApp() {
   });
   await app.register(swaggerUi, {
     routePrefix: "/docs",
-    staticCSP: true,
+    staticCSP: secureCookies,
     uiConfig: {
       docExpansion: "list",
       deepLinking: false
@@ -152,15 +153,26 @@ export async function buildApp() {
   await registerMockOidcController(app, services);
 
   const webDist = path.resolve(__dirname, "../../web/dist");
-  app.register(fastifyStatic, {
-    root: webDist,
-    prefix: "/",
-    wildcard: false
-  });
+  if (await pathExists(path.join(webDist, "index.html"))) {
+    app.register(fastifyStatic, {
+      root: webDist,
+      prefix: "/",
+      wildcard: false
+    });
 
-  app.get("/*", async (_request, reply) => {
-    return reply.sendFile("index.html");
-  });
+    app.get("/*", async (_request, reply) => {
+      return reply.sendFile("index.html");
+    });
+  }
 
   return app;
+}
+
+async function pathExists(filePath: string) {
+  try {
+    await fs.access(filePath);
+    return true;
+  } catch {
+    return false;
+  }
 }

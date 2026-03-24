@@ -1,13 +1,22 @@
 services:
-  app:
+  web:
     build:
       context: .
-      dockerfile: Dockerfile.all-in-one
+      dockerfile: web/Dockerfile
+    depends_on:
+      - server
     ports:
-      - "${APP_HOST_PORT:-8080}:3000"
+      - "${APP_HOST_PORT:-8080}:80"
+
+  server:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
     user: "${BBNOTE_UID:-1000}:${BBNOTE_GID:-1000}"
     env_file:
       - .env
+    ports:
+      - "${SERVER_HOST_PORT:-3000}:3000"
     volumes:
       - ./data/db:/data/db
       - ./data/notes:/data/notes
