@@ -1,8 +1,12 @@
-name: docker
+name: ci
 
 on:
   pull_request:
+    branches:
+      - main
   push:
+    branches:
+      - main
 
 permissions:
   contents: read
@@ -47,32 +51,10 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Prepare compose env
-        run: |
-          cp .env.example .env
-          python - <<'PY'
-          from pathlib import Path
-
-          env_path = Path(".env")
-          lines = env_path.read_text().splitlines()
-          replacements = {
-              "APP_BASE_URL": "http://web",
-              "OIDC_ISSUER_URL": "https://issuer.example.com",
-          }
-          output_lines = []
-          for line in lines:
-              if not line or line.lstrip().startswith("#") or "=" not in line:
-                  output_lines.append(line)
-                  continue
-
-              key, value = line.split("=", 1)
-              output_lines.append(f"{key}={replacements.get(key, value)}")
-
-          output_lines.append("BBNOTE_TEST_AUTH_ENABLED=true")
-          env_path.write_text("\n".join(output_lines) + "\n")
-          PY
+        run: cp .env.example .env
 
       - name: Start split stack
-        run: docker compose --project-name bbnote-ci up -d --build
+        run: docker compose --project-name bbnote-ci -f docker-compose.yml -f docker-compose.ci.yml up -d --build
 
       - name: Wait for split stack
         shell: bash
@@ -83,7 +65,7 @@ jobs:
             fi
             sleep 2
           done
-          docker compose --project-name bbnote-ci logs
+          docker compose --project-name bbnote-ci -f docker-compose.yml -f docker-compose.ci.yml logs
           exit 1
 
       - name: Build Playwright runner
@@ -94,7 +76,7 @@ jobs:
 
       - name: Stop split stack
         if: always()
-        run: docker compose --project-name bbnote-ci down -v
+        run: docker compose --project-name bbnote-ci -f docker-compose.yml -f docker-compose.ci.yml down -v
 
   docker:
     runs-on: ubuntu-latest
