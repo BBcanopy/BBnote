@@ -56,14 +56,14 @@ jobs:
           lines = env_path.read_text().splitlines()
           replacements = {
               "APP_BASE_URL": "http://web",
-              "OIDC_ISSUER_URL": "http://web/mock-oidc",
+              "OIDC_ISSUER_URL": "https://issuer.example.com",
           }
           env_path.write_text(
               "\n".join(
                   f"{key}={replacements.get(key, value)}"
                   for key, value in (line.split("=", 1) for line in lines)
               )
-              + "\n"
+              + "\nBBNOTE_TEST_AUTH_ENABLED=true\n"
           )
           PY
 

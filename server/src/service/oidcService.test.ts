@@ -1,34 +1,72 @@
+import { generateKeyPairSync, sign as signBuffer } from "node:crypto";
 import Fastify from "fastify";
 import jwt from "@fastify/jwt";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { AppConfig } from "./configService.js";
-import { MockOidcService } from "./mockOidcService.js";
 import { OidcService } from "./oidcService.js";
 
 describe("OidcService", () => {
   const apps: Array<ReturnType<typeof Fastify>> = [];
+  let issuerUrl = "";
+  let publicJwk: Record<string, unknown>;
+  let privateKeyPem = "";
+
+  beforeEach(async () => {
+    const { privateKey, publicKey } = generateKeyPairSync("rsa", {
+      modulusLength: 2048
+    });
+    privateKeyPem = privateKey.export({
+      format: "pem",
+      type: "pkcs8"
+    }).toString();
+    publicJwk = publicKey.export({
+      format: "jwk"
+    }) as Record<string, unknown>;
+
+    const metadataApp = Fastify();
+    apps.push(metadataApp);
+    metadataApp.get("/.well-known/openid-configuration", async () => ({
+      issuer: issuerUrl,
+      jwks_uri: `${issuerUrl}/jwks`
+    }));
+    metadataApp.get("/jwks", async () => ({
+      keys: [
+        {
+          ...publicJwk,
+          alg: "RS256",
+          kid: "test-key",
+          use: "sig"
+        }
+      ]
+    }));
+
+    issuerUrl = await metadataApp.listen({
+      host: "127.0.0.1",
+      port: 0
+    });
+  });
 
   afterEach(async () => {
     await Promise.all(apps.splice(0).map((app) => app.close()));
   });
 
   it("verifies signed bearer tokens against jwks", async () => {
-    const config = buildConfig("http://127.0.0.1:3000/mock-oidc");
+    const config = buildConfig(issuerUrl);
     const app = Fastify();
     apps.push(app);
     await app.register(jwt, {
       secret: "bbnote-dev-session-secret-0123456789"
     });
 
-    const mockOidc = new MockOidcService(config);
-    const oidc = new OidcService(config, app, mockOidc);
-    const issued = await mockOidc.issueTestToken({
-      clientId: config.oidcClientIdAndroid,
+    const oidc = new OidcService(config, app);
+    const token = signJwt(privateKeyPem, {
       email: "avery@example.com",
-      name: "Avery Stone"
+      iss: issuerUrl,
+      name: "Avery Stone",
+      sub: "avery-stone"
     });
 
-    const claims = await oidc.verifyBearerJwt(issued.access_token);
+    const claims = await oidc.verifyBearerJwt(token);
 
     expect(claims.sub).toBeTruthy();
     expect(claims.email).toBe("avery@example.com");
@@ -49,7 +87,17 @@ function buildConfig(issuer: string): AppConfig {
     sqlitePath: "/tmp/db.sqlite",
     notesRoot: "/tmp/notes",
     attachmentsRoot: "/tmp/attachments",
-    exportsRoot: "/tmp/exports",
-    mockOidcEnabled: true
+    exportsRoot: "/tmp/exports"
   };
+}
+
+function signJwt(privateKeyPem: string, payload: Record<string, unknown>) {
+  const encodedHeader = Buffer.from(JSON.stringify({
+    alg: "RS256",
+    kid: "test-key",
+    typ: "JWT"
+  })).toString("base64url");
+  const encodedPayload = Buffer.from(JSON.stringify(payload)).toString("base64url");
+  const signature = signBuffer("RSA-SHA256", Buffer.from(`${encodedHeader}.${encodedPayload}`), privateKeyPem).toString("base64url");
+  return `${encodedHeader}.${encodedPayload}.${signature}`;
 }

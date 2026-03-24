@@ -13,9 +13,9 @@ import { ConsistencyService } from "./consistencyService.js";
 import { ExportService } from "./exportService.js";
 import { FolderService } from "./folderService.js";
 import { ImportService } from "./importService.js";
-import { MockOidcService } from "./mockOidcService.js";
 import { NoteService } from "./noteService.js";
 import { OidcService } from "./oidcService.js";
+import type { OidcAuthTestingOptions } from "./oidcTesting.js";
 import { StorageService } from "./storageService.js";
 
 export interface AppServices {
@@ -30,7 +30,6 @@ export interface AppServices {
   authService: AuthService;
   oidcService: OidcService;
   storageService: StorageService;
-  mockOidcService: MockOidcService | null;
   attachmentDb: AttachmentDb;
   noteDb: NoteDb;
   folderDb: FolderDb;
@@ -38,7 +37,11 @@ export interface AppServices {
   sessionDb: SessionDb;
 }
 
-export async function createServices(config: AppConfig, app?: FastifyInstance): Promise<AppServices> {
+export async function createServices(
+  config: AppConfig,
+  app?: FastifyInstance,
+  authTesting?: OidcAuthTestingOptions
+): Promise<AppServices> {
   const database = openDatabase(config);
   const userDb = new UserDb(database.connection);
   const folderDb = new FolderDb(database.connection);
@@ -49,8 +52,7 @@ export async function createServices(config: AppConfig, app?: FastifyInstance): 
   const storageService = new StorageService(config);
   await storageService.ensureRoots();
   const folderService = new FolderService(folderDb);
-  const mockOidcService = config.mockOidcEnabled ? new MockOidcService(config) : null;
-  const oidcService = new OidcService(config, app, mockOidcService);
+  const oidcService = new OidcService(config, app, authTesting);
   const noteService = new NoteService(noteDb, folderDb, storageService, (noteId) => attachmentDb.listByNoteId(noteId));
   const attachmentService = new AttachmentService(attachmentDb, noteDb, storageService);
   const importService = new ImportService(jobDb, folderService, noteService, attachmentService);
@@ -70,7 +72,6 @@ export async function createServices(config: AppConfig, app?: FastifyInstance): 
     authService,
     oidcService,
     storageService,
-    mockOidcService,
     attachmentDb,
     noteDb,
     folderDb,

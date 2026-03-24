@@ -11,7 +11,6 @@ export default defineConfig({
       "/api": "http://127.0.0.1:3000",
       "/auth": "http://127.0.0.1:3000",
       "/docs": "http://127.0.0.1:3000",
-      "/mock-oidc": "http://127.0.0.1:3000",
       "/healthz": "http://127.0.0.1:3000"
     }
   },

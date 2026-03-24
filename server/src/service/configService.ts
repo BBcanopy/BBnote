@@ -11,7 +11,6 @@ export interface AppConfig {
   notesRoot: string;
   attachmentsRoot: string;
   exportsRoot: string;
-  mockOidcEnabled: boolean;
 }
 
 export function buildConfig(): AppConfig {
@@ -29,8 +28,7 @@ export function buildConfig(): AppConfig {
     sqlitePath: requireEnv("SQLITE_PATH"),
     notesRoot: requireEnv("NOTES_ROOT"),
     attachmentsRoot: requireEnv("ATTACHMENTS_ROOT"),
-    exportsRoot: requireEnv("EXPORTS_ROOT"),
-    mockOidcEnabled: requireBooleanEnv("MOCK_OIDC_ENABLED")
+    exportsRoot: requireEnv("EXPORTS_ROOT")
   };
 }
 
@@ -40,14 +38,6 @@ function requireEnv(name: string) {
     throw new Error(`Missing required environment variable: ${name}`);
   }
   return value;
-}
-
-function requireBooleanEnv(name: string) {
-  const value = requireEnv(name);
-  if (value !== "true" && value !== "false") {
-    throw new Error(`Environment variable ${name} must be 'true' or 'false'.`);
-  }
-  return value === "true";
 }
 
 function requireSessionSecret() {

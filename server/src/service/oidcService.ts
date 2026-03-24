@@ -1,7 +1,7 @@
 import { createPublicKey } from "node:crypto";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { AppConfig } from "./configService.js";
-import type { MockOidcService } from "./mockOidcService.js";
+import type { OidcAuthTestingOptions } from "./oidcTesting.js";
 
 interface OidcDiscoveryDocument {
   authorization_endpoint: string;
@@ -40,7 +40,7 @@ export class OidcService {
   constructor(
     private readonly config: AppConfig,
     private readonly app: FastifyInstance | undefined,
-    private readonly mockOidc: MockOidcService | null
+    private readonly authTesting?: OidcAuthTestingOptions
   ) {}
 
   async generateAuthorizationUri(request: FastifyRequest, reply: FastifyReply) {
@@ -52,10 +52,6 @@ export class OidcService {
   }
 
   async userinfo(tokenSetOrToken: { access_token?: string } | string) {
-    if (this.isMockIssuer()) {
-      return this.mockOidc!.userinfo(extractAccessToken(tokenSetOrToken));
-    }
-
     return this.requireApp().oidc.userinfo(tokenSetOrToken as any);
   }
 
@@ -89,6 +85,10 @@ export class OidcService {
   }
 
   private async verifyJwt(token: string, audience?: string | string[]) {
+    if (this.authTesting?.jwtVerifier) {
+      return this.authTesting.jwtVerifier.verify(token) as Promise<Record<string, unknown>>;
+    }
+
     const header = decodeJwtHeader(token);
     if (header.alg === "none" || header.alg.startsWith("HS")) {
       throw new Error("OIDC token uses an unsupported signing algorithm.");
@@ -122,10 +122,6 @@ export class OidcService {
   }
 
   private async getDiscovery() {
-    if (this.isMockIssuer()) {
-      return this.mockOidc!.discoveryDocument() as Promise<OidcDiscoveryDocument>;
-    }
-
     if (!this.discoveryPromise) {
       this.discoveryPromise = fetch(`${normalizeIssuer(this.config.oidcIssuerUrl)}/.well-known/openid-configuration`).then(
         async (response) => {
@@ -142,10 +138,6 @@ export class OidcService {
   }
 
   private async getJwks() {
-    if (this.isMockIssuer()) {
-      return this.mockOidc!.jwks() as Promise<JwksDocument>;
-    }
-
     if (!this.jwksPromise) {
       this.jwksPromise = this.getDiscovery().then(async (discovery) => {
         const response = await fetch(discovery.jwks_uri);
@@ -157,10 +149,6 @@ export class OidcService {
     }
 
     return this.jwksPromise;
-  }
-
-  private isMockIssuer() {
-    return this.mockOidc?.matchesIssuer(this.config.oidcIssuerUrl) ?? false;
   }
 
   private requireApp() {

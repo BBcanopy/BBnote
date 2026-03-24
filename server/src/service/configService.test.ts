@@ -3,7 +3,7 @@ import { buildConfig } from "./configService.js";
 
 const REQUIRED_ENV = {
   APP_BASE_URL: "http://127.0.0.1:3000",
-  OIDC_ISSUER_URL: "http://127.0.0.1:3000/mock-oidc",
+  OIDC_ISSUER_URL: "https://issuer.example.com",
   OIDC_CLIENT_ID_WEB: "bbnote-web",
   OIDC_CLIENT_ID_ANDROID: "bbnote-android",
   OIDC_CLIENT_SECRET: "bbnote-dev-client-secret",
@@ -12,8 +12,7 @@ const REQUIRED_ENV = {
   SQLITE_PATH: "/tmp/bbnote.sqlite",
   NOTES_ROOT: "/tmp/notes",
   ATTACHMENTS_ROOT: "/tmp/attachments",
-  EXPORTS_ROOT: "/tmp/exports",
-  MOCK_OIDC_ENABLED: "true"
+  EXPORTS_ROOT: "/tmp/exports"
 } as const;
 
 const REQUIRED_ENV_KEYS = Object.keys(REQUIRED_ENV) as Array<keyof typeof REQUIRED_ENV>;
@@ -38,7 +37,6 @@ describe("buildConfig", () => {
     expect(config.appBaseUrl).toBe(REQUIRED_ENV.APP_BASE_URL);
     expect(config.oidcIssuerUrl).toBe(REQUIRED_ENV.OIDC_ISSUER_URL);
     expect(config.oidcClientSecret).toBe(REQUIRED_ENV.OIDC_CLIENT_SECRET);
-    expect(config.mockOidcEnabled).toBe(true);
     expect(config.sessionSecret).toBe(REQUIRED_ENV.SESSION_SECRET);
     expect(config.notesRoot).toBe(REQUIRED_ENV.NOTES_ROOT);
   });
@@ -48,8 +46,8 @@ describe("buildConfig", () => {
     expect(() => buildConfig()).toThrow("Missing required environment variable: OIDC_ISSUER_URL");
   });
 
-  it("fails fast when the mock oidc flag is not a boolean string", () => {
-    process.env.MOCK_OIDC_ENABLED = "sometimes";
-    expect(() => buildConfig()).toThrow("Environment variable MOCK_OIDC_ENABLED must be 'true' or 'false'.");
+  it("fails fast when the session secret is too short", () => {
+    process.env.SESSION_SECRET = "too-short";
+    expect(() => buildConfig()).toThrow("Environment variable SESSION_SECRET must be at least 32 characters long.");
   });
 });

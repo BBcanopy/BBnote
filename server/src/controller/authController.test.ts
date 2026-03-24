@@ -6,6 +6,7 @@ import type { AddressInfo } from "node:net";
 import type { FastifyInstance } from "fastify";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { buildApp } from "../app.js";
+import { createTestAuthProvider, createTestConfig } from "../test-helpers.js";
 
 describe("authController integration", () => {
   let app: FastifyInstance | undefined;
@@ -16,40 +17,25 @@ describe("authController integration", () => {
     tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "bbnote-"));
     const port = await getAvailablePort();
     baseUrl = `http://127.0.0.1:${port}`;
-    process.env.APP_BASE_URL = baseUrl;
-    process.env.OIDC_ISSUER_URL = `${baseUrl}/mock-oidc`;
-    process.env.OIDC_CLIENT_ID_WEB = "bbnote-web";
-    process.env.OIDC_CLIENT_ID_ANDROID = "bbnote-android";
-    process.env.OIDC_CLIENT_SECRET = "bbnote-dev-client-secret";
-    process.env.OIDC_SCOPES = "openid profile email";
-    process.env.SESSION_SECRET = "bbnote-dev-session-secret-0123456789";
-    process.env.SQLITE_PATH = path.join(tempRoot, "db", "bbnote.sqlite");
-    process.env.NOTES_ROOT = path.join(tempRoot, "notes");
-    process.env.ATTACHMENTS_ROOT = path.join(tempRoot, "attachments");
-    process.env.EXPORTS_ROOT = path.join(tempRoot, "exports");
-    process.env.MOCK_OIDC_ENABLED = "true";
+    const config = createTestConfig(tempRoot, {
+      appBaseUrl: baseUrl
+    });
+    const oidc = createTestAuthProvider(config, {
+      email: "avery@example.com",
+      name: "Avery Stone",
+      subject: "avery-stone"
+    });
 
-    app = await buildApp();
+    app = await buildApp({
+      authTesting: oidc.authTesting,
+      config
+    });
     await app.listen({ host: "127.0.0.1", port });
   });
 
   afterEach(async () => {
-    if (app) {
-      await app.close();
-    }
+    await app?.close();
     await fs.rm(tempRoot, { recursive: true, force: true });
-    delete process.env.APP_BASE_URL;
-    delete process.env.OIDC_ISSUER_URL;
-    delete process.env.OIDC_CLIENT_ID_WEB;
-    delete process.env.OIDC_CLIENT_ID_ANDROID;
-    delete process.env.OIDC_CLIENT_SECRET;
-    delete process.env.OIDC_SCOPES;
-    delete process.env.SESSION_SECRET;
-    delete process.env.SQLITE_PATH;
-    delete process.env.NOTES_ROOT;
-    delete process.env.ATTACHMENTS_ROOT;
-    delete process.env.EXPORTS_ROOT;
-    delete process.env.MOCK_OIDC_ENABLED;
   });
 
   it("signs in through server-managed oidc and authenticates protected routes via session cookie", async () => {
@@ -65,22 +51,7 @@ describe("authController integration", () => {
     expect(cookieJar.has("bbnote_oidc_state")).toBe(true);
     expect(cookieJar.has("bbnote_oidc_verifier")).toBe(true);
 
-    const authorizeLocation = new URL(String(loginResponse.headers.get("location")), baseUrl);
-    const authorizePayload = new URLSearchParams(authorizeLocation.searchParams);
-    authorizePayload.set("name", "Avery Stone");
-    authorizePayload.set("email", "avery@example.com");
-
-    const authorizeResponse = await fetch(authorizeLocation, {
-      method: "POST",
-      headers: {
-        "content-type": "application/x-www-form-urlencoded"
-      },
-      body: authorizePayload.toString(),
-      redirect: "manual"
-    });
-
-    expect(authorizeResponse.status).toBe(302);
-    const callbackUrl = new URL(String(authorizeResponse.headers.get("location")), baseUrl);
+    const callbackUrl = new URL(String(loginResponse.headers.get("location")), baseUrl);
     expect(callbackUrl.pathname).toBe("/auth/callback");
 
     const callbackResponse = await fetch(callbackUrl, {
@@ -171,21 +142,7 @@ async function signIn(baseUrl: string) {
   });
   mergeCookies(cookieJar, loginResponse.headers.getSetCookie());
 
-  const authorizeLocation = new URL(String(loginResponse.headers.get("location")), baseUrl);
-  const authorizePayload = new URLSearchParams(authorizeLocation.searchParams);
-  authorizePayload.set("name", "Avery Stone");
-  authorizePayload.set("email", "avery@example.com");
-
-  const authorizeResponse = await fetch(authorizeLocation, {
-    method: "POST",
-    headers: {
-      "content-type": "application/x-www-form-urlencoded"
-    },
-    body: authorizePayload.toString(),
-    redirect: "manual"
-  });
-
-  const callbackUrl = new URL(String(authorizeResponse.headers.get("location")), baseUrl);
+  const callbackUrl = new URL(String(loginResponse.headers.get("location")), baseUrl);
   const callbackResponse = await fetch(callbackUrl, {
     headers: {
       cookie: serializeCookies(cookieJar)

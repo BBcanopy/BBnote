@@ -11,7 +11,7 @@ await rm(dataRoot, { recursive: true, force: true });
 const env = {
   ...process.env,
   APP_BASE_URL: "http://127.0.0.1:5173",
-  OIDC_ISSUER_URL: "http://127.0.0.1:5173/mock-oidc",
+  OIDC_ISSUER_URL: "https://issuer.example.com",
   OIDC_CLIENT_ID_WEB: "bbnote-web",
   OIDC_CLIENT_ID_ANDROID: "bbnote-android",
   OIDC_CLIENT_SECRET: "bbnote-dev-client-secret",
@@ -21,7 +21,7 @@ const env = {
   NOTES_ROOT: path.join(dataRoot, "notes"),
   ATTACHMENTS_ROOT: path.join(dataRoot, "attachments"),
   EXPORTS_ROOT: path.join(dataRoot, "exports"),
-  MOCK_OIDC_ENABLED: "true"
+  BBNOTE_TEST_AUTH_ENABLED: "true"
 };
 
 const child =
