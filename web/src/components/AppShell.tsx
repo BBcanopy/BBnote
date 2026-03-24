@@ -30,7 +30,7 @@ export function AppShell() {
 
   return (
     <main className="bb-page-shell">
-      <div className="bb-shell">
+      <div className="bb-shell bb-shell--app">
         <PageNav
           user={auth.user}
           onLogout={() => void auth.logout()}

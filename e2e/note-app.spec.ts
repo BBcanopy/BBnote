@@ -100,6 +100,18 @@ test("keeps desktop lanes viewport-height and only shows the pane grip on border
     })
     .toBeLessThan(3);
   await expect
+    .poll(async () => (await notebookPane.boundingBox())?.x ?? Number.POSITIVE_INFINITY)
+    .toBeLessThan(24);
+  await expect
+    .poll(async () => {
+      const editorBox = await editorPanel.boundingBox();
+      if (!editorBox || !viewport) {
+        return 0;
+      }
+      return editorBox.x + editorBox.width;
+    })
+    .toBeGreaterThan((viewport?.width ?? 0) - 24);
+  await expect
     .poll(async () => Number.parseFloat(await notebookCard.evaluate((element) => getComputedStyle(element).borderTopRightRadius)))
     .toBeLessThan(18);
   await expect
@@ -139,7 +151,7 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
   await expect(page.getByText("No notebooks yet.")).toBeVisible();
   const topbarBox = await page.locator(".bb-topbar").boundingBox();
   const viewport = page.viewportSize();
-  expect(topbarBox?.width ?? 0).toBeGreaterThan(((viewport?.width ?? 0) * 0.75));
+  expect(topbarBox?.width ?? 0).toBeGreaterThan(((viewport?.width ?? 0) * 0.95));
   await expect(page.getByRole("navigation", { name: /primary navigation/i })).toHaveCount(0);
   await expect(page.getByText("Markdown workspace")).toHaveCount(0);
   await expect(page.getByRole("link", { name: /bbnote home/i })).toHaveAttribute("href", "/");

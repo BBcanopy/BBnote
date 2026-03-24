@@ -195,6 +195,10 @@ button:disabled {
   gap: 1rem;
 }
 
+.bb-shell--app {
+  max-width: none;
+}
+
 .bb-shell--auth {
   width: 100%;
   align-items: stretch;
