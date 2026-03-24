@@ -12,7 +12,7 @@ FROM deps AS build
 COPY . .
 RUN npm run build --workspace web
 
-FROM nginx:1.27-bookworm AS runner
+FROM nginx:1.29-bookworm AS runner
 COPY web/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /app/web/dist /usr/share/nginx/html
 EXPOSE 80
