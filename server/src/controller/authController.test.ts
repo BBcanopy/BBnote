@@ -258,6 +258,11 @@ describe("authController integration", () => {
 
       expect(callbackResponse.statusCode).toBe(302);
       expect(callbackResponse.headers.location).toBe("https://note.example.test/");
+      expect(callbackResponse.headers["set-cookie"]).toEqual(
+        expect.arrayContaining([
+          expect.stringContaining(`${SESSION_COOKIE_NAME}=`)
+        ])
+      );
 
       const sessionCookie = callbackResponse.cookies.find((cookie) => cookie.name === SESSION_COOKIE_NAME);
       expect(sessionCookie?.secure).toBe(true);
