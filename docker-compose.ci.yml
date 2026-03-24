@@ -1,0 +1,24 @@
+services:
+  web:
+    ports:
+      - "${CI_APP_HOST_PORT:-8082}:80"
+
+  server:
+    environment:
+      APP_BASE_URL: http://web
+      OIDC_ISSUER_URL: https://issuer.example.com
+      BBNOTE_TEST_AUTH_ENABLED: "true"
+    ports:
+      - "${CI_SERVER_HOST_PORT:-3002}:3000"
+    user: "0:0"
+    volumes:
+      - bbnote-ci-db:/data/db
+      - bbnote-ci-notes:/data/notes
+      - bbnote-ci-attachments:/data/attachments
+      - bbnote-ci-exports:/data/exports
+
+volumes:
+  bbnote-ci-db:
+  bbnote-ci-notes:
+  bbnote-ci-attachments:
+  bbnote-ci-exports:
