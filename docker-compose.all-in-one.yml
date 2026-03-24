@@ -1,0 +1,13 @@
+services:
+  app:
+    image: "ghcr.io/bbcanopy/bbnote:${BBNOTE_IMAGE_TAG:-latest}"
+    ports:
+      - "${APP_HOST_PORT:-8082}:3000"
+    user: "${BBNOTE_UID:-1000}:${BBNOTE_GID:-1000}"
+    env_file:
+      - .env
+    volumes:
+      - ./data/db:/data/db
+      - ./data/notes:/data/notes
+      - ./data/attachments:/data/attachments
+      - ./data/exports:/data/exports

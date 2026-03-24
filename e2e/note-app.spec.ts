@@ -416,7 +416,6 @@ test("opens migration from the avatar menu and runs both export and import flows
 async function login(page: import("@playwright/test").Page) {
   await page.goto("/");
   await page.getByRole("button", { name: /sign in with oidc/i }).click();
-  await page.getByRole("button", { name: /continue to bbnote/i }).click();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "sea");
   await expect(page.getByRole("button", { name: /^new note$/i })).toBeVisible();
   await expect(page.getByText("Notebook workspace")).toHaveCount(0);

@@ -1,12 +1,12 @@
 import "fastify";
-import type { OAuth2Namespace } from "@fastify/oauth2";
 import type { AppServices } from "./serviceFactory.js";
 import type { AuthenticatedUser } from "./models.js";
+import type { OidcOAuth2NamespaceLike } from "./oidcTesting.js";
 
 declare module "fastify" {
   interface FastifyInstance {
     bbnote: AppServices;
-    oidc: OAuth2Namespace;
+    oidc: OidcOAuth2NamespaceLike;
   }
 
   interface FastifyRequest {

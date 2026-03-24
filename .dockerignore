@@ -1,0 +1,16 @@
+.git
+.github
+node_modules
+**/node_modules
+data
+.playwright-data
+playwright-report
+test-results
+coverage
+**/coverage
+server/dist
+web/dist
+*.log
+.codex-dev.log
+.DS_Store
+Thumbs.db

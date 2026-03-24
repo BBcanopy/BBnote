@@ -18,7 +18,7 @@
     "server:consistency-check": "npm run cli --workspace server -- consistency-check"
   },
   "devDependencies": {
-    "@playwright/test": "^1.54.2",
+    "@playwright/test": "1.58.2",
     "concurrently": "^9.2.1",
     "typescript": "^5.9.2"
   }

@@ -7,6 +7,7 @@ import session from "@fastify/session";
 import swagger from "@fastify/swagger";
 import swaggerUi from "@fastify/swagger-ui";
 import Fastify from "fastify";
+import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import fastifyStatic from "@fastify/static";
@@ -16,17 +17,22 @@ import { registerExportController } from "./controller/exportController.js";
 import { registerFolderController } from "./controller/folderController.js";
 import { registerHealthController } from "./controller/healthController.js";
 import { registerImportController } from "./controller/importController.js";
-import { registerMockOidcController } from "./controller/mockOidcController.js";
 import { registerNoteController } from "./controller/noteController.js";
 import { OIDC_STATE_COOKIE_NAME, OIDC_VERIFIER_COOKIE_NAME, SESSION_COOKIE_NAME, authCookieOptions } from "./service/authConstants.js";
 import { buildConfig } from "./service/configService.js";
+import type { OidcAuthTestingOptions } from "./service/oidcTesting.js";
 import { createServices } from "./service/serviceFactory.js";
 import { SqliteSessionStore } from "./service/sqliteSessionStore.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-export async function buildApp() {
-  const config = buildConfig();
+export interface BuildAppOptions {
+  authTesting?: OidcAuthTestingOptions;
+  config?: ReturnType<typeof buildConfig>;
+}
+
+export async function buildApp(options: BuildAppOptions = {}) {
+  const config = options.config ?? buildConfig();
   const app = Fastify({
     logger: true,
     ajv: {
@@ -38,7 +44,7 @@ export async function buildApp() {
       ]
     }
   });
-  const services = await createServices(config, app);
+  const services = await createServices(config, app, options.authTesting);
   app.decorate("bbnote", services);
   app.decorateRequest("auth", null);
   const secureCookies = config.appBaseUrl.startsWith("https://");
@@ -56,41 +62,32 @@ export async function buildApp() {
   app.register(jwt, {
     secret: config.sessionSecret
   });
-  app.register(oauth2, {
-    name: "oidc",
-    scope: config.oidcScopes.split(/\s+/).filter(Boolean),
-    credentials: {
-      client: {
-        id: config.oidcClientIdWeb,
-        secret: config.oidcClientSecret
-      },
-      ...(config.mockOidcEnabled
-        ? {
-            auth: {
-              tokenHost: config.appBaseUrl.replace(/\/$/, ""),
-              authorizePath: "/mock-oidc/authorize",
-              tokenPath: "/mock-oidc/token"
-            }
-          }
-        : {}),
-      options: {
-        authorizationMethod: "body",
-        bodyFormat: "form"
-      }
-    },
-    callbackUri: `${config.appBaseUrl.replace(/\/$/, "")}/auth/callback`,
-    ...(!config.mockOidcEnabled
-      ? {
-          discovery: {
-            issuer: config.oidcIssuerUrl
-          }
+  if (options.authTesting?.oauth2Namespace) {
+    app.decorate("oidc", options.authTesting.oauth2Namespace);
+  } else {
+    app.register(oauth2, {
+      name: "oidc",
+      scope: config.oidcScopes.split(/\s+/).filter(Boolean),
+      credentials: {
+        client: {
+          id: config.oidcClientIdWeb,
+          secret: config.oidcClientSecret
+        },
+        options: {
+          authorizationMethod: "body",
+          bodyFormat: "form"
         }
-      : {}),
-    pkce: "S256",
-    redirectStateCookieName: OIDC_STATE_COOKIE_NAME,
-    verifierCookieName: OIDC_VERIFIER_COOKIE_NAME,
-    cookie: baseCookieOptions
-  });
+      },
+      callbackUri: `${config.appBaseUrl.replace(/\/$/, "")}/auth/callback`,
+      discovery: {
+        issuer: config.oidcIssuerUrl
+      },
+      pkce: "S256",
+      redirectStateCookieName: OIDC_STATE_COOKIE_NAME,
+      verifierCookieName: OIDC_VERIFIER_COOKIE_NAME,
+      cookie: baseCookieOptions
+    });
+  }
   app.register(cors, {
     origin: true
   });
@@ -126,7 +123,7 @@ export async function buildApp() {
   });
   await app.register(swaggerUi, {
     routePrefix: "/docs",
-    staticCSP: true,
+    staticCSP: secureCookies,
     uiConfig: {
       docExpansion: "list",
       deepLinking: false
@@ -149,18 +146,28 @@ export async function buildApp() {
   registerAttachmentController(app, services);
   registerImportController(app, services);
   registerExportController(app, services);
-  await registerMockOidcController(app, services);
 
   const webDist = path.resolve(__dirname, "../../web/dist");
-  app.register(fastifyStatic, {
-    root: webDist,
-    prefix: "/",
-    wildcard: false
-  });
+  if (await pathExists(path.join(webDist, "index.html"))) {
+    app.register(fastifyStatic, {
+      root: webDist,
+      prefix: "/",
+      wildcard: false
+    });
 
-  app.get("/*", async (_request, reply) => {
-    return reply.sendFile("index.html");
-  });
+    app.get("/*", async (_request, reply) => {
+      return reply.sendFile("index.html");
+    });
+  }
 
   return app;
+}
+
+async function pathExists(filePath: string) {
+  try {
+    await fs.access(filePath);
+    return true;
+  } catch {
+    return false;
+  }
 }
