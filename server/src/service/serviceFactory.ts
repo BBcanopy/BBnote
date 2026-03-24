@@ -7,7 +7,6 @@ import { NoteDb } from "../db/noteDb.js";
 import { SessionDb } from "../db/sessionDb.js";
 import { UserDb } from "../db/userDb.js";
 import { AttachmentService } from "./attachmentService.js";
-import { CookieService } from "./cookieService.js";
 import type { AppConfig } from "./configService.js";
 import { AuthService } from "./authService.js";
 import { ConsistencyService } from "./consistencyService.js";
@@ -30,7 +29,6 @@ export interface AppServices {
   consistencyService: ConsistencyService;
   authService: AuthService;
   oidcService: OidcService;
-  cookieService: CookieService;
   storageService: StorageService;
   mockOidcService: MockOidcService | null;
   attachmentDb: AttachmentDb;
@@ -52,14 +50,13 @@ export async function createServices(config: AppConfig, app?: FastifyInstance): 
   await storageService.ensureRoots();
   const folderService = new FolderService(folderDb);
   const mockOidcService = config.mockOidcEnabled ? new MockOidcService(config) : null;
-  const cookieService = new CookieService(config);
-  const oidcService = new OidcService(config, mockOidcService);
+  const oidcService = new OidcService(config, app, mockOidcService);
   const noteService = new NoteService(noteDb, folderDb, storageService, (noteId) => attachmentDb.listByNoteId(noteId));
   const attachmentService = new AttachmentService(attachmentDb, noteDb, storageService);
   const importService = new ImportService(jobDb, folderService, noteService, attachmentService);
   const exportService = new ExportService(config, jobDb, folderDb, noteDb, attachmentDb, storageService);
   const consistencyService = new ConsistencyService(noteDb, attachmentDb, storageService);
-  const authService = new AuthService(config, userDb, sessionDb, oidcService, cookieService);
+  const authService = new AuthService(config, userDb, oidcService);
 
   const services: AppServices = {
     config,
@@ -72,7 +69,6 @@ export async function createServices(config: AppConfig, app?: FastifyInstance): 
     consistencyService,
     authService,
     oidcService,
-    cookieService,
     storageService,
     mockOidcService,
     attachmentDb,

@@ -1,16 +1,29 @@
-import crypto from "node:crypto";
-import { createRemoteJWKSet, jwtVerify } from "jose";
-import type { FastifyRequest } from "fastify";
-import type { JWTPayload } from "jose";
+import { createPublicKey } from "node:crypto";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { AppConfig } from "./configService.js";
 import type { MockOidcService } from "./mockOidcService.js";
-import type { AuthFlowCookieValue } from "./cookieService.js";
 
 interface OidcDiscoveryDocument {
   authorization_endpoint: string;
-  token_endpoint: string;
-  jwks_uri: string;
   issuer: string;
+  jwks_uri: string;
+  token_endpoint: string;
+  userinfo_endpoint?: string;
+}
+
+interface JwksDocument {
+  keys: Array<Record<string, unknown>>;
+}
+
+type JsonWebKeyLike = Record<string, unknown>;
+
+export interface OidcTokenResponse {
+  token: {
+    access_token: string;
+    expires_at?: Date;
+    expires_in?: number;
+    id_token?: string;
+  };
 }
 
 export interface OidcIdentity {
@@ -18,162 +31,177 @@ export interface OidcIdentity {
   subject: string;
   email: string | null;
   name: string | null;
-  expiresAt: string;
-}
-
-function pkceChallenge(verifier: string) {
-  return crypto.createHash("sha256").update(verifier).digest("base64url");
 }
 
 export class OidcService {
   private discoveryPromise: Promise<OidcDiscoveryDocument> | null = null;
-  private remoteJwksPromise: Promise<ReturnType<typeof createRemoteJWKSet>> | null = null;
-  private readonly redirectUri: string;
+  private jwksPromise: Promise<JwksDocument> | null = null;
 
-  constructor(private readonly config: AppConfig, private readonly mockOidc: MockOidcService | null) {
-    this.redirectUri = `${this.config.appBaseUrl.replace(/\/$/, "")}/auth/callback`;
+  constructor(
+    private readonly config: AppConfig,
+    private readonly app: FastifyInstance | undefined,
+    private readonly mockOidc: MockOidcService | null
+  ) {}
+
+  async generateAuthorizationUri(request: FastifyRequest, reply: FastifyReply) {
+    return this.requireApp().oidc.generateAuthorizationUri(request, reply);
   }
 
-  async buildLoginRequest(returnTo: string) {
-    const discovery = await this.getDiscovery();
-    const state = crypto.randomUUID();
-    const nonce = crypto.randomUUID();
-    const codeVerifier = crypto.randomBytes(32).toString("base64url");
-    const authorizationUrl = new URL(discovery.authorization_endpoint);
+  async exchangeAuthorizationCode(request: FastifyRequest, reply: FastifyReply): Promise<OidcTokenResponse> {
+    return this.requireApp().oidc.getAccessTokenFromAuthorizationCodeFlow(request, reply) as Promise<OidcTokenResponse>;
+  }
 
-    authorizationUrl.searchParams.set("client_id", this.config.oidcClientIdWeb);
-    authorizationUrl.searchParams.set("redirect_uri", this.redirectUri);
-    authorizationUrl.searchParams.set("response_type", "code");
-    authorizationUrl.searchParams.set("scope", this.config.oidcScopes);
-    authorizationUrl.searchParams.set("state", state);
-    authorizationUrl.searchParams.set("nonce", nonce);
-    authorizationUrl.searchParams.set("code_challenge", pkceChallenge(codeVerifier));
-    authorizationUrl.searchParams.set("code_challenge_method", "S256");
+  async userinfo(tokenSetOrToken: { access_token?: string } | string) {
+    if (this.isMockIssuer()) {
+      return this.mockOidc!.userinfo(extractAccessToken(tokenSetOrToken));
+    }
 
+    return this.requireApp().oidc.userinfo(tokenSetOrToken as any);
+  }
+
+  async verifyIdToken(idToken: string) {
+    return this.verifyJwt(idToken, this.config.oidcClientIdWeb);
+  }
+
+  async verifyBearerJwt(token: string) {
+    return this.verifyJwt(token);
+  }
+
+  normalizeIdentity(
+    payload: {
+      iss?: unknown;
+      sub?: unknown;
+      email?: unknown;
+      name?: unknown;
+    },
+    fallbackIssuer = normalizeIssuer(this.config.oidcIssuerUrl)
+  ): OidcIdentity {
     return {
-      authorizationUrl: authorizationUrl.toString(),
-      flow: {
-        state,
-        nonce,
-        codeVerifier,
-        returnTo,
-        createdAt: new Date().toISOString()
-      } satisfies AuthFlowCookieValue
+      issuer: typeof payload.iss === "string" ? normalizeIssuer(payload.iss) : fallbackIssuer,
+      subject: String(payload.sub),
+      email: typeof payload.email === "string" ? payload.email : null,
+      name: typeof payload.name === "string" ? payload.name : null
     };
   }
 
-  async completeAuthorizationCode(input: { code: string; flow: AuthFlowCookieValue }) {
-    const tokens = await this.exchangeAuthorizationCode(input);
-
-    if (!tokens.id_token) {
-      throw new Error("OIDC provider did not return an id_token.");
-    }
-
-    const claims = await this.verifyIdToken(tokens.id_token);
-    if (claims.nonce !== input.flow.nonce) {
-      throw new Error("OIDC nonce mismatch.");
-    }
-
-    const expiryDate =
-      typeof claims.exp === "number"
-        ? new Date(claims.exp * 1000)
-        : new Date(Date.now() + Math.max(tokens.expires_in ?? 3600, 300) * 1000);
-
-    return {
-      issuer: String(claims.iss),
-      subject: String(claims.sub),
-      email: typeof claims.email === "string" ? claims.email : null,
-      name: typeof claims.name === "string" ? claims.name : null,
-      expiresAt: expiryDate.toISOString()
-    } satisfies OidcIdentity;
+  looksLikeJwt(token: string) {
+    return token.split(".").length === 3;
   }
 
-  async verifyBearerToken(token: string): Promise<JWTPayload> {
-    if (this.mockOidc && this.mockOidc.matchesIssuer(this.config.oidcIssuerUrl)) {
-      return this.mockOidc.verifyAccessToken(token);
+  private async verifyJwt(token: string, audience?: string | string[]) {
+    const header = decodeJwtHeader(token);
+    if (header.alg === "none" || header.alg.startsWith("HS")) {
+      throw new Error("OIDC token uses an unsupported signing algorithm.");
     }
 
-    const result = await jwtVerify(token, await this.getRemoteJwks(), {
-      issuer: this.config.oidcIssuerUrl,
-      audience: [this.config.oidcClientIdWeb, this.config.oidcClientIdAndroid]
+    const key = await this.resolveVerificationKey(header.kid);
+    return this.requireApp().jwt.verify<Record<string, unknown>>(token, {
+      key,
+      allowedIss: normalizeIssuer(this.config.oidcIssuerUrl),
+      ...(audience ? { allowedAud: audience } : {})
     });
+  }
 
-    return result.payload;
+  private async resolveVerificationKey(kid: string | null) {
+    const jwks = await this.getJwks();
+    const match =
+      (kid ? jwks.keys.find((key) => key.kid === kid) : undefined) ??
+      (jwks.keys.length === 1 ? jwks.keys[0] : undefined);
+
+    if (!match) {
+      throw new Error("Unable to resolve the OIDC verification key.");
+    }
+
+    return createPublicKey({
+      key: match as JsonWebKeyLike,
+      format: "jwk"
+    }).export({
+      format: "pem",
+      type: "spki"
+    }).toString();
   }
 
   private async getDiscovery() {
-    if (this.mockOidc && this.mockOidc.matchesIssuer(this.config.oidcIssuerUrl)) {
-      return this.mockOidc.discoveryDocument() as Promise<OidcDiscoveryDocument>;
+    if (this.isMockIssuer()) {
+      return this.mockOidc!.discoveryDocument() as Promise<OidcDiscoveryDocument>;
     }
 
     if (!this.discoveryPromise) {
-      this.discoveryPromise = fetch(`${this.config.oidcIssuerUrl}/.well-known/openid-configuration`).then(async (response) => {
-        if (!response.ok) {
-          throw new Error("Failed to load OIDC discovery document.");
+      this.discoveryPromise = fetch(`${normalizeIssuer(this.config.oidcIssuerUrl)}/.well-known/openid-configuration`).then(
+        async (response) => {
+          if (!response.ok) {
+            throw new Error("Failed to load the OIDC discovery document.");
+          }
+
+          return (await response.json()) as OidcDiscoveryDocument;
         }
-        return (await response.json()) as OidcDiscoveryDocument;
-      });
+      );
     }
 
     return this.discoveryPromise;
   }
 
-  private async verifyIdToken(idToken: string) {
-    if (this.mockOidc && this.mockOidc.matchesIssuer(this.config.oidcIssuerUrl)) {
-      return this.mockOidc.verifyAccessToken(idToken);
+  private async getJwks() {
+    if (this.isMockIssuer()) {
+      return this.mockOidc!.jwks() as Promise<JwksDocument>;
     }
 
-    const result = await jwtVerify(idToken, await this.getRemoteJwks(), {
-      issuer: this.config.oidcIssuerUrl,
-      audience: this.config.oidcClientIdWeb
-    });
-    return result.payload;
-  }
-
-  private async getRemoteJwks() {
-    if (!this.remoteJwksPromise) {
-      this.remoteJwksPromise = this.getDiscovery().then((discovery) => createRemoteJWKSet(new URL(discovery.jwks_uri)));
-    }
-
-    return this.remoteJwksPromise;
-  }
-
-  private async exchangeAuthorizationCode(input: { code: string; flow: AuthFlowCookieValue }) {
-    if (this.mockOidc && this.mockOidc.matchesIssuer(this.config.oidcIssuerUrl)) {
-      return this.mockOidc.exchangeAuthorizationCode({
-        code: input.code,
-        clientId: this.config.oidcClientIdWeb,
-        redirectUri: this.redirectUri,
-        codeVerifier: input.flow.codeVerifier
+    if (!this.jwksPromise) {
+      this.jwksPromise = this.getDiscovery().then(async (discovery) => {
+        const response = await fetch(discovery.jwks_uri);
+        if (!response.ok) {
+          throw new Error("Failed to load the OIDC JWKS.");
+        }
+        return (await response.json()) as JwksDocument;
       });
     }
 
-    const discovery = await this.getDiscovery();
-    const body = new URLSearchParams({
-      grant_type: "authorization_code",
-      code: input.code,
-      redirect_uri: this.redirectUri,
-      client_id: this.config.oidcClientIdWeb,
-      code_verifier: input.flow.codeVerifier,
-      client_secret: this.config.oidcClientSecret
-    });
+    return this.jwksPromise;
+  }
 
-    const response = await fetch(discovery.token_endpoint, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded"
-      },
-      body
-    });
+  private isMockIssuer() {
+    return this.mockOidc?.matchesIssuer(this.config.oidcIssuerUrl) ?? false;
+  }
 
-    if (!response.ok) {
-      throw new Error("OIDC token exchange failed.");
+  private requireApp() {
+    if (!this.app) {
+      throw new Error("OIDC service requires a Fastify app instance.");
     }
 
-    return (await response.json()) as {
-      id_token?: string;
-      access_token?: string;
-      expires_in?: number;
-    };
+    return this.app;
   }
+}
+
+function decodeJwtHeader(token: string) {
+  const [encodedHeader] = token.split(".", 1);
+  if (!encodedHeader) {
+    throw new Error("OIDC token is not a JWT.");
+  }
+
+  const header = JSON.parse(Buffer.from(encodedHeader, "base64url").toString("utf8")) as {
+    alg?: unknown;
+    kid?: unknown;
+  };
+  if (typeof header.alg !== "string" || !header.alg) {
+    throw new Error("OIDC token is missing its signing algorithm.");
+  }
+
+  return {
+    alg: header.alg,
+    kid: typeof header.kid === "string" ? header.kid : null
+  };
+}
+
+function extractAccessToken(tokenSetOrToken: { access_token?: string } | string) {
+  if (typeof tokenSetOrToken === "string") {
+    return tokenSetOrToken;
+  }
+  if (typeof tokenSetOrToken.access_token === "string" && tokenSetOrToken.access_token) {
+    return tokenSetOrToken.access_token;
+  }
+  throw new Error("OIDC token response did not include an access_token.");
+}
+
+function normalizeIssuer(issuer: string) {
+  return issuer.replace(/\/$/, "");
 }

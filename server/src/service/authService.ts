@@ -1,43 +1,34 @@
 import crypto from "node:crypto";
-import type { FastifyRequest } from "fastify";
+import type { FastifyReply, FastifyRequest } from "fastify";
 import type { AppConfig } from "./configService.js";
-import { AUTH_FLOW_COOKIE_NAME, SESSION_COOKIE_NAME, type CookieService } from "./cookieService.js";
+import { OIDC_STATE_COOKIE_NAME, OIDC_VERIFIER_COOKIE_NAME, RETURN_TO_COOKIE_NAME, SESSION_COOKIE_NAME, authCookieOptions } from "./authConstants.js";
 import type { AuthenticatedUser, AuthSessionView, UserTheme } from "./models.js";
-import type { OidcService } from "./oidcService.js";
-import type { SessionDb } from "../db/sessionDb.js";
+import type { OidcIdentity, OidcService } from "./oidcService.js";
 import type { UserDb } from "../db/userDb.js";
 
 export class AuthService {
   constructor(
     private readonly config: AppConfig,
     private readonly users: UserDb,
-    private readonly sessions: SessionDb,
-    private readonly oidcService: OidcService,
-    readonly cookieService: CookieService
+    private readonly oidcService: OidcService
   ) {}
 
   async authenticateRequest(request: FastifyRequest): Promise<AuthenticatedUser> {
     const authorization = request.headers.authorization;
     if (authorization?.startsWith("Bearer ")) {
       const token = authorization.slice("Bearer ".length);
-      const payload = await this.oidcService.verifyBearerToken(token);
-      return this.syncUserFromClaims(payload);
+      const identity = await this.identityFromBearerToken(token);
+      return this.syncIdentity(identity);
     }
 
-    const sessionId = this.cookieService.readSignedCookie(request.headers.cookie, SESSION_COOKIE_NAME);
-    if (!sessionId) {
+    const ownerId = request.session.get("userId");
+    if (!ownerId) {
       throw new Error("Missing session.");
     }
 
-    this.sessions.deleteExpired(new Date().toISOString());
-    const session = this.sessions.getById(sessionId);
-    if (!session || session.expires_at <= new Date().toISOString()) {
-      throw new Error("Session expired.");
-    }
-
-    const user = this.users.getById(session.owner_id);
+    const user = this.users.getById(ownerId);
     if (!user) {
-      this.sessions.deleteById(sessionId);
+      await request.session.destroy();
       throw new Error("Session user not found.");
     }
 
@@ -51,18 +42,19 @@ export class AuthService {
     };
   }
 
-  async startLogin(returnTo: string | undefined) {
+  async startLogin(request: FastifyRequest, reply: FastifyReply, returnTo: string | undefined) {
     const safeReturnTo = sanitizeReturnTo(returnTo);
-    const { authorizationUrl, flow } = await this.oidcService.buildLoginRequest(safeReturnTo);
+    reply.setCookie(RETURN_TO_COOKIE_NAME, safeReturnTo, {
+      ...authCookieOptions(this.secureCookies()),
+      maxAge: 600
+    });
 
-    return {
-      redirectUrl: authorizationUrl,
-      flowCookie: this.cookieService.serializeJsonCookie(AUTH_FLOW_COOKIE_NAME, flow, 600)
-    };
+    return this.oidcService.generateAuthorizationUri(request, reply);
   }
 
   async completeLogin(
     request: FastifyRequest,
+    reply: FastifyReply,
     query: {
       code?: string;
       state?: string;
@@ -70,46 +62,51 @@ export class AuthService {
       error_description?: string;
     }
   ) {
-    const flow = this.cookieService.readJsonCookie(request.headers.cookie, AUTH_FLOW_COOKIE_NAME);
-    if (!flow) {
-      throw new Error("Login flow state is missing.");
-    }
-
     if (query.error) {
       throw new Error(query.error_description ? `${query.error}: ${query.error_description}` : query.error);
     }
     if (!query.code || !query.state) {
       throw new Error("OIDC callback is missing the authorization code.");
     }
-    if (query.state !== flow.state) {
-      throw new Error("OIDC state mismatch.");
+
+    const tokens = await this.oidcService.exchangeAuthorizationCode(request, reply);
+    const verifiedIdentity = tokens.token.id_token
+      ? this.oidcService.normalizeIdentity(await this.oidcService.verifyIdToken(tokens.token.id_token))
+      : null;
+    const userinfoIdentity = this.oidcService.normalizeIdentity(
+      (await this.oidcService.userinfo(tokens.token)) as Record<string, unknown>,
+      verifiedIdentity?.issuer
+    );
+
+    if (verifiedIdentity && verifiedIdentity.subject !== userinfoIdentity.subject) {
+      throw new Error("OIDC userinfo subject mismatch.");
     }
 
-    const identity = await this.oidcService.completeAuthorizationCode({
-      code: query.code,
-      flow
-    });
-    const authUser = await this.syncIdentity(identity);
-    const sessionId = crypto.randomUUID();
-    const now = new Date().toISOString();
+    const authUser = await this.syncIdentity(mergeIdentity(verifiedIdentity, userinfoIdentity));
+    const returnTo = sanitizeReturnTo(request.cookies[RETURN_TO_COOKIE_NAME]);
 
-    this.sessions.insert({
-      id: sessionId,
-      owner_id: authUser.ownerId,
-      created_at: now,
-      updated_at: now,
-      expires_at: identity.expiresAt
+    request.session.set("userId", authUser.ownerId);
+    request.session.options({
+      maxAge: sessionMaxAgeMs(tokens.token)
     });
+    await request.session.regenerate(["userId"]);
+
+    this.clearFlowCookies(reply);
 
     return {
-      redirectTo: absoluteAppUrl(this.config.appBaseUrl, flow.returnTo),
-      flowCookie: this.cookieService.clearCookie(AUTH_FLOW_COOKIE_NAME),
-      sessionCookie: this.cookieService.serializeSignedCookie(
-        SESSION_COOKIE_NAME,
-        sessionId,
-        Math.max(Math.floor((Date.parse(identity.expiresAt) - Date.now()) / 1000), 60)
-      )
+      redirectTo: absoluteAppUrl(this.config.appBaseUrl, returnTo)
     };
+  }
+
+  async failLogin(request: FastifyRequest, reply: FastifyReply) {
+    try {
+      await request.session.destroy();
+    } catch {
+      // Best-effort cleanup only.
+    }
+
+    this.clearFlowCookies(reply);
+    reply.clearCookie(SESSION_COOKIE_NAME, authCookieOptions(this.secureCookies()));
   }
 
   async getSessionState(request: FastifyRequest): Promise<AuthSessionView> {
@@ -131,12 +128,14 @@ export class AuthService {
     }
   }
 
-  async logout(request: FastifyRequest) {
-    const sessionId = this.cookieService.readSignedCookie(request.headers.cookie, SESSION_COOKIE_NAME);
-    if (sessionId) {
-      this.sessions.deleteById(sessionId);
+  async logout(request: FastifyRequest, reply: FastifyReply) {
+    try {
+      await request.session.destroy();
+    } catch {
+      // Best-effort cleanup only.
     }
-    return this.cookieService.clearCookie(SESSION_COOKIE_NAME);
+
+    reply.clearCookie(SESSION_COOKIE_NAME, authCookieOptions(this.secureCookies()));
   }
 
   async updateTheme(request: FastifyRequest, theme: UserTheme): Promise<AuthSessionView> {
@@ -153,29 +152,15 @@ export class AuthService {
     };
   }
 
-  private async syncUserFromClaims(payload: {
-    iss?: unknown;
-    sub?: unknown;
-    email?: unknown;
-    name?: unknown;
-  }): Promise<AuthenticatedUser> {
-    const identity = {
-      issuer: String(payload.iss),
-      subject: String(payload.sub),
-      email: typeof payload.email === "string" ? payload.email : null,
-      name: typeof payload.name === "string" ? payload.name : null,
-      expiresAt: new Date(Date.now() + 3600_000).toISOString()
-    };
+  private async identityFromBearerToken(token: string) {
+    if (this.oidcService.looksLikeJwt(token)) {
+      return this.oidcService.normalizeIdentity(await this.oidcService.verifyBearerJwt(token));
+    }
 
-    return this.syncIdentity(identity);
+    return this.oidcService.normalizeIdentity((await this.oidcService.userinfo(token)) as Record<string, unknown>);
   }
 
-  private async syncIdentity(identity: {
-    issuer: string;
-    subject: string;
-    email: string | null;
-    name: string | null;
-  }): Promise<AuthenticatedUser> {
+  private async syncIdentity(identity: OidcIdentity): Promise<AuthenticatedUser> {
     const ownerId = crypto.createHash("sha256").update(`${identity.issuer}\u0000${identity.subject}`).digest("base64url");
     const now = new Date().toISOString();
 
@@ -201,6 +186,30 @@ export class AuthService {
       theme: persistedUser?.theme ?? "sea"
     };
   }
+
+  private clearFlowCookies(reply: FastifyReply) {
+    const options = authCookieOptions(this.secureCookies());
+    reply.clearCookie(RETURN_TO_COOKIE_NAME, options);
+    reply.clearCookie(OIDC_STATE_COOKIE_NAME, options);
+    reply.clearCookie(OIDC_VERIFIER_COOKIE_NAME, options);
+  }
+
+  private secureCookies() {
+    return this.config.appBaseUrl.startsWith("https://");
+  }
+}
+
+function mergeIdentity(verifiedIdentity: OidcIdentity | null, userinfoIdentity: OidcIdentity): OidcIdentity {
+  if (!verifiedIdentity) {
+    return userinfoIdentity;
+  }
+
+  return {
+    issuer: verifiedIdentity.issuer,
+    subject: verifiedIdentity.subject,
+    email: userinfoIdentity.email ?? verifiedIdentity.email,
+    name: userinfoIdentity.name ?? verifiedIdentity.name
+  };
 }
 
 function sanitizeReturnTo(returnTo: string | undefined) {
@@ -213,4 +222,12 @@ function sanitizeReturnTo(returnTo: string | undefined) {
 
 function absoluteAppUrl(appBaseUrl: string, returnTo: string) {
   return `${appBaseUrl.replace(/\/$/, "")}${returnTo}`;
+}
+
+function sessionMaxAgeMs(token: { expires_at?: Date; expires_in?: number }) {
+  if (token.expires_at instanceof Date && !Number.isNaN(token.expires_at.valueOf())) {
+    return Math.max(token.expires_at.valueOf() - Date.now(), 60_000);
+  }
+
+  return Math.max((token.expires_in ?? 3600) * 1000, 60_000);
 }

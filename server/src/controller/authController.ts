@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { errorMessageSchema, sessionCookieSecurity } from "./openapi.js";
-import { AUTH_FLOW_COOKIE_NAME, SESSION_COOKIE_NAME } from "../service/cookieService.js";
+import { SESSION_COOKIE_NAME } from "../service/authConstants.js";
 import type { AppServices } from "../service/serviceFactory.js";
 import { userThemeValues } from "../service/models.js";
 
@@ -61,9 +61,8 @@ export function registerAuthController(app: FastifyInstance, services: AppServic
     }
   }, async (request, reply) => {
     const query = loginQuerySchema.parse(request.query);
-    const { redirectUrl, flowCookie } = await services.authService.startLogin(query.returnTo);
-
-    return reply.header("Set-Cookie", flowCookie).redirect(redirectUrl);
+    const redirectUrl = await services.authService.startLogin(request, reply, query.returnTo);
+    return reply.redirect(redirectUrl);
   });
 
   app.get("/auth/callback", {
@@ -87,14 +86,12 @@ export function registerAuthController(app: FastifyInstance, services: AppServic
     const query = callbackQuerySchema.parse(request.query);
 
     try {
-      const result = await services.authService.completeLogin(request, query);
-      return reply
-        .header("Set-Cookie", [result.flowCookie, result.sessionCookie])
-        .redirect(result.redirectTo);
+      const result = await services.authService.completeLogin(request, reply, query);
+      return reply.redirect(result.redirectTo);
     } catch (error) {
+      await services.authService.failLogin(request, reply);
       return reply
         .code(400)
-        .header("Set-Cookie", [services.cookieService.clearCookie(AUTH_FLOW_COOKIE_NAME), services.cookieService.clearCookie(SESSION_COOKIE_NAME)])
         .type("text/html")
         .send(renderAuthError(String(error)));
     }
@@ -148,8 +145,8 @@ export function registerAuthController(app: FastifyInstance, services: AppServic
       summary: "Clear the current session"
     }
   }, async (request, reply) => {
-    const clearCookie = await services.authService.logout(request);
-    return reply.header("Set-Cookie", clearCookie).code(204).send();
+    await services.authService.logout(request, reply);
+    return reply.code(204).send();
   });
 }
 

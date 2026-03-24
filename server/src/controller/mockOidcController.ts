@@ -24,6 +24,7 @@ const tokenBodySchema = z.object({
   code: z.string().min(1),
   redirect_uri: z.string().url(),
   client_id: z.string().min(1),
+  client_secret: z.string().min(1).optional(),
   code_verifier: z.string().min(1)
 });
 
@@ -36,6 +37,13 @@ export async function registerMockOidcController(app: FastifyInstance, services:
 
   app.get("/mock-oidc/.well-known/openid-configuration", async () => services.mockOidcService!.discoveryDocument());
   app.get("/mock-oidc/jwks", async () => services.mockOidcService!.jwks());
+  app.get("/mock-oidc/userinfo", async (request) => {
+    const authorization = request.headers.authorization;
+    if (!authorization?.startsWith("Bearer ")) {
+      throw new Error("Missing bearer token.");
+    }
+    return services.mockOidcService!.userinfo(authorization.slice("Bearer ".length));
+  });
   app.get("/mock-oidc/authorize", async (request, reply) => {
     const query = authorizeQuerySchema.parse(request.query);
     return reply.type("text/html").send(services.mockOidcService!.renderAuthorizePage(query));
@@ -60,6 +68,7 @@ export async function registerMockOidcController(app: FastifyInstance, services:
     const tokens = await services.mockOidcService!.exchangeAuthorizationCode({
       code: body.code,
       clientId: body.client_id,
+      clientSecret: body.client_secret,
       redirectUri: body.redirect_uri,
       codeVerifier: body.code_verifier
     });

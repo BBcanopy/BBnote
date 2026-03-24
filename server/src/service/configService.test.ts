@@ -8,7 +8,7 @@ const REQUIRED_ENV = {
   OIDC_CLIENT_ID_ANDROID: "bbnote-android",
   OIDC_CLIENT_SECRET: "bbnote-dev-client-secret",
   OIDC_SCOPES: "openid profile email",
-  SESSION_SECRET: "bbnote-dev-session-secret",
+  SESSION_SECRET: "bbnote-dev-session-secret-0123456789",
   SQLITE_PATH: "/tmp/bbnote.sqlite",
   NOTES_ROOT: "/tmp/notes",
   ATTACHMENTS_ROOT: "/tmp/attachments",
