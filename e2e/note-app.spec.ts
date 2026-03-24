@@ -351,8 +351,9 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
       if (!excerpt) {
         return false;
       }
-      const style = getComputedStyle(excerpt);
-      return style.overflow === "hidden" && style.textOverflow === "ellipsis" && style.whiteSpace === "nowrap";
+      const lineHeight = Number.parseFloat(getComputedStyle(excerpt).lineHeight);
+      const excerptHeight = excerpt.getBoundingClientRect().height;
+      return excerpt.scrollHeight <= excerpt.clientHeight + 1 && Number.isFinite(lineHeight) && excerptHeight <= lineHeight + 4;
     })
   ).toBeTruthy();
   expect(
