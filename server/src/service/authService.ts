@@ -91,6 +91,10 @@ export class AuthService {
     });
     await request.session.regenerate(["userId"]);
     await request.session.save();
+    reply.setCookie(SESSION_COOKIE_NAME, request.session.encryptedSessionId, {
+      ...authCookieOptions(this.secureCookies()),
+      expires: request.session.cookie.expires ?? undefined
+    });
 
     this.clearFlowCookies(reply);
 
