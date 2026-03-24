@@ -54,29 +54,29 @@ jobs:
         run: cp .env.example .env
 
       - name: Start split stack
-        run: docker compose --project-name bbnote-ci -f docker-compose.yml -f docker-compose.ci.yml up -d --build
+        run: docker compose --project-name bbnote-ci -f docker-compose.ci.yml up -d --build server web
+
+      - name: Build Playwright runner
+        run: docker compose --project-name bbnote-ci -f docker-compose.ci.yml build e2e
 
       - name: Wait for split stack
         shell: bash
         run: |
           for attempt in {1..60}; do
-            if curl -fsS http://localhost:8080/healthz > /dev/null; then
+            if docker compose --project-name bbnote-ci -f docker-compose.ci.yml run --rm --no-deps e2e node -e "fetch('http://web/healthz').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"; then
               exit 0
             fi
             sleep 2
           done
-          docker compose --project-name bbnote-ci -f docker-compose.yml -f docker-compose.ci.yml logs
+          docker compose --project-name bbnote-ci -f docker-compose.ci.yml logs
           exit 1
 
-      - name: Build Playwright runner
-        run: docker build --file e2e/Dockerfile --tag bbnote-e2e .
-
       - name: Run Playwright against split stack
-        run: docker run --rm --network bbnote-ci_default -e PLAYWRIGHT_BASE_URL=http://web bbnote-e2e
+        run: docker compose --project-name bbnote-ci -f docker-compose.ci.yml run --rm --no-deps e2e
 
       - name: Stop split stack
         if: always()
-        run: docker compose --project-name bbnote-ci -f docker-compose.yml -f docker-compose.ci.yml down -v
+        run: docker compose --project-name bbnote-ci -f docker-compose.ci.yml down -v
 
   docker:
     runs-on: ubuntu-latest
