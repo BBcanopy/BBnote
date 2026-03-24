@@ -90,6 +90,7 @@ export class AuthService {
       maxAge: sessionMaxAgeMs(tokens.token)
     });
     await request.session.regenerate(["userId"]);
+    await request.session.save();
 
     this.clearFlowCookies(reply);
 
