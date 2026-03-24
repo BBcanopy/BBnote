@@ -58,13 +58,17 @@ jobs:
               "APP_BASE_URL": "http://web",
               "OIDC_ISSUER_URL": "https://issuer.example.com",
           }
-          env_path.write_text(
-              "\n".join(
-                  f"{key}={replacements.get(key, value)}"
-                  for key, value in (line.split("=", 1) for line in lines)
-              )
-              + "\nBBNOTE_TEST_AUTH_ENABLED=true\n"
-          )
+          output_lines = []
+          for line in lines:
+              if not line or line.lstrip().startswith("#") or "=" not in line:
+                  output_lines.append(line)
+                  continue
+
+              key, value = line.split("=", 1)
+              output_lines.append(f"{key}={replacements.get(key, value)}")
+
+          output_lines.append("BBNOTE_TEST_AUTH_ENABLED=true")
+          env_path.write_text("\n".join(output_lines) + "\n")
           PY
 
       - name: Start split stack
