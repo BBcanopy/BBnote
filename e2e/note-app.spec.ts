@@ -124,7 +124,7 @@ test("keeps desktop lanes viewport-height and only shows the pane grip on border
     .toBeGreaterThan(48);
 });
 
-test("starts empty, restores separate notebook and notes lanes, supports row dragging, autosaves notes, and collapses both lanes", async ({ page }) => {
+test("starts empty, restores separate notebook and notes lanes, supports drag interactions, autosaves notes, and keeps panes open on note selection", async ({ page }) => {
   await page.setViewportSize({ width: 1900, height: 1000 });
   const suffix = Date.now().toString();
   const notebookName = `Projects ${suffix}`;
@@ -139,7 +139,10 @@ test("starts empty, restores separate notebook and notes lanes, supports row dra
   await expect(page.getByText("No notebooks yet.")).toBeVisible();
   const topbarBox = await page.locator(".bb-topbar").boundingBox();
   const viewport = page.viewportSize();
-  expect(topbarBox?.width ?? 0).toBeGreaterThan(((viewport?.width ?? 0) * 0.85));
+  expect(topbarBox?.width ?? 0).toBeGreaterThan(((viewport?.width ?? 0) * 0.75));
+  await expect(page.getByRole("navigation", { name: /primary navigation/i })).toHaveCount(0);
+  await expect(page.getByText("Markdown workspace")).toHaveCount(0);
+  await expect(page.getByRole("link", { name: /bbnote home/i })).toHaveAttribute("href", "/");
   await expect(page.getByText(/inbox/i)).toHaveCount(0);
   const allNotesButton = page.getByRole("button", { name: /all notes/i }).first();
   await expect(allNotesButton).toBeVisible();
@@ -159,8 +162,10 @@ test("starts empty, restores separate notebook and notes lanes, supports row dra
   await expect
     .poll(async () => ((await notesPane.boundingBox())?.width ?? 0) - notesPaneWidthBefore)
     .toBeGreaterThan(48);
-  await expect(page.getByRole("button", { name: /^new note$/i }).first()).toHaveAttribute("title", "New note");
+  await expect(page.getByRole("button", { name: /^new note$/i }).first()).toBeDisabled();
+  await expect(page.getByRole("button", { name: /^new note$/i }).first()).toHaveAttribute("title", /select a notebook to create a note/i);
   expect((await page.getByRole("button", { name: /^new note$/i }).first().textContent())?.trim() ?? "").toBe("");
+  await expect(page.getByText("Select or create a notebook to add a new note.")).toBeVisible();
   await expect
     .poll(async () => {
       const labels = await page.getByTestId("notebooks-actions").locator("button").evaluateAll((buttons) =>
@@ -183,7 +188,12 @@ test("starts empty, restores separate notebook and notes lanes, supports row dra
   await expect(collapsedNotebookRail).toBeVisible();
   await expect
     .poll(async () => (await collapsedNotebookRail.boundingBox())?.width ?? Number.POSITIVE_INFINITY)
-    .toBeLessThan(60);
+    .toBeLessThan(24);
+  await expect
+    .poll(async () =>
+      collapsedNotebookRail.locator(".bb-collapsed-rail__action").evaluate((element) => getComputedStyle(element).borderTopWidth)
+    )
+    .toBe("0px");
   expect((await collapsedNotebookRail.textContent())?.trim() ?? "").toBe("");
   await collapsedNotebookRail.click();
   await expect(page.getByRole("button", { name: /collapse notebooks pane/i })).toBeVisible();
@@ -192,7 +202,12 @@ test("starts empty, restores separate notebook and notes lanes, supports row dra
   await expect(collapsedNotesRail).toBeVisible();
   await expect
     .poll(async () => (await collapsedNotesRail.boundingBox())?.width ?? Number.POSITIVE_INFINITY)
-    .toBeLessThan(60);
+    .toBeLessThan(24);
+  await expect
+    .poll(async () =>
+      collapsedNotesRail.locator(".bb-collapsed-rail__action").evaluate((element) => getComputedStyle(element).borderTopWidth)
+    )
+    .toBe("0px");
   expect((await collapsedNotesRail.textContent())?.trim() ?? "").toBe("");
   await collapsedNotesRail.click();
   await expect(page.getByRole("button", { name: /collapse notes pane/i })).toBeVisible();
@@ -218,9 +233,16 @@ test("starts empty, restores separate notebook and notes lanes, supports row dra
   await page.getByRole("button", { name: new RegExp(`expand notebook ${notebookName}`, "i") }).click();
   await expect(page.locator('[data-testid^="notebook-drag-"]').filter({ hasText: subNotebookName }).first()).toBeVisible();
 
-  await page.getByRole("button", { name: new RegExp(subNotebookName, "i") }).click();
+  await notebookRow(page, subNotebookName).click();
   await createNotebookWithDialog(page, archiveNotebookName);
   await expect.poll(async () => page.locator('[data-testid^="notebook-drag-"]').count()).toBe(3);
+
+  await page.getByRole("button", { name: new RegExp(`choose icon for ${archiveNotebookName}`, "i") }).click();
+  await page.getByRole("menuitem", { name: /^use star icon$/i }).click();
+  await page.reload();
+  await page.getByRole("button", { name: new RegExp(`choose icon for ${archiveNotebookName}`, "i") }).click();
+  await expect(page.getByRole("menuitem", { name: /^use star icon$/i })).toHaveClass(/is-active/);
+  await page.getByRole("button", { name: new RegExp(`choose icon for ${archiveNotebookName}`, "i") }).click();
 
   const archiveNotebookRow = page.getByTestId(buildNotebookTestId("drag", archiveNotebookName));
   await expect(archiveNotebookRow).toBeVisible();
@@ -242,7 +264,9 @@ test("starts empty, restores separate notebook and notes lanes, supports row dra
     page.getByTestId(buildNotebookTestId("drag", notebookName))
   );
 
-  await page.getByRole("button", { name: new RegExp(subNotebookName, "i") }).click();
+  await notebookRow(page, subNotebookName).click();
+  await expect(page.getByRole("button", { name: /^new note$/i }).first()).toBeEnabled();
+  await expect(page.getByRole("button", { name: /^new note$/i }).first()).toHaveAttribute("title", "New note");
   await page.getByRole("button", { name: /^new note$/i }).click();
   await expect(page.getByRole("button", { name: /open notebooks pane/i })).toHaveCount(0);
   await expect(page.getByRole("button", { name: /open notes pane/i })).toHaveCount(0);
@@ -282,7 +306,7 @@ test("starts empty, restores separate notebook and notes lanes, supports row dra
     .toEqual([expect.stringContaining(followUpNoteTitle), expect.stringContaining(noteTitle)]);
 
   await page.reload();
-  await page.getByRole("button", { name: new RegExp(subNotebookName, "i") }).click();
+  await notebookRow(page, subNotebookName).click();
   await expect
     .poll(async () => {
       const items = await page
@@ -293,12 +317,12 @@ test("starts empty, restores separate notebook and notes lanes, supports row dra
     .toEqual([expect.stringContaining(followUpNoteTitle), expect.stringContaining(noteTitle)]);
 
   await page.getByPlaceholder("Search notes").fill("priority");
-  await expect(page.locator('[data-testid^="note-drag-"]')).toHaveCount(0);
+  await expect(page.locator('[data-testid^="note-before-"]')).toHaveCount(0);
   await page.getByPlaceholder("Search notes").fill("");
   await expect.poll(async () => page.locator('[data-testid^="note-drag-"]').count()).toBe(2);
 
   await allNotesButton.click();
-  await expect(page.locator('[data-testid^="note-drag-"]')).toHaveCount(0);
+  await expect(page.locator('[data-testid^="note-before-"]')).toHaveCount(0);
   await expect(page.getByText(noteTitle).first()).toBeVisible();
 
   const notePreview = page.getByRole("button", { name: new RegExp(noteTitle, "i") }).first();
@@ -334,12 +358,9 @@ test("starts empty, restores separate notebook and notes lanes, supports row dra
 
   await page.getByPlaceholder("Search notes").fill(searchTerm);
   await notePreview.click();
-  const collapsedWorkspaceRail = page.getByRole("button", { name: /open notebooks and notes panes/i });
-  await expect(collapsedWorkspaceRail).toBeVisible();
-  await expect
-    .poll(async () => (await collapsedWorkspaceRail.boundingBox())?.width ?? Number.POSITIVE_INFINITY)
-    .toBeLessThan(60);
-  expect((await collapsedWorkspaceRail.textContent())?.trim() ?? "").toBe("");
+  await expect(page.getByRole("button", { name: /collapse notebooks pane/i })).toBeVisible();
+  await expect(page.getByRole("button", { name: /collapse notes pane/i })).toBeVisible();
+  await expect(page.getByRole("button", { name: /open notebooks and notes panes/i })).toHaveCount(0);
   await expect(page.getByRole("button", { name: /open notebooks pane/i })).toHaveCount(0);
   await expect(page.getByRole("button", { name: /open notes pane/i })).toHaveCount(0);
 
@@ -356,17 +377,56 @@ test("starts empty, restores separate notebook and notes lanes, supports row dra
 
   await page.getByRole("button", { name: /^link$/i }).click();
   await expect(page.getByPlaceholder("Write in Markdown").first()).toHaveValue(/budget\.txt/);
+
+  await page.getByPlaceholder("Search notes").fill("");
+  await dragLocatorToLocator(
+    page,
+    page.getByTestId(buildNoteTestId("drag", followUpNoteTitle)),
+    page.getByTestId(buildNotebookTestId("drag", archiveNotebookName))
+  );
+  await expect(notebookRowContainer(page, archiveNotebookName)).toHaveClass(/is-active/);
+  await expect(page.getByText(followUpNoteTitle).first()).toBeVisible();
+  await expect(page.locator('[data-testid^="note-drag-"]').filter({ hasText: noteTitle })).toHaveCount(0);
+
+  await page.getByRole("button", { name: new RegExp(followUpNoteTitle, "i") }).click();
+  await expect(page.getByRole("button", { name: /collapse notebooks pane/i })).toBeVisible();
+  const editorDeleteButton = page.locator(".bb-editor-header").getByRole("button", { name: /^delete note$/i });
+  await editorDeleteButton.click();
+  const deleteNoteDialog = page.getByRole("dialog", { name: /^delete note\?$/i });
+  await expect(deleteNoteDialog).toBeVisible();
+  await deleteNoteDialog.getByRole("button", { name: /^cancel$/i }).click();
+  await expect(deleteNoteDialog).toHaveCount(0);
+  await expect(page.getByText(followUpNoteTitle).first()).toBeVisible();
+  await editorDeleteButton.click();
+  await page.getByRole("dialog", { name: /^delete note\?$/i }).getByRole("button", { name: /^delete note$/i }).click();
+  await expect(page.getByText(followUpNoteTitle).first()).toHaveCount(0);
+  await expect(page.getByText("No note selected").first()).toBeVisible();
+
+  const blockedNotebookDrag = await startDrag(page, page.getByTestId(buildNotebookTestId("drag", subNotebookName)));
+  const deleteNotebookTarget = page.getByRole("button", { name: /^delete notebook$/i });
+  await expect(deleteNotebookTarget).toBeVisible();
+  await expect(deleteNotebookTarget).toBeDisabled();
+  await endDrag(page.getByTestId(buildNotebookTestId("drag", subNotebookName)), blockedNotebookDrag);
+  await expect(page.getByRole("dialog", { name: /^delete notebook\?$/i })).toHaveCount(0);
+
+  const archiveNotebookDrag = await startDrag(page, page.getByTestId(buildNotebookTestId("drag", archiveNotebookName)));
+  await expect(deleteNotebookTarget).toBeVisible();
+  await expect(deleteNotebookTarget).toBeEnabled();
+  await dropOnTarget(page.getByTestId(buildNotebookTestId("drag", archiveNotebookName)), deleteNotebookTarget, archiveNotebookDrag);
+  const deleteNotebookDialog = page.getByRole("dialog", { name: /^delete notebook\?$/i });
+  await expect(deleteNotebookDialog).toBeVisible();
+  await deleteNotebookDialog.getByRole("button", { name: /^delete notebook$/i }).click();
+  await expect(page.getByTestId(buildNotebookTestId("drag", archiveNotebookName))).toHaveCount(0);
 });
 
 test("opens migration from the avatar menu and runs both export and import flows", async ({ page }) => {
   await login(page);
   await createNotebookAndPersistedNote(page);
   const userMenuButton = page.getByRole("button", { name: /open user menu/i });
+  const notesTopbarWidth = (await page.locator(".bb-topbar").boundingBox())?.width ?? 0;
 
-  await expect(page.getByRole("navigation", { name: /primary navigation/i }).getByRole("link", { name: /^notes$/i })).toBeVisible();
-  await expect(page.getByRole("navigation", { name: /primary navigation/i }).getByRole("link", { name: /^imports$/i })).toHaveCount(0);
-  await expect(page.getByRole("navigation", { name: /primary navigation/i }).getByRole("link", { name: /^exports$/i })).toHaveCount(0);
-  await expect(page.getByRole("navigation", { name: /primary navigation/i }).getByRole("link", { name: /^migration$/i })).toHaveCount(0);
+  await expect(page.getByRole("navigation", { name: /primary navigation/i })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: /bbnote home/i })).toHaveAttribute("href", "/");
   await expect
     .poll(async () => ((await userMenuButton.textContent()) ?? "").trim().length)
     .toBe(1);
@@ -380,11 +440,15 @@ test("opens migration from the avatar menu and runs both export and import flows
   await expect(userMenu.getByRole("link", { name: /^migration$/i })).toBeVisible();
   await expect(userMenu.getByRole("link", { name: /^imports$/i })).toHaveCount(0);
   await expect(userMenu.getByRole("link", { name: /^exports$/i })).toHaveCount(0);
+  await expect(userMenu.locator(".bb-theme-option__copy span")).toHaveCount(0);
+  await expect(userMenu.getByText(/cool glass, mineral greens/i)).toHaveCount(0);
   await userMenu.getByRole("button", { name: /^ember/i }).click();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "ember");
   await userMenu.getByRole("link", { name: /^migration$/i }).click();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "ember");
   await expect(page).toHaveURL(/\/migration$/);
+  const migrationTopbarWidth = (await page.locator(".bb-topbar").boundingBox())?.width ?? 0;
+  expect(Math.abs(migrationTopbarWidth - notesTopbarWidth)).toBeLessThan(5);
   await expect(page.getByRole("heading", { name: /bring notes in, package everything out/i })).toHaveCount(0);
   await expect(page.getByRole("heading", { name: /bring in an archive/i })).toBeVisible();
   await expect(page.getByRole("heading", { name: /create a markdown bundle/i })).toBeVisible();
@@ -411,6 +475,8 @@ test("opens migration from the avatar menu and runs both export and import flows
   await page.reload();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "midnight");
   await expect(page).toHaveURL(/\/migration$/);
+  await page.getByRole("link", { name: /bbnote home/i }).click();
+  await expect(page).toHaveURL(/\/$/);
 });
 
 async function login(page: import("@playwright/test").Page) {
@@ -442,6 +508,14 @@ function buildNotebookTestId(kind: "drag" | "before" | "after", name: string) {
 
 function buildNoteTestId(kind: "drag" | "before" | "after", title: string) {
   return `note-${kind}-${encodeURIComponent(title)}`;
+}
+
+function notebookRow(page: import("@playwright/test").Page, name: string) {
+  return page.getByTestId(buildNotebookTestId("drag", name)).locator(".bb-tree-row__content");
+}
+
+function notebookRowContainer(page: import("@playwright/test").Page, name: string) {
+  return page.getByTestId(buildNotebookTestId("drag", name)).locator(".bb-tree-row");
 }
 
 async function createNotebookWithDialog(page: import("@playwright/test").Page, name: string) {
@@ -483,31 +557,43 @@ async function dragResizer(page: import("@playwright/test").Page, handle: import
   await page.mouse.up();
 }
 
+async function dragLocatorToLocator(
+  page: import("@playwright/test").Page,
+  source: import("@playwright/test").Locator,
+  target: import("@playwright/test").Locator
+) {
+  const dataTransfer = await startDrag(page, source);
+  await dropOnTarget(source, target, dataTransfer);
+}
+
 async function dragToDropZone(
   page: import("@playwright/test").Page,
   source: import("@playwright/test").Locator,
   target: import("@playwright/test").Locator
 ) {
-  const sourceBox = await source.boundingBox();
-  if (!sourceBox) {
-    throw new Error("Expected drag source to be visible.");
-  }
+  const dataTransfer = await startDrag(page, source);
+  await expect(target).toBeAttached();
+  await dropOnTarget(source, target, dataTransfer);
+}
 
-  const startX = sourceBox.x + sourceBox.width / 2;
-  const startY = sourceBox.y + sourceBox.height / 2;
-  await page.mouse.move(startX, startY);
-  await page.mouse.down();
-  await page.mouse.move(startX, startY + 12, { steps: 4 });
+async function startDrag(page: import("@playwright/test").Page, source: import("@playwright/test").Locator) {
+  const dataTransfer = await page.evaluateHandle(() => new DataTransfer());
+  await source.dispatchEvent("dragstart", { dataTransfer });
+  return dataTransfer;
+}
 
-  await expect
-    .poll(async () => (await target.boundingBox())?.height ?? 0)
-    .toBeGreaterThan(4);
+async function endDrag(source: import("@playwright/test").Locator, dataTransfer: Awaited<ReturnType<import("@playwright/test").Page["evaluateHandle"]>>) {
+  await source.dispatchEvent("dragend", { dataTransfer });
+  await dataTransfer.dispose();
+}
 
-  const targetBox = await target.boundingBox();
-  if (!targetBox) {
-    throw new Error("Expected drop zone to be visible.");
-  }
-
-  await page.mouse.move(targetBox.x + targetBox.width / 2, targetBox.y + targetBox.height / 2, { steps: 12 });
-  await page.mouse.up();
+async function dropOnTarget(
+  source: import("@playwright/test").Locator,
+  target: import("@playwright/test").Locator,
+  dataTransfer: Awaited<ReturnType<import("@playwright/test").Page["evaluateHandle"]>>
+) {
+  await target.dispatchEvent("dragenter", { dataTransfer });
+  await target.dispatchEvent("dragover", { dataTransfer });
+  await target.dispatchEvent("drop", { dataTransfer });
+  await endDrag(source, dataTransfer);
 }

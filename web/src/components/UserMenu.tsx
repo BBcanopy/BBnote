@@ -81,7 +81,6 @@ export function UserMenu(props: {
                   <span className={`bb-theme-option__swatch bb-theme-option__swatch--${option.id}`} />
                   <span className="bb-theme-option__copy">
                     <strong>{option.label}</strong>
-                    <span>{option.description}</span>
                   </span>
                 </button>
               ))}

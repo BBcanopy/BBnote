@@ -1,9 +1,11 @@
-import { ArrowsInSimple, ArrowsOutSimple, CaretDown, CaretLeft, FolderSimple, FolderSimplePlus } from "@phosphor-icons/react";
-import { useEffect, useMemo, useRef, useState, type DragEvent } from "react";
-import type { FolderNode } from "../api/types";
+import { ArrowsInSimple, ArrowsOutSimple, CaretDown, CaretLeft, FolderSimplePlus, Trash } from "@phosphor-icons/react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent } from "react";
+import type { FolderIconId, FolderNode } from "../api/types";
+import { FolderIconGlyph, folderIconOptions } from "./folderIcons";
+import { getDragPayload, setDragPayload } from "../utils/dragPayload";
 import type { FolderMoveInstruction, FolderMovePosition } from "../utils/folderTree";
 
-interface DropTarget {
+interface FolderDropTarget {
   targetId: string;
   position: FolderMovePosition;
 }
@@ -13,15 +15,23 @@ export function FolderTree(props: {
   selectedFolderId: string | null;
   onCreateNotebook(): void;
   onMoveNotebook(move: FolderMoveInstruction): void;
+  onMoveNote(noteId: string, folderId: string): void;
+  onRequestDeleteNotebook(folder: FolderNode): void;
   onSelectFolder(folderId: string | null): void;
+  onUpdateNotebookIcon(folderId: string, icon: FolderIconId): Promise<void>;
   onCollapse?(): void;
+  acceptDraggedNotes?: boolean;
+  enableFolderDragAndDrop?: boolean;
 }) {
   const [draggedFolderId, setDraggedFolderId] = useState<string | null>(null);
-  const [dropTarget, setDropTarget] = useState<DropTarget | null>(null);
+  const [folderDropTarget, setFolderDropTarget] = useState<FolderDropTarget | null>(null);
+  const [noteDropFolderId, setNoteDropFolderId] = useState<string | null>(null);
+  const [trashActive, setTrashActive] = useState(false);
   const [expandedFolderIds, setExpandedFolderIds] = useState<Set<string>>(new Set());
+  const [iconPickerFolderId, setIconPickerFolderId] = useState<string | null>(null);
+  const [iconSavingFolderId, setIconSavingFolderId] = useState<string | null>(null);
   const initializedExpansionRef = useRef(false);
-  const dragging = draggedFolderId !== null;
-  const allNotesCount = props.folders.reduce((total, folder) => total + folder.noteCount, 0);
+  const containerRef = useRef<HTMLDivElement | null>(null);
   const folderById = useMemo(() => new Map(props.folders.map((folder) => [folder.id, folder])), [props.folders]);
   const childFoldersByParent = useMemo(() => {
     const grouped = new Map<string | null, FolderNode[]>();
@@ -38,6 +48,14 @@ export function FolderTree(props: {
   );
   const allParentsExpanded = parentFolderIds.size > 0 && [...parentFolderIds].every((folderId) => expandedFolderIds.has(folderId));
   const anyParentExpanded = [...parentFolderIds].some((folderId) => expandedFolderIds.has(folderId));
+  const allNotesCount = props.folders.reduce((total, folder) => total + folder.noteCount, 0);
+  const draggedFolder = draggedFolderId ? folderById.get(draggedFolderId) ?? null : null;
+  const canDeleteDraggedFolder = Boolean(
+    props.enableFolderDragAndDrop !== false &&
+      draggedFolder &&
+      draggedFolder.childCount === 0 &&
+      draggedFolder.noteCount === 0
+  );
 
   useEffect(() => {
     setExpandedFolderIds((current) => {
@@ -75,39 +93,106 @@ export function FolderTree(props: {
     });
   }, [folderById, props.selectedFolderId]);
 
-  function handleDragStart(event: DragEvent<HTMLDivElement>, folderId: string) {
-    event.dataTransfer.effectAllowed = "move";
-    event.dataTransfer.setData("text/plain", folderId);
-    setDraggedFolderId(folderId);
-  }
-
-  function handleDragOver(event: DragEvent<HTMLElement>, targetId: string, position: FolderMovePosition) {
-    event.preventDefault();
-    if (!draggedFolderId || draggedFolderId === targetId) {
-      return;
-    }
-    setDropTarget({ targetId, position });
-  }
-
-  function handleDrop(event: DragEvent<HTMLElement>, targetId: string, position: FolderMovePosition) {
-    event.preventDefault();
-    const draggedId = event.dataTransfer.getData("text/plain") || draggedFolderId;
-    clearDragState();
-
-    if (!draggedId || draggedId === targetId) {
-      return;
+  useEffect(() => {
+    function handlePointerDown(event: MouseEvent) {
+      if (!containerRef.current?.contains(event.target as Node)) {
+        setIconPickerFolderId(null);
+      }
     }
 
-    props.onMoveNotebook({
-      draggedId,
-      targetId,
-      position
-    });
-  }
+    document.addEventListener("mousedown", handlePointerDown);
+    return () => document.removeEventListener("mousedown", handlePointerDown);
+  }, []);
+
+  useEffect(() => {
+    function clearTransientDragState() {
+      setNoteDropFolderId(null);
+      setTrashActive(false);
+      setFolderDropTarget(null);
+    }
+
+    window.addEventListener("dragend", clearTransientDragState);
+    window.addEventListener("drop", clearTransientDragState);
+    return () => {
+      window.removeEventListener("dragend", clearTransientDragState);
+      window.removeEventListener("drop", clearTransientDragState);
+    };
+  }, []);
 
   function clearDragState() {
     setDraggedFolderId(null);
-    setDropTarget(null);
+    setFolderDropTarget(null);
+    setNoteDropFolderId(null);
+    setTrashActive(false);
+  }
+
+  function handleFolderDragStart(event: DragEvent<HTMLDivElement>, folderId: string) {
+    if (props.enableFolderDragAndDrop === false) {
+      return;
+    }
+
+    event.dataTransfer.effectAllowed = "move";
+    setDragPayload(event.dataTransfer, {
+      kind: "folder",
+      id: folderId
+    });
+    setDraggedFolderId(folderId);
+  }
+
+  function handleFolderDragOver(event: DragEvent<HTMLElement>, targetId: string, position: FolderMovePosition) {
+    const payload = getDragPayload(event.dataTransfer);
+    if (!payload) {
+      return;
+    }
+
+    if (payload.kind === "note") {
+      if (!props.acceptDraggedNotes || payload.folderId === targetId) {
+        return;
+      }
+
+      event.preventDefault();
+      setNoteDropFolderId(targetId);
+      setFolderDropTarget(null);
+      return;
+    }
+
+    if (props.enableFolderDragAndDrop === false || payload.id === targetId) {
+      return;
+    }
+
+    event.preventDefault();
+    setFolderDropTarget({ targetId, position });
+    setNoteDropFolderId(null);
+  }
+
+  function handleFolderDrop(event: DragEvent<HTMLElement>, targetId: string, position: FolderMovePosition) {
+    const payload = getDragPayload(event.dataTransfer);
+    clearDragState();
+
+    if (!payload) {
+      return;
+    }
+
+    if (payload.kind === "note") {
+      if (!props.acceptDraggedNotes || payload.folderId === targetId) {
+        return;
+      }
+
+      event.preventDefault();
+      props.onMoveNote(payload.id, targetId);
+      return;
+    }
+
+    if (props.enableFolderDragAndDrop === false || payload.id === targetId) {
+      return;
+    }
+
+    event.preventDefault();
+    props.onMoveNotebook({
+      draggedId: payload.id,
+      targetId,
+      position
+    });
   }
 
   function toggleFolder(folderId: string) {
@@ -136,17 +221,147 @@ export function FolderTree(props: {
     }
   }
 
+  async function handleIconSelection(folder: FolderNode, icon: FolderIconId) {
+    setIconSavingFolderId(folder.id);
+    try {
+      await props.onUpdateNotebookIcon(folder.id, icon);
+      setIconPickerFolderId(null);
+    } finally {
+      setIconSavingFolderId(null);
+    }
+  }
+
+  function renderNotebook(folder: FolderNode, depth: number) {
+    const children = childFoldersByParent.get(folder.id) ?? [];
+    const hasChildren = children.length > 0;
+    const expanded = hasChildren ? expandedFolderIds.has(folder.id) : false;
+    const selected = props.selectedFolderId === folder.id;
+    const activeFolderDrop = folderDropTarget?.targetId === folder.id && folderDropTarget.position === "inside";
+    const activeNoteDrop = noteDropFolderId === folder.id;
+
+    return (
+      <div key={folder.id} className="bb-tree-node">
+        {props.enableFolderDragAndDrop === false ? null : (
+          <NotebookDropZone
+            testId={buildNotebookTestId("before", folder.name)}
+            folderId={folder.id}
+            depth={depth}
+            position="before"
+            active={folderDropTarget?.targetId === folder.id && folderDropTarget.position === "before"}
+            dragging={draggedFolderId !== null && draggedFolderId !== folder.id}
+            onDragOver={handleFolderDragOver}
+            onDrop={handleFolderDrop}
+          />
+        )}
+
+        <div className={`bb-tree-branch ${activeFolderDrop || activeNoteDrop ? "is-drop-active" : ""}`}>
+          <div
+            draggable={props.enableFolderDragAndDrop !== false}
+            data-testid={buildNotebookTestId("drag", folder.name)}
+            onDragStart={(event) => handleFolderDragStart(event, folder.id)}
+            onDragEnd={clearDragState}
+            onDragOver={(event) => handleFolderDragOver(event, folder.id, "inside")}
+            onDrop={(event) => handleFolderDrop(event, folder.id, "inside")}
+            className="bb-tree-branch__body"
+          >
+            <div
+              className={`bb-tree-row ${selected ? "is-active" : ""} ${activeNoteDrop ? "is-note-target" : ""}`}
+              style={{ "--tree-depth": depth } as CSSProperties}
+            >
+              {hasChildren ? (
+                <button
+                  type="button"
+                  aria-label={`${expanded ? "Collapse" : "Expand"} notebook ${folder.name}`}
+                  onClick={() => toggleFolder(folder.id)}
+                  className="bb-tree-toggle shrink-0"
+                >
+                  <CaretDown size={12} weight="bold" className={`transition-transform duration-300 ${expanded ? "rotate-0" : "-rotate-90"}`} />
+                </button>
+              ) : (
+                <span className="bb-tree-toggle-placeholder" aria-hidden="true" />
+              )}
+
+              <div className="bb-tree-icon-shell">
+                <button
+                  type="button"
+                  aria-label={`Choose icon for ${folder.name}`}
+                  title={`Choose icon for ${folder.name}`}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    setIconPickerFolderId((current) => (current === folder.id ? null : folder.id));
+                  }}
+                  className="bb-tree-icon-button"
+                >
+                  <FolderIconGlyph icon={folder.icon} size={16} className="bb-tree-icon-glyph" />
+                </button>
+                {iconPickerFolderId === folder.id ? (
+                  <div role="menu" className="bb-icon-picker">
+                    {folderIconOptions.map((option) => (
+                      <button
+                        key={option.id}
+                        type="button"
+                        role="menuitem"
+                        aria-label={`Use ${option.label} icon`}
+                        title={option.label}
+                        disabled={iconSavingFolderId === folder.id}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          void handleIconSelection(folder, option.id);
+                        }}
+                        className={`bb-icon-picker__option ${folder.icon === option.id ? "is-active" : ""}`}
+                      >
+                        <FolderIconGlyph icon={option.id} size={16} />
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+
+              <button
+                type="button"
+                onClick={() => props.onSelectFolder(selected ? null : folder.id)}
+                className="bb-tree-row__content"
+              >
+                <span className="bb-tree-row__label">{folder.name}</span>
+                <span className="bb-count-pill shrink-0">{folder.noteCount}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {hasChildren && expanded ? (
+          <div className="bb-tree-children">
+            {children.map((child) => renderNotebook(child, depth + 1))}
+          </div>
+        ) : null}
+
+        {props.enableFolderDragAndDrop === false ? null : (
+          <NotebookDropZone
+            testId={buildNotebookTestId("after", folder.name)}
+            folderId={folder.id}
+            depth={depth}
+            position="after"
+            active={folderDropTarget?.targetId === folder.id && folderDropTarget.position === "after"}
+            dragging={draggedFolderId !== null && draggedFolderId !== folder.id}
+            onDragOver={handleFolderDragOver}
+            onDrop={handleFolderDrop}
+          />
+        )}
+      </div>
+    );
+  }
+
   return (
-    <section className="bb-pane-card">
+    <section className="bb-pane-card bb-pane-card--tree" ref={containerRef}>
       <div className="bb-pane-card__header justify-end">
-        <div data-testid="notebooks-actions" className="flex items-center gap-2">
+        <div data-testid="notebooks-actions" className="flex items-center gap-1.5">
           <button
             type="button"
             aria-label="Expand all notebooks"
             title="Expand all notebooks"
             onClick={expandAllFolders}
             disabled={parentFolderIds.size === 0 || allParentsExpanded}
-            className="bb-icon-button"
+            className="bb-icon-button bb-icon-button--bare"
           >
             <ArrowsOutSimple size={16} />
           </button>
@@ -156,7 +371,7 @@ export function FolderTree(props: {
             title="Collapse all notebooks"
             onClick={collapseAllFolders}
             disabled={parentFolderIds.size === 0 || !anyParentExpanded}
-            className="bb-icon-button"
+            className="bb-icon-button bb-icon-button--bare"
           >
             <ArrowsInSimple size={16} />
           </button>
@@ -165,16 +380,46 @@ export function FolderTree(props: {
             aria-label="New notebook"
             title="New notebook"
             onClick={props.onCreateNotebook}
-            className="bb-icon-button bb-icon-button--accent"
+            className="bb-icon-button bb-icon-button--bare bb-icon-button--accent"
           >
             <FolderSimplePlus size={17} />
           </button>
+          {draggedFolder ? (
+            <button
+              type="button"
+              aria-label="Delete notebook"
+              title={canDeleteDraggedFolder ? "Drop the dragged notebook here to delete it" : "Only empty notebooks can be deleted"}
+              disabled={!canDeleteDraggedFolder}
+              onDragOver={(event) => {
+                const payload = getDragPayload(event.dataTransfer);
+                if (payload?.kind !== "folder" || !canDeleteDraggedFolder) {
+                  return;
+                }
+                event.preventDefault();
+                setTrashActive(true);
+              }}
+              onDragLeave={() => setTrashActive(false)}
+              onDrop={(event) => {
+                const payload = getDragPayload(event.dataTransfer);
+                clearDragState();
+                if (payload?.kind !== "folder" || !canDeleteDraggedFolder || !draggedFolder) {
+                  return;
+                }
+
+                event.preventDefault();
+                props.onRequestDeleteNotebook(draggedFolder);
+              }}
+              className={`bb-icon-button bb-icon-button--bare bb-folder-trash-target ${trashActive ? "is-active" : ""}`}
+            >
+              <Trash size={16} />
+            </button>
+          ) : null}
           {props.onCollapse ? (
             <button
               type="button"
               aria-label="Collapse notebooks pane"
               onClick={props.onCollapse}
-              className="bb-icon-button"
+              className="bb-icon-button bb-icon-button--bare"
             >
               <CaretLeft size={16} />
             </button>
@@ -182,134 +427,28 @@ export function FolderTree(props: {
         </div>
       </div>
 
-      <div className="space-y-1.5">
+      <div className="space-y-1">
         <button
           type="button"
           onClick={() => props.onSelectFolder(null)}
-          className={`bb-tree-row ${props.selectedFolderId === null ? "is-active" : ""}`}
+          className={`bb-tree-row bb-tree-row--all ${props.selectedFolderId === null ? "is-active" : ""}`}
         >
-          <span className="bb-tree-icon shrink-0">
-            <FolderSimple size={16} />
+          <span className="bb-tree-icon-button" aria-hidden="true">
+            <FolderIconGlyph icon="folder" size={16} className="bb-tree-icon-glyph" />
           </span>
-          <span className="flex-1 truncate text-sm font-medium tracking-tight">All Notes</span>
-          <span className="bb-count-pill">{allNotesCount}</span>
+          <span className="bb-tree-row__content">
+            <span className="bb-tree-row__label">All Notes</span>
+            <span className="bb-count-pill shrink-0">{allNotesCount}</span>
+          </span>
         </button>
 
         {props.folders.length === 0 ? (
           <div className="bb-empty-state text-sm">No notebooks yet.</div>
         ) : (
-          (childFoldersByParent.get(null) ?? []).map((folder) =>
-            renderNotebook(folder, 0, {
-              childFoldersByParent,
-              clearDragState,
-              draggedFolderId,
-              dragging,
-              dropTarget,
-              expandedFolderIds,
-              handleDragOver,
-              handleDragStart,
-              handleDrop,
-              onSelectFolder: props.onSelectFolder,
-              selectedFolderId: props.selectedFolderId,
-              toggleFolder
-            })
-          )
+          (childFoldersByParent.get(null) ?? []).map((folder) => renderNotebook(folder, 0))
         )}
       </div>
     </section>
-  );
-}
-
-function renderNotebook(
-  folder: FolderNode,
-  depth: number,
-  helpers: {
-    childFoldersByParent: Map<string | null, FolderNode[]>;
-    clearDragState(): void;
-    draggedFolderId: string | null;
-    dragging: boolean;
-    dropTarget: DropTarget | null;
-    expandedFolderIds: Set<string>;
-    handleDragOver(event: DragEvent<HTMLElement>, targetId: string, position: FolderMovePosition): void;
-    handleDragStart(event: DragEvent<HTMLDivElement>, folderId: string): void;
-    handleDrop(event: DragEvent<HTMLElement>, targetId: string, position: FolderMovePosition): void;
-    onSelectFolder(folderId: string | null): void;
-    selectedFolderId: string | null;
-    toggleFolder(folderId: string): void;
-  }
-) {
-  const children = helpers.childFoldersByParent.get(folder.id) ?? [];
-  const hasChildren = children.length > 0;
-  const expanded = hasChildren ? helpers.expandedFolderIds.has(folder.id) : false;
-  const selected = helpers.selectedFolderId === folder.id;
-  const insideDropActive = helpers.dropTarget?.targetId === folder.id && helpers.dropTarget.position === "inside";
-
-  return (
-    <div key={folder.id} className="space-y-1">
-      <NotebookDropZone
-        testId={buildNotebookTestId("before", folder.name)}
-        folderId={folder.id}
-        depth={depth}
-        position="before"
-        active={helpers.dropTarget?.targetId === folder.id && helpers.dropTarget.position === "before"}
-        dragging={helpers.dragging && helpers.draggedFolderId !== folder.id}
-        onDragOver={helpers.handleDragOver}
-        onDrop={helpers.handleDrop}
-      />
-
-      <div
-        draggable
-        data-testid={buildNotebookTestId("drag", folder.name)}
-        onDragStart={(event) => helpers.handleDragStart(event, folder.id)}
-        onDragEnd={helpers.clearDragState}
-        onDragOver={(event) => helpers.handleDragOver(event, folder.id, "inside")}
-        onDrop={(event) => helpers.handleDrop(event, folder.id, "inside")}
-        className={insideDropActive ? "bb-tree-drop-target rounded-[1.15rem]" : "rounded-[1.15rem]"}
-      >
-        <div
-          className={`bb-tree-row ${selected ? "is-active" : ""}`}
-          style={{ paddingLeft: `${16 + depth * 16}px` }}
-        >
-          {hasChildren ? (
-            <button
-              type="button"
-              aria-label={`${expanded ? "Collapse" : "Expand"} notebook ${folder.name}`}
-              onClick={() => helpers.toggleFolder(folder.id)}
-              className="bb-tree-toggle shrink-0"
-            >
-              <CaretDown size={13} weight="bold" className={`transition-transform duration-300 ${expanded ? "rotate-0" : "-rotate-90"}`} />
-            </button>
-          ) : (
-            <span className="inline-flex h-6 w-6 shrink-0" aria-hidden="true" />
-          )}
-
-          <button
-            type="button"
-            onClick={() => helpers.onSelectFolder(selected ? null : folder.id)}
-            className="flex min-w-0 flex-1 items-center gap-2.5 text-left"
-          >
-            <span className="bb-tree-icon shrink-0">
-              <FolderSimple size={16} />
-            </span>
-            <span className="min-w-0 flex-1 truncate text-sm font-medium tracking-tight">{folder.name}</span>
-            <span className="bb-count-pill shrink-0">{folder.noteCount}</span>
-          </button>
-        </div>
-      </div>
-
-      {hasChildren && expanded ? children.map((child) => renderNotebook(child, depth + 1, helpers)) : null}
-
-      <NotebookDropZone
-        testId={buildNotebookTestId("after", folder.name)}
-        folderId={folder.id}
-        depth={depth}
-        position="after"
-        active={helpers.dropTarget?.targetId === folder.id && helpers.dropTarget.position === "after"}
-        dragging={helpers.dragging && helpers.draggedFolderId !== folder.id}
-        onDragOver={helpers.handleDragOver}
-        onDrop={helpers.handleDrop}
-      />
-    </div>
   );
 }
 
@@ -328,8 +467,8 @@ function NotebookDropZone(props: {
       data-testid={props.testId}
       onDragOver={(event) => props.onDragOver(event, props.folderId, props.position)}
       onDrop={(event) => props.onDrop(event, props.folderId, props.position)}
-      className={`bb-dropzone ${props.dragging ? "is-visible" : ""} ${props.active ? "is-active" : ""}`}
-      style={{ marginLeft: `${16 + props.depth * 18}px` }}
+      className={`bb-dropzone bb-dropzone--tree ${props.dragging ? "is-visible" : ""} ${props.active ? "is-active" : ""}`}
+      style={{ marginLeft: `${14 + props.depth * 16}px` }}
     />
   );
 }

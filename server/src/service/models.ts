@@ -1,6 +1,9 @@
 export const userThemeValues = ["sea", "ember", "midnight"] as const;
 export type UserTheme = (typeof userThemeValues)[number];
 
+export const folderIconValues = ["folder", "inbox", "archive", "bookmark", "briefcase", "book", "calendar", "star"] as const;
+export type FolderIconId = (typeof folderIconValues)[number];
+
 export interface AuthenticatedUser {
   ownerId: string;
   issuer: string;
@@ -26,6 +29,7 @@ export interface FolderRecord {
   ownerId: string;
   parentId: string | null;
   name: string;
+  icon: FolderIconId;
   storageDirName: string;
   sortOrder: number;
   createdAt: string;
@@ -85,6 +89,7 @@ export interface FolderNode {
   name: string;
   parentId: string | null;
   path: string;
+  icon: FolderIconId;
   childCount: number;
   noteCount: number;
 }

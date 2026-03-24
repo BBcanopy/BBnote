@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { FolderDb } from "../db/folderDb.js";
-import type { FolderNode, FolderRecord } from "./models.js";
+import type { FolderIconId, FolderNode, FolderRecord } from "./models.js";
 import { buildFolderDirectoryName } from "./slugService.js";
 
 export class FolderService {
@@ -15,12 +15,13 @@ export class FolderService {
       name: folder.name,
       parentId: folder.parentId,
       path: buildPath(folder.id, byId),
+      icon: folder.icon,
       childCount: folder.child_count,
       noteCount: folder.note_count
     }));
   }
 
-  async createFolder(ownerId: string, input: { name: string; parentId: string | null }) {
+  async createFolder(ownerId: string, input: { name: string; parentId: string | null; icon?: FolderIconId }) {
     if (input.parentId) {
       const parent = this.folderDb.getById(ownerId, input.parentId);
       if (!parent) {
@@ -35,6 +36,7 @@ export class FolderService {
       ownerId,
       parentId: input.parentId,
       name: input.name.trim() || "Untitled folder",
+      icon: input.icon ?? "folder",
       storageDirName: buildFolderDirectoryName(input.name, folderId),
       sortOrder: this.folderDb.getNextSortOrder(ownerId, input.parentId),
       createdAt: now,
@@ -44,7 +46,7 @@ export class FolderService {
     return record;
   }
 
-  async updateFolder(ownerId: string, folderId: string, input: { name: string; parentId: string | null; sortOrder?: number }) {
+  async updateFolder(ownerId: string, folderId: string, input: { name: string; icon?: FolderIconId; parentId: string | null; sortOrder?: number }) {
     const existing = this.folderDb.getById(ownerId, folderId);
     if (!existing) {
       throw new Error("Folder not found.");
@@ -63,6 +65,7 @@ export class FolderService {
 
     this.folderDb.update(ownerId, folderId, {
       name: input.name.trim() || existing.name,
+      icon: input.icon ?? null,
       parentId: input.parentId,
       sortOrder:
         typeof input.sortOrder === "number"

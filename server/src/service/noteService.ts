@@ -226,6 +226,22 @@ export class NoteService {
     return this.getNote(input.ownerId, input.noteId);
   }
 
+  async moveNote(input: { ownerId: string; noteId: string; folderId: string }) {
+    const record = this.noteDb.getById(input.ownerId, input.noteId);
+    if (!record) {
+      throw new Error("Note not found.");
+    }
+
+    const bodyMarkdown = await this.storageService.readMarkdown(record.filePath);
+    return this.updateNote({
+      ownerId: input.ownerId,
+      noteId: input.noteId,
+      folderId: input.folderId,
+      title: record.title,
+      bodyMarkdown
+    });
+  }
+
   async deleteNote(ownerId: string, noteId: string) {
     const record = this.noteDb.getById(ownerId, noteId);
     if (!record) {

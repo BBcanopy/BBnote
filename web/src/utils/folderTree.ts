@@ -106,6 +106,7 @@ function flattenForest(nodes: MutableFolderNode[], parentPath = ""): FolderNode[
       name: node.name,
       parentId: node.parentId,
       path,
+      icon: node.icon,
       childCount: node.children.length,
       noteCount: node.noteCount
     });
