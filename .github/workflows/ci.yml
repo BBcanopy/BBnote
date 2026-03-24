@@ -26,6 +26,8 @@ jobs:
 
       - run: npm ci
       - run: npm run test:server
+      - name: Build server image
+        run: docker build --file server/Dockerfile --tag bbnote-server-ci .
 
   web-test:
     runs-on: ubuntu-latest
@@ -40,6 +42,8 @@ jobs:
 
       - run: npm ci
       - run: npm run test:web
+      - name: Build web image
+        run: docker build --file web/Dockerfile --tag bbnote-web-ci .
 
   e2e-test:
     runs-on: ubuntu-latest
@@ -74,11 +78,15 @@ jobs:
       - name: Run Playwright against split stack
         run: docker compose --project-name bbnote-ci -f docker-compose.ci.yml run --rm --no-deps e2e
 
+      - name: Build all-in-one image
+        run: docker build --file Dockerfile.all-in-one --tag bbnote-all-in-one-ci .
+
       - name: Stop split stack
         if: always()
         run: docker compose --project-name bbnote-ci -f docker-compose.ci.yml down -v
 
-  docker:
+  publish-images:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     needs:
       - server-test
