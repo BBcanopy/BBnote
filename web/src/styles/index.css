@@ -189,10 +189,14 @@ button:disabled {
 
 .bb-shell {
   width: 100%;
-  max-width: none;
+  max-width: 96rem;
   margin: 0 auto;
   display: grid;
   gap: 1rem;
+}
+
+.bb-shell--app {
+  max-width: none;
 }
 
 .bb-shell--auth {
@@ -246,11 +250,16 @@ button:disabled {
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 1rem;
-  padding: 0.95rem 1.1rem;
+  padding: 0.72rem 0.9rem;
   border-radius: 1.8rem;
   position: sticky;
   top: 0.75rem;
   z-index: 10;
+  border-color: color-mix(in srgb, var(--line) 70%, transparent);
+  background: color-mix(in srgb, var(--surface-strong) 86%, transparent);
+  box-shadow:
+    inset 0 1px 0 var(--surface-highlight),
+    0 16px 32px -32px rgba(18, 34, 36, 0.3);
 }
 
 .bb-topbar__nav {
@@ -261,12 +270,23 @@ button:disabled {
   min-width: 0;
 }
 
+.bb-topbar__nav--brand-only {
+  grid-template-columns: auto;
+}
+
 .bb-brand-mark {
   display: inline-grid;
   grid-template-columns: auto auto;
   align-items: center;
   gap: 0.8rem;
   min-width: fit-content;
+  transition:
+    transform 220ms var(--ease),
+    opacity 220ms var(--ease);
+}
+
+.bb-brand-mark:hover {
+  transform: translateY(-1px);
 }
 
 .bb-brand-mark__pill {
@@ -428,8 +448,8 @@ button:disabled {
   gap: 0.75rem;
   align-items: center;
   width: 100%;
-  min-height: 3.2rem;
-  padding: 0.7rem 0.8rem;
+  min-height: 2.8rem;
+  padding: 0.6rem 0.75rem;
   border: 1px solid var(--line);
   border-radius: 1.15rem;
   background: var(--surface-muted);
@@ -474,17 +494,13 @@ button:disabled {
 }
 
 .bb-theme-option__copy {
-  display: grid;
-  gap: 0.1rem;
+  display: block;
+  min-width: 0;
 }
 
 .bb-theme-option__copy strong {
+  display: block;
   font-size: 0.92rem;
-}
-
-.bb-theme-option__copy span {
-  font-size: 0.78rem;
-  color: var(--ink-soft);
 }
 
 .bb-menu-divider {
@@ -603,6 +619,22 @@ button:disabled {
   background: var(--surface-input);
   color: var(--ink-soft);
   box-shadow: inset 0 1px 0 var(--surface-highlight);
+}
+
+.bb-icon-button--bare {
+  width: 2rem;
+  height: 2rem;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+}
+
+.bb-icon-button--bare:hover {
+  background: color-mix(in srgb, var(--surface-muted) 86%, transparent);
+}
+
+.bb-icon-button--danger {
+  color: var(--danger);
 }
 
 .bb-icon-button--accent:hover {
@@ -1024,6 +1056,12 @@ button:disabled {
   font-weight: 600;
 }
 
+.bb-field__label--mode {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.25rem;
+}
+
 .bb-field__hint {
   color: var(--ink-soft);
   font-size: 0.8rem;
@@ -1061,7 +1099,6 @@ button:disabled {
 }
 
 .bb-note-card,
-.bb-tree-row,
 .bb-attachment-card,
 .bb-summary-card {
   border: 1px solid var(--line);
@@ -1087,14 +1124,12 @@ button:disabled {
 }
 
 .bb-note-card:hover,
-.bb-tree-row:hover,
 .bb-attachment-card:hover {
   transform: translateY(-1px);
   border-color: var(--line-strong);
 }
 
-.bb-note-card.is-active,
-.bb-tree-row.is-active {
+.bb-note-card.is-active {
   border-color: color-mix(in srgb, var(--accent) 34%, var(--line));
   background: linear-gradient(145deg, var(--brand-start) 0%, var(--brand-end) 100%);
   color: #f5fffe;
@@ -1146,15 +1181,48 @@ button:disabled {
 }
 
 .bb-tree-row {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 0.6rem;
+  gap: 0.32rem;
   width: 100%;
-  padding: 0.62rem 0.8rem;
+  padding: 0.18rem 0.28rem;
+  border: none;
+  border-radius: 0.95rem;
+  background: transparent;
+  box-shadow: none;
   text-align: left;
+  transition:
+    background-color 180ms var(--ease),
+    color 180ms var(--ease);
 }
 
-.bb-tree-icon,
+.bb-tree-row:hover {
+  transform: none;
+  border-color: transparent;
+  background: color-mix(in srgb, var(--surface-muted) 74%, transparent);
+}
+
+.bb-tree-row.is-active {
+  background: color-mix(in srgb, var(--accent-soft) 84%, var(--surface-strong));
+  color: var(--ink);
+}
+
+.bb-tree-row.is-note-target {
+  background: color-mix(in srgb, var(--accent-soft) 72%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 28%, var(--line));
+}
+
+.bb-tree-row--all {
+  gap: 0.5rem;
+  padding-inline: 0.4rem;
+}
+
+.bb-note-icon,
+.bb-tree-icon-glyph {
+  color: var(--accent-strong);
+}
+
 .bb-note-icon {
   display: inline-grid;
   place-items: center;
@@ -1166,7 +1234,6 @@ button:disabled {
   border: 1px solid color-mix(in srgb, var(--accent) 18%, var(--line));
 }
 
-.bb-tree-row.is-active .bb-tree-icon,
 .bb-note-card.is-active .bb-note-icon {
   background: rgba(255, 255, 255, 0.14);
   color: #f5fffe;
@@ -1177,6 +1244,82 @@ button:disabled {
   width: 1.72rem;
   height: 1.72rem;
   border-radius: 0.72rem;
+}
+
+.bb-tree-icon-shell {
+  position: relative;
+  display: inline-grid;
+  flex-shrink: 0;
+}
+
+.bb-tree-icon-button {
+  display: inline-grid;
+  place-items: center;
+  width: 1.7rem;
+  height: 1.7rem;
+  padding: 0;
+  border: none;
+  border-radius: 0.6rem;
+  background: transparent;
+  color: var(--ink-soft);
+  transition:
+    background-color 180ms var(--ease),
+    color 180ms var(--ease);
+}
+
+.bb-tree-icon-button:hover {
+  background: color-mix(in srgb, var(--surface-muted) 78%, transparent);
+}
+
+.bb-tree-row.is-active .bb-tree-icon-button,
+.bb-tree-row.is-active .bb-tree-icon-glyph {
+  color: var(--accent-strong);
+}
+
+.bb-tree-row__content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem;
+  min-width: 0;
+  flex: 1 1 auto;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+}
+
+.bb-tree-row__label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.84rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.bb-tree-node {
+  display: grid;
+  gap: 0.1rem;
+}
+
+.bb-tree-branch {
+  position: relative;
+  border-radius: 1rem;
+}
+
+.bb-tree-branch.is-drop-active {
+  background: color-mix(in srgb, var(--accent-soft) 48%, transparent);
+}
+
+.bb-tree-children {
+  display: grid;
+  gap: 0.08rem;
+  margin-left: 0.95rem;
+  padding-left: 0.52rem;
+  border-left: 1px solid color-mix(in srgb, var(--line) 86%, transparent);
 }
 
 .bb-note-drag-handle {
@@ -1211,19 +1354,29 @@ button:disabled {
 }
 
 .bb-tree-row.is-active .bb-count-pill {
-  background: rgba(255, 255, 255, 0.16);
-  color: #f5fffe;
+  background: color-mix(in srgb, var(--accent-soft) 80%, transparent);
+  color: var(--accent-strong);
 }
 
 .bb-tree-toggle {
   display: inline-grid;
   place-items: center;
-  width: 1.85rem;
-  height: 1.85rem;
+  width: 1.4rem;
+  height: 1.4rem;
   border: none;
-  border-radius: 999px;
+  border-radius: 0.55rem;
   background: transparent;
   color: inherit;
+}
+
+.bb-tree-toggle:hover {
+  background: color-mix(in srgb, var(--surface-muted) 72%, transparent);
+}
+
+.bb-tree-toggle-placeholder {
+  width: 1.4rem;
+  height: 1.4rem;
+  flex-shrink: 0;
 }
 
 .bb-dropzone {
@@ -1234,6 +1387,65 @@ button:disabled {
     height 220ms var(--ease),
     border-color 220ms var(--ease),
     background-color 220ms var(--ease);
+}
+
+.bb-dropzone--tree.is-visible {
+  height: 0.32rem;
+}
+
+.bb-pane-card--tree {
+  gap: 0.55rem;
+  padding: 0.7rem;
+}
+
+.bb-icon-picker {
+  position: absolute;
+  top: calc(100% + 0.4rem);
+  left: 0;
+  z-index: 12;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.25rem;
+  min-width: 9rem;
+  padding: 0.42rem;
+  border: 1px solid var(--line);
+  border-radius: 0.95rem;
+  background: var(--surface-popover);
+  box-shadow:
+    inset 0 1px 0 var(--surface-highlight),
+    var(--shadow-soft);
+}
+
+.bb-icon-picker__option {
+  display: inline-grid;
+  place-items: center;
+  width: 1.8rem;
+  height: 1.8rem;
+  padding: 0;
+  border: none;
+  border-radius: 0.55rem;
+  background: transparent;
+  color: var(--ink-soft);
+}
+
+.bb-icon-picker__option:hover {
+  background: color-mix(in srgb, var(--surface-muted) 74%, transparent);
+  color: var(--accent-strong);
+}
+
+.bb-icon-picker__option.is-active {
+  background: color-mix(in srgb, var(--accent-soft) 76%, var(--surface-strong));
+  color: var(--accent-strong);
+}
+
+.bb-folder-trash-target {
+  color: var(--danger);
+}
+
+.bb-folder-trash-target.is-active,
+.bb-folder-trash-target:hover {
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  color: var(--danger);
 }
 
 .bb-dropzone.is-visible {
@@ -1291,12 +1503,12 @@ button:disabled {
 .bb-editor-mode {
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
-  padding: 0.28rem;
-  border: 1px solid var(--line);
+  gap: 0.2rem;
+  padding: 0;
+  border: none;
   border-radius: 999px;
-  background: var(--surface-muted);
-  box-shadow: inset 0 1px 0 var(--surface-highlight);
+  background: transparent;
+  box-shadow: none;
 }
 
 .bb-editor-mode__button {
@@ -1322,9 +1534,9 @@ button:disabled {
 }
 
 .bb-editor-mode__button.is-active {
-  background: linear-gradient(145deg, var(--brand-start) 0%, var(--brand-end) 100%);
-  color: #f5fffe;
-  box-shadow: 0 12px 24px -18px rgba(18, 34, 36, 0.48);
+  background: color-mix(in srgb, var(--accent-soft) 80%, var(--surface-strong));
+  color: var(--accent-strong);
+  box-shadow: none;
 }
 
 .bb-panel-note {
@@ -1423,37 +1635,34 @@ button:disabled {
 
 .bb-collapsed-rail {
   align-self: stretch;
-  width: 3.2rem;
-  min-width: 3.2rem;
-  padding: 0.65rem 0.35rem;
-  border-radius: 1.5rem;
+  width: 1.25rem;
+  min-width: 1.25rem;
+  padding: 0.35rem 0;
+  border-radius: 999px;
   display: flex;
   align-items: center;
   justify-content: center;
   color: var(--ink-soft);
-  background: color-mix(in srgb, var(--surface-strong) 90%, white);
-  box-shadow: inset 0 0 0 1px var(--line);
+  background: color-mix(in srgb, var(--surface-strong) 86%, transparent);
+  box-shadow: none;
 }
 
 .bb-collapsed-rail__action {
   display: inline-grid;
   place-items: center;
-  width: 2rem;
-  height: 2rem;
-  border-radius: 999px;
-  border: 1px solid var(--line);
-  background: var(--surface-input);
+  width: auto;
+  height: auto;
+  border: none;
+  background: transparent;
   color: var(--ink-soft);
   transition:
     transform 180ms var(--ease),
-    border-color 180ms var(--ease),
     color 180ms var(--ease);
 }
 
 .bb-collapsed-rail:hover .bb-collapsed-rail__action,
 .bb-collapsed-rail:focus-visible .bb-collapsed-rail__action {
   transform: translateX(1px);
-  border-color: color-mix(in srgb, var(--accent) 24%, var(--line));
   color: var(--accent-strong);
 }
 

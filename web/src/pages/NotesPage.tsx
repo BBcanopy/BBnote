@@ -14,11 +14,13 @@ import {
   createFolder,
   createNote,
   deleteAttachment,
+  deleteFolder,
   deleteNote,
   fetchAttachmentBlob,
   getNote,
   listFolders,
   listNotes,
+  moveNote,
   reorderNotes,
   updateFolder,
   updateNote,
@@ -27,7 +29,8 @@ import {
 import type { AttachmentRef, FolderNode, NoteDetail, NoteSummary } from "../api/types";
 import { useAuth } from "../auth/AuthProvider";
 import { AttachmentList } from "../components/AttachmentList";
-import { buttonDanger, buttonGhost, buttonPrimary, buttonSecondary } from "../components/buttonStyles";
+import { buttonGhost, buttonPrimary, buttonSecondary } from "../components/buttonStyles";
+import { ConfirmationDialog } from "../components/ConfirmationDialog";
 import { FolderTree } from "../components/FolderTree";
 import { MarkdownPreview } from "../components/MarkdownPreview";
 import { NoteListPane } from "../components/NoteListPane";
@@ -88,6 +91,8 @@ export function NotesPage() {
   const [saving, setSaving] = useState(false);
   const [uploadingAttachment, setUploadingAttachment] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [deleteNoteOpen, setDeleteNoteOpen] = useState(false);
+  const [pendingFolderDelete, setPendingFolderDelete] = useState<FolderNode | null>(null);
   const [lastSyncedContentKey, setLastSyncedContentKey] = useState<string | null>(null);
   const deferredSearch = useDeferredValue(search);
   const saveInFlightRef = useRef(false);
@@ -104,6 +109,7 @@ export function NotesPage() {
   );
   const canPersistEditor = Boolean(editorNote?.folderId && editorNote.title.trim().length > 0);
   const explorerCollapsed = folderPaneCollapsed && notePaneCollapsed;
+  const canCreateDraft = selectedFolderId !== null;
   const canReorderNotes = Boolean(selectedFolderId && search.trim().length === 0);
 
   useEffect(() => {
@@ -168,6 +174,7 @@ export function NotesPage() {
       title: editorNote.title.trim(),
       bodyMarkdown: editorNote.bodyMarkdown
     };
+    const refreshFoldersAfterSave = !payload.noteId;
     const timer = window.setTimeout(async () => {
       saveInFlightRef.current = true;
       setSaving(true);
@@ -211,7 +218,11 @@ export function NotesPage() {
           });
         }
 
-        await refreshNotes();
+        if (refreshFoldersAfterSave) {
+          await Promise.all([refreshNotes(), refreshFolders()]);
+        } else {
+          await refreshNotes();
+        }
       } catch (saveError) {
         if (sessionId === editorSessionRef.current) {
           setError(String(saveError));
@@ -281,14 +292,20 @@ export function NotesPage() {
     }
   }
 
-  async function refreshNotes() {
+  async function refreshNotes(options?: {
+    folderId?: string | null;
+    search?: string;
+  }) {
+    const nextFolderId = options?.folderId === undefined ? selectedFolderId : options.folderId;
+    const nextSearch = options?.search === undefined ? deferredSearch : options.search;
+
     try {
       setLoadingNotes(true);
       const payload = await listNotes({
-        folderId: selectedFolderId ?? undefined,
-        q: deferredSearch || undefined,
-        sort: selectedFolderId && !deferredSearch ? "priority" : undefined,
-        order: selectedFolderId && !deferredSearch ? "asc" : undefined
+        folderId: nextFolderId ?? undefined,
+        q: nextSearch || undefined,
+        sort: nextFolderId && !nextSearch ? "priority" : undefined,
+        order: nextFolderId && !nextSearch ? "asc" : undefined
       });
       setNotes(payload.items);
     } catch (notesError) {
@@ -296,6 +313,25 @@ export function NotesPage() {
     } finally {
       setLoadingNotes(false);
     }
+  }
+
+  async function handleUpdateNotebookIcon(folderId: string, icon: FolderNode["icon"]) {
+    if (!auth.user) {
+      return;
+    }
+
+    const folder = folders.find((entry) => entry.id === folderId);
+    if (!folder || folder.icon === icon) {
+      return;
+    }
+
+    setError(null);
+    await updateFolder(folderId, {
+      name: folder.name,
+      icon,
+      parentId: folder.parentId
+    });
+    await refreshFolders();
   }
 
   function openCreateNotebookDialog() {
@@ -413,6 +449,10 @@ export function NotesPage() {
   }
 
   function handleCreateDraft() {
+    if (!canCreateDraft) {
+      return;
+    }
+
     editorSessionRef.current += 1;
     noteLoadRef.current += 1;
     setError(null);
@@ -435,14 +475,49 @@ export function NotesPage() {
 
   function handleSelectNote(noteId: string) {
     setSelectedNoteId(noteId);
-    setFolderPaneCollapsed(true);
-    setNotePaneCollapsed(true);
     setMobileNotesOpen(false);
   }
 
-  function handleEditorFolderChange(nextFolderId: string | null) {
-    setEditorNote((current) => (current ? { ...current, folderId: nextFolderId } : current));
-    setSelectedFolderId(nextFolderId);
+  async function handleMoveNoteToNotebook(noteId: string, folderId: string) {
+    if (!auth.user) {
+      return;
+    }
+
+    const movingSelectedNote = selectedNoteId === noteId || editorNote?.noteId === noteId;
+    setError(null);
+
+    try {
+      const movedNote = await moveNote(noteId, { folderId });
+      setSearch("");
+      setSelectedFolderId(folderId);
+      setFolderPaneCollapsed(false);
+      setNotePaneCollapsed(false);
+      setMobileFoldersOpen(false);
+      setMobileNotesOpen(false);
+
+      if (movingSelectedNote) {
+        setSelectedNoteId(noteId);
+        setEditorNote(mapNoteDetail(movedNote));
+        setLastSyncedContentKey(buildContentKey(movedNote.folderId, movedNote.title, movedNote.bodyMarkdown));
+      }
+
+      await Promise.all([
+        refreshFolders(),
+        refreshNotes({
+          folderId,
+          search: ""
+        })
+      ]);
+    } catch (moveError) {
+      setError(String(moveError));
+    }
+  }
+
+  function handleRequestDeleteCurrentNote() {
+    if (!editorNote?.noteId) {
+      return;
+    }
+    setDeleteNoteOpen(true);
   }
 
   async function handleDeleteCurrentNote() {
@@ -456,12 +531,34 @@ export function NotesPage() {
       await deleteNote(editorNote.noteId);
       editorSessionRef.current += 1;
       noteLoadRef.current += 1;
+      setDeleteNoteOpen(false);
       setEditorNote(null);
       setSelectedNoteId(null);
       setLastSyncedContentKey(null);
-      setFolderPaneCollapsed(false);
-      setNotePaneCollapsed(false);
-      await refreshNotes();
+      await Promise.all([refreshNotes(), refreshFolders()]);
+    } catch (deleteError) {
+      setError(String(deleteError));
+    }
+  }
+
+  function handleRequestDeleteNotebook(folder: FolderNode) {
+    setPendingFolderDelete(folder);
+  }
+
+  async function handleDeleteNotebook() {
+    if (!auth.user || !pendingFolderDelete) {
+      return;
+    }
+
+    setError(null);
+
+    try {
+      await deleteFolder(pendingFolderDelete.id);
+      if (selectedFolderId === pendingFolderDelete.id) {
+        setSelectedFolderId(null);
+      }
+      setPendingFolderDelete(null);
+      await Promise.all([refreshFolders(), refreshNotes({ folderId: null })]);
     } catch (deleteError) {
       setError(String(deleteError));
     }
@@ -566,13 +663,19 @@ export function NotesPage() {
           <ListBullets size={18} />
           Notes
         </button>
-        <button type="button" onClick={handleCreateDraft} className={buttonPrimary}>
+        <button
+          type="button"
+          onClick={handleCreateDraft}
+          disabled={!canCreateDraft}
+          title={canCreateDraft ? "New note" : "Select a notebook to create a note"}
+          className={buttonPrimary}
+        >
           <Plus size={18} />
           New note
         </button>
       </section>
 
-      <div className="hidden min-h-[calc(100dvh-7.5rem)] items-stretch lg:flex">
+      <div className="hidden min-h-[calc(100dvh-7rem)] items-stretch lg:flex">
         {explorerCollapsed ? (
           <CollapsedPaneRail
             label="Notebooks and notes"
@@ -598,8 +701,13 @@ export function NotesPage() {
                     selectedFolderId={selectedFolderId}
                     onCreateNotebook={openCreateNotebookDialog}
                     onMoveNotebook={(move) => void handleMoveNotebook(move)}
+                    onMoveNote={(noteId, folderId) => void handleMoveNoteToNotebook(noteId, folderId)}
+                    onRequestDeleteNotebook={handleRequestDeleteNotebook}
+                    onUpdateNotebookIcon={(folderId, icon) => handleUpdateNotebookIcon(folderId, icon)}
                     onCollapse={() => setFolderPaneCollapsed(true)}
                     onSelectFolder={handleSelectFolder}
+                    acceptDraggedNotes
+                    enableFolderDragAndDrop
                   />
                 </div>
                 <PaneResizeHandle
@@ -635,7 +743,9 @@ export function NotesPage() {
                     onCollapse={() => setNotePaneCollapsed(true)}
                     loading={loadingNotes}
                     notebookName={selectedFolder?.name ?? null}
+                    canCreateNote={canCreateDraft}
                     canReorder={canReorderNotes}
+                    enableCrossNotebookMove
                     onMoveNote={(move) => void handleMoveNote(move)}
                   />
                 </div>
@@ -658,13 +768,11 @@ export function NotesPage() {
 
         <EditorPanel
           editorNote={editorNote}
-          folders={folders}
           editorPane={editorPane}
           onEditorPaneChange={setEditorPane}
-          onFolderChange={handleEditorFolderChange}
           onTitleChange={(title) => setEditorNote((current) => (current ? { ...current, title } : current))}
           onBodyChange={(bodyMarkdown) => setEditorNote((current) => (current ? { ...current, bodyMarkdown } : current))}
-          onDelete={() => void handleDeleteCurrentNote()}
+          onDeleteRequest={handleRequestDeleteCurrentNote}
           onUpload={(files) => void handleAttachmentUpload(files)}
           onInsertLink={(attachment) => appendToBody(`[${attachment.name}](${attachment.url})`)}
           onInsertImage={(attachment) => appendToBody(`![${attachment.name}](${attachment.url})`)}
@@ -681,13 +789,11 @@ export function NotesPage() {
       <div className="lg:hidden">
         <EditorPanel
           editorNote={editorNote}
-          folders={folders}
           editorPane={editorPane}
           onEditorPaneChange={setEditorPane}
-          onFolderChange={handleEditorFolderChange}
           onTitleChange={(title) => setEditorNote((current) => (current ? { ...current, title } : current))}
           onBodyChange={(bodyMarkdown) => setEditorNote((current) => (current ? { ...current, bodyMarkdown } : current))}
-          onDelete={() => void handleDeleteCurrentNote()}
+          onDeleteRequest={handleRequestDeleteCurrentNote}
           onUpload={(files) => void handleAttachmentUpload(files)}
           onInsertLink={(attachment) => appendToBody(`[${attachment.name}](${attachment.url})`)}
           onInsertImage={(attachment) => appendToBody(`![${attachment.name}](${attachment.url})`)}
@@ -707,7 +813,12 @@ export function NotesPage() {
           selectedFolderId={selectedFolderId}
           onCreateNotebook={openCreateNotebookDialog}
           onMoveNotebook={(move) => void handleMoveNotebook(move)}
+          onMoveNote={(noteId, folderId) => void handleMoveNoteToNotebook(noteId, folderId)}
+          onRequestDeleteNotebook={handleRequestDeleteNotebook}
+          onUpdateNotebookIcon={(folderId, icon) => handleUpdateNotebookIcon(folderId, icon)}
           onSelectFolder={handleSelectFolder}
+          acceptDraggedNotes={false}
+          enableFolderDragAndDrop={false}
         />
       </MobileDrawer>
 
@@ -721,7 +832,9 @@ export function NotesPage() {
           onCreateNote={handleCreateDraft}
           loading={loadingNotes}
           notebookName={selectedFolder?.name ?? null}
+          canCreateNote={canCreateDraft}
           canReorder={canReorderNotes}
+          enableCrossNotebookMove={false}
           onMoveNote={(move) => void handleMoveNote(move)}
         />
       </MobileDrawer>
@@ -737,19 +850,37 @@ export function NotesPage() {
         onClose={closeCreateNotebookDialog}
         onConfirm={() => void handleCreateNotebook()}
       />
+
+      <ConfirmationDialog
+        open={deleteNoteOpen}
+        title="Delete note?"
+        description="This note will be removed permanently."
+        confirmLabel="Delete note"
+        tone="danger"
+        onClose={() => setDeleteNoteOpen(false)}
+        onConfirm={() => void handleDeleteCurrentNote()}
+      />
+
+      <ConfirmationDialog
+        open={pendingFolderDelete !== null}
+        title="Delete notebook?"
+        description={pendingFolderDelete ? `${pendingFolderDelete.name} will be removed permanently once you confirm.` : undefined}
+        confirmLabel="Delete notebook"
+        tone="danger"
+        onClose={() => setPendingFolderDelete(null)}
+        onConfirm={() => void handleDeleteNotebook()}
+      />
     </>
   );
 }
 
 function EditorPanel(props: {
   editorNote: EditorState | null;
-  folders: FolderNode[];
   editorPane: EditorPane;
   onEditorPaneChange(value: EditorPane): void;
-  onFolderChange(folderId: string | null): void;
   onTitleChange(title: string): void;
   onBodyChange(bodyMarkdown: string): void;
-  onDelete(): void;
+  onDeleteRequest(): void;
   onUpload(files: FileList | null): void;
   onInsertLink(attachment: AttachmentRef): void;
   onInsertImage(attachment: AttachmentRef): void;
@@ -767,12 +898,13 @@ function EditorPanel(props: {
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
-            onClick={props.onDelete}
+            onClick={props.onDeleteRequest}
             disabled={!props.editorNote?.noteId}
-            className={buttonDanger}
+            aria-label="Delete note"
+            title="Delete note"
+            className="bb-icon-button bb-icon-button--bare bb-icon-button--danger"
           >
-            <Trash size={18} />
-            Delete
+            <Trash size={17} />
           </button>
         </div>
       </div>
@@ -797,37 +929,19 @@ function EditorPanel(props: {
         </div>
       ) : (
       <div className="bb-editor-panel__content">
-        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_14rem]">
-          <label className="bb-field">
-            <span className="bb-field__label">Title</span>
-            <input
-              value={props.editorNote?.title ?? ""}
-              onChange={(event) => props.onTitleChange(event.target.value)}
-              placeholder="Note title"
-              disabled={!props.editorNote}
-              className="bb-input text-lg font-medium tracking-tight"
-            />
-          </label>
-          <label className="bb-field">
-            <span className="bb-field__label">Notebook</span>
-            <select
-              value={props.editorNote?.folderId ?? ""}
-              onChange={(event) => props.onFolderChange(event.target.value || null)}
-              disabled={!props.editorNote}
-              className="bb-select"
-            >
-              <option value="">Select a notebook</option>
-              {props.folders.map((folder) => (
-                <option key={folder.id} value={folder.id}>
-                  {folder.path}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
+        <label className="bb-field">
+          <span className="bb-field__label">Title</span>
+          <input
+            value={props.editorNote?.title ?? ""}
+            onChange={(event) => props.onTitleChange(event.target.value)}
+            placeholder="Note title"
+            disabled={!props.editorNote}
+            className="bb-input text-lg font-medium tracking-tight"
+          />
+        </label>
 
         <div className="bb-editor-body-header">
-          <span className="bb-field__label">{props.editorPane === "markdown" ? "Markdown" : "Preview"}</span>
+          <span className="bb-field__label bb-field__label--mode">{props.editorPane === "markdown" ? "Notes" : "Preview"}</span>
           <div className="bb-editor-mode">
             <ModeButton
               active={props.editorPane === "markdown"}
@@ -870,12 +984,6 @@ function EditorPanel(props: {
           onDelete={props.onDeleteAttachment}
           onDownload={props.onDownloadAttachment}
         />
-
-        {!props.folders.length ? (
-          <div className="bb-panel-note text-sm">
-            Create a notebook before this note can save.
-          </div>
-        ) : null}
 
       </div>
       )}

@@ -1,6 +1,7 @@
 import { CaretLeft, DotsSixVertical, MagnifyingGlass, NotePencil, Plus } from "@phosphor-icons/react";
 import { useEffect, useState, type DragEvent } from "react";
 import type { NoteSummary } from "../api/types";
+import { getDragPayload, setDragPayload } from "../utils/dragPayload";
 import type { NoteMoveInstruction, NoteMovePosition } from "../utils/noteOrder";
 
 const NOTE_PREVIEW_EXCERPT_LIMIT = 42;
@@ -20,16 +21,18 @@ export function NoteListPane(props: {
   onCollapse?(): void;
   loading: boolean;
   notebookName: string | null;
+  canCreateNote: boolean;
   canReorder: boolean;
+  enableCrossNotebookMove?: boolean;
   onMoveNote(move: NoteMoveInstruction): void;
 }) {
   const [draggedNoteId, setDraggedNoteId] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<NoteDropTarget | null>(null);
-  const dragging = props.canReorder && draggedNoteId !== null;
+  const canDragNotes = props.enableCrossNotebookMove || props.canReorder;
+  const dragging = canDragNotes && draggedNoteId !== null;
 
   useEffect(() => {
     if (!props.canReorder) {
-      setDraggedNoteId(null);
       setDropTarget(null);
     }
   }, [props.canReorder]);
@@ -39,18 +42,23 @@ export function NoteListPane(props: {
     setDropTarget(null);
   }
 
-  function handleDragStart(event: DragEvent<HTMLDivElement>, noteId: string) {
-    if (!props.canReorder) {
+  function handleDragStart(event: DragEvent<HTMLDivElement>, note: NoteSummary) {
+    if (!canDragNotes) {
       return;
     }
 
     event.dataTransfer.effectAllowed = "move";
-    event.dataTransfer.setData("text/plain", noteId);
-    setDraggedNoteId(noteId);
+    setDragPayload(event.dataTransfer, {
+      kind: "note",
+      id: note.id,
+      folderId: note.folderId
+    });
+    setDraggedNoteId(note.id);
   }
 
   function handleDragOver(event: DragEvent<HTMLElement>, targetId: string, position: NoteMovePosition) {
-    if (!props.canReorder || !draggedNoteId || draggedNoteId === targetId) {
+    const payload = getDragPayload(event.dataTransfer);
+    if (!props.canReorder || payload?.kind !== "note" || payload.id === targetId) {
       return;
     }
 
@@ -59,20 +67,16 @@ export function NoteListPane(props: {
   }
 
   function handleDrop(event: DragEvent<HTMLElement>, targetId: string, position: NoteMovePosition) {
-    if (!props.canReorder) {
+    const payload = getDragPayload(event.dataTransfer);
+    clearDragState();
+
+    if (!props.canReorder || payload?.kind !== "note" || payload.id === targetId) {
       return;
     }
 
     event.preventDefault();
-    const draggedId = event.dataTransfer.getData("text/plain") || draggedNoteId;
-    clearDragState();
-
-    if (!draggedId || draggedId === targetId) {
-      return;
-    }
-
     props.onMoveNote({
-      draggedId,
+      draggedId: payload.id,
       targetId,
       position
     });
@@ -85,8 +89,9 @@ export function NoteListPane(props: {
           <button
             type="button"
             aria-label="New note"
-            title="New note"
+            title={props.canCreateNote ? "New note" : "Select a notebook to create a note"}
             onClick={props.onCreateNote}
+            disabled={!props.canCreateNote}
             className="bb-icon-button bb-icon-button--accent"
           >
             <Plus size={17} />
@@ -112,6 +117,11 @@ export function NoteListPane(props: {
           className="text-sm"
         />
       </label>
+      {!props.canCreateNote ? (
+        <div className="bb-panel-note text-sm">
+          Select or create a notebook to add a new note.
+        </div>
+      ) : null}
       <div className="bb-note-list">
         {props.loading ? (
           <>
@@ -121,21 +131,24 @@ export function NoteListPane(props: {
           </>
         ) : props.notes.length === 0 ? (
           <div className="bb-empty-state text-sm leading-relaxed">
-            No notes yet.
+            {props.notebookName ? "No notes yet." : "No notes match this view."}
           </div>
         ) : (
-          props.notes.map((note) => renderNote(note, {
-            canReorder: props.canReorder,
-            draggedNoteId,
-            dragging,
-            dropTarget,
-            onDragEnd: clearDragState,
-            onDragOver: handleDragOver,
-            onDragStart: handleDragStart,
-            onDrop: handleDrop,
-            onSelectNote: props.onSelectNote,
-            selectedNoteId: props.selectedNoteId
-          }))
+          props.notes.map((note) =>
+            renderNote(note, {
+              canDragNotes,
+              canReorder: props.canReorder,
+              draggedNoteId,
+              dragging,
+              dropTarget,
+              onDragEnd: clearDragState,
+              onDragOver: handleDragOver,
+              onDragStart: handleDragStart,
+              onDrop: handleDrop,
+              onSelectNote: props.onSelectNote,
+              selectedNoteId: props.selectedNoteId
+            })
+          )
         )}
       </div>
     </section>
@@ -157,13 +170,14 @@ function formatPreviewExcerpt(excerpt: string) {
 function renderNote(
   note: NoteSummary,
   helpers: {
+    canDragNotes: boolean;
     canReorder: boolean;
     draggedNoteId: string | null;
     dragging: boolean;
     dropTarget: NoteDropTarget | null;
     onDragEnd(): void;
     onDragOver(event: DragEvent<HTMLElement>, targetId: string, position: NoteMovePosition): void;
-    onDragStart(event: DragEvent<HTMLDivElement>, noteId: string): void;
+    onDragStart(event: DragEvent<HTMLDivElement>, note: NoteSummary): void;
     onDrop(event: DragEvent<HTMLElement>, targetId: string, position: NoteMovePosition): void;
     onSelectNote(noteId: string): void;
     selectedNoteId: string | null;
@@ -185,7 +199,7 @@ function renderNote(
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-1">
-          {helpers.canReorder ? (
+          {helpers.canDragNotes ? (
             <span className="bb-note-drag-handle" aria-hidden="true">
               <DotsSixVertical size={16} />
             </span>
@@ -198,39 +212,43 @@ function renderNote(
     </button>
   );
 
-  if (!helpers.canReorder) {
+  if (!helpers.canDragNotes) {
     return <div key={note.id} className="min-w-0">{noteCard}</div>;
   }
 
   return (
     <div key={note.id} className="min-w-0 space-y-0.5">
-      <NoteDropZone
-        testId={buildNoteTestId("before", note.title)}
-        noteId={note.id}
-        position="before"
-        active={helpers.dropTarget?.targetId === note.id && helpers.dropTarget.position === "before"}
-        dragging={helpers.dragging && helpers.draggedNoteId !== note.id}
-        onDragOver={helpers.onDragOver}
-        onDrop={helpers.onDrop}
-      />
+      {helpers.canReorder ? (
+        <NoteDropZone
+          testId={buildNoteTestId("before", note.title)}
+          noteId={note.id}
+          position="before"
+          active={helpers.dropTarget?.targetId === note.id && helpers.dropTarget.position === "before"}
+          dragging={helpers.dragging && helpers.draggedNoteId !== note.id}
+          onDragOver={helpers.onDragOver}
+          onDrop={helpers.onDrop}
+        />
+      ) : null}
       <div
         draggable
         data-testid={buildNoteTestId("drag", note.title)}
-        onDragStart={(event) => helpers.onDragStart(event, note.id)}
+        onDragStart={(event) => helpers.onDragStart(event, note)}
         onDragEnd={helpers.onDragEnd}
-        className={helpers.dropTarget?.targetId === note.id ? "bb-tree-drop-target min-w-0 rounded-[1.15rem]" : "min-w-0 rounded-[1.15rem]"}
+        className={helpers.canReorder && helpers.dropTarget?.targetId === note.id ? "bb-tree-drop-target min-w-0 rounded-[1.15rem]" : "min-w-0 rounded-[1.15rem]"}
       >
         {noteCard}
       </div>
-      <NoteDropZone
-        testId={buildNoteTestId("after", note.title)}
-        noteId={note.id}
-        position="after"
-        active={helpers.dropTarget?.targetId === note.id && helpers.dropTarget.position === "after"}
-        dragging={helpers.dragging && helpers.draggedNoteId !== note.id}
-        onDragOver={helpers.onDragOver}
-        onDrop={helpers.onDrop}
-      />
+      {helpers.canReorder ? (
+        <NoteDropZone
+          testId={buildNoteTestId("after", note.title)}
+          noteId={note.id}
+          position="after"
+          active={helpers.dropTarget?.targetId === note.id && helpers.dropTarget.position === "after"}
+          dragging={helpers.dragging && helpers.draggedNoteId !== note.id}
+          onDragOver={helpers.onDragOver}
+          onDrop={helpers.onDrop}
+        />
+      ) : null}
     </div>
   );
 }

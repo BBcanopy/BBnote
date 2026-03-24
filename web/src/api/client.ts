@@ -1,6 +1,7 @@
 import type {
   AuthSession,
   ExportJob,
+  FolderIconId,
   FolderNode,
   ImportJob,
   NoteDetail,
@@ -60,14 +61,14 @@ export function listFolders() {
   return request<FolderNode[]>("/api/v1/folders");
 }
 
-export function createFolder(payload: { name: string; parentId: string | null }) {
+export function createFolder(payload: { name: string; icon?: FolderIconId; parentId: string | null }) {
   return request<FolderNode>("/api/v1/folders", {
     method: "POST",
     body: JSON.stringify(payload)
   });
 }
 
-export function updateFolder(folderId: string, payload: { name: string; parentId: string | null; sortOrder?: number }) {
+export function updateFolder(folderId: string, payload: { name: string; icon?: FolderIconId; parentId: string | null; sortOrder?: number }) {
   return request<FolderNode>(`/api/v1/folders/${folderId}`, {
     method: "PATCH",
     body: JSON.stringify(payload)
@@ -112,6 +113,13 @@ export function getNote(noteId: string) {
 export function updateNote(noteId: string, payload: { folderId: string; title: string; bodyMarkdown: string }) {
   return request<NoteDetail>(`/api/v1/notes/${noteId}`, {
     method: "PUT",
+    body: JSON.stringify(payload)
+  });
+}
+
+export function moveNote(noteId: string, payload: { folderId: string }) {
+  return request<NoteDetail>(`/api/v1/notes/${noteId}/move`, {
+    method: "PATCH",
     body: JSON.stringify(payload)
   });
 }

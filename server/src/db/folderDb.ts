@@ -27,6 +27,7 @@ export class FolderDb {
             folders.owner_id as ownerId,
             folders.parent_id as parentId,
             folders.name,
+            folders.icon,
             folders.storage_dir_name as storageDirName,
             folders.sort_order as sortOrder,
             folders.created_at as createdAt,
@@ -58,6 +59,7 @@ export class FolderDb {
             owner_id as ownerId,
             parent_id as parentId,
             name,
+            icon,
             storage_dir_name as storageDirName,
             sort_order as sortOrder,
             created_at as createdAt,
@@ -69,11 +71,11 @@ export class FolderDb {
       .get(ownerId, id) as FolderRecord | undefined;
   }
 
-  update(ownerId: string, id: string, input: { name: string; parentId: string | null; sortOrder: number; updatedAt: string }) {
+  update(ownerId: string, id: string, input: { name: string; icon: FolderRecord["icon"] | null; parentId: string | null; sortOrder: number; updatedAt: string }) {
     this.connection
       .prepare(`
         update folders
-        set name = @name, parent_id = @parentId, sort_order = @sortOrder, updated_at = @updatedAt
+        set name = @name, icon = coalesce(@icon, icon), parent_id = @parentId, sort_order = @sortOrder, updated_at = @updatedAt
         where owner_id = @ownerId and id = @id
       `)
       .run({ ownerId, id, ...input });

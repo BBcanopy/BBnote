@@ -145,4 +145,63 @@ describe("runMigrations", () => {
       { title: "Oldest", sortOrder: 2 }
     ]);
   });
+
+  it("adds folder icon metadata with a folder default", () => {
+    const connection = new Database(":memory:");
+    connections.push(connection);
+
+    connection.exec(`
+      pragma foreign_keys = ON;
+
+      create table users (
+        id text primary key,
+        issuer text not null,
+        subject text not null,
+        email text,
+        display_name text,
+        created_at text not null,
+        updated_at text not null,
+        unique(issuer, subject)
+      );
+
+      create table folders (
+        id text primary key,
+        owner_id text not null,
+        parent_id text references folders(id) on delete cascade,
+        name text not null,
+        storage_dir_name text not null,
+        sort_order integer not null default 0,
+        created_at text not null,
+        updated_at text not null,
+        foreign key(owner_id) references users(id) on delete cascade
+      );
+    `);
+
+    connection.prepare(
+      `
+        insert into users (id, issuer, subject, email, display_name, created_at, updated_at)
+        values (?, ?, ?, ?, ?, ?, ?)
+      `
+    ).run("user-1", "issuer", "subject", "avery@example.com", "Avery", "2026-03-23T09:00:00.000Z", "2026-03-23T09:00:00.000Z");
+
+    connection.prepare(
+      `
+        insert into folders (id, owner_id, parent_id, name, storage_dir_name, sort_order, created_at, updated_at)
+        values (?, ?, ?, ?, ?, ?, ?, ?)
+      `
+    ).run("folder-1", "user-1", null, "Projects", "projects", 0, "2026-03-23T09:00:00.000Z", "2026-03-23T09:00:00.000Z");
+
+    runMigrations(connection);
+
+    const columns = connection
+      .prepare<[], { name: string }>("pragma table_info(folders)")
+      .all()
+      .map((column) => column.name);
+    expect(columns).toContain("icon");
+
+    const row = connection
+      .prepare<[], { icon: string }>("select icon from folders where id = 'folder-1'")
+      .get();
+    expect(row?.icon).toBe("folder");
+  });
 });

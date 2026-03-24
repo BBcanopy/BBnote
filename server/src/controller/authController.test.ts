@@ -6,6 +6,7 @@ import type { AddressInfo } from "node:net";
 import type { FastifyInstance } from "fastify";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { buildApp } from "../app.js";
+import { OIDC_STATE_COOKIE_NAME, OIDC_VERIFIER_COOKIE_NAME, SESSION_COOKIE_NAME } from "../service/authConstants.js";
 import { createTestAuthProvider, createTestConfig } from "../test-helpers.js";
 
 describe("authController integration", () => {
@@ -132,6 +133,83 @@ describe("authController integration", () => {
         theme: "midnight"
       }
     });
+  });
+
+  it("writes a secure session cookie when https is forwarded by a trusted proxy", async () => {
+    const secureConfig = createTestConfig(tempRoot, {
+      appBaseUrl: "https://note.example.test"
+    });
+    const oidc = createTestAuthProvider(secureConfig, {
+      email: "proxy@example.com",
+      name: "Proxy User",
+      subject: "proxy-user"
+    });
+    const secureApp = await buildApp({
+      authTesting: oidc.authTesting,
+      config: secureConfig
+    });
+
+    try {
+      const loginResponse = await secureApp.inject({
+        method: "GET",
+        url: "/api/v1/auth/login?returnTo=%2F",
+        headers: {
+          host: "note.example.test",
+          "x-forwarded-proto": "https"
+        }
+      });
+
+      expect(loginResponse.statusCode).toBe(302);
+      const stateCookie = loginResponse.cookies.find((cookie) => cookie.name === OIDC_STATE_COOKIE_NAME);
+      const verifierCookie = loginResponse.cookies.find((cookie) => cookie.name === OIDC_VERIFIER_COOKIE_NAME);
+      expect(stateCookie?.secure).toBe(true);
+      expect(verifierCookie?.secure).toBe(true);
+
+      const callbackResponse = await secureApp.inject({
+        method: "GET",
+        url: String(loginResponse.headers.location),
+        headers: {
+          host: "note.example.test",
+          "x-forwarded-proto": "https"
+        },
+        cookies: {
+          [OIDC_STATE_COOKIE_NAME]: stateCookie?.value ?? "",
+          [OIDC_VERIFIER_COOKIE_NAME]: verifierCookie?.value ?? ""
+        }
+      });
+
+      expect(callbackResponse.statusCode).toBe(302);
+      expect(callbackResponse.headers.location).toBe("https://note.example.test/");
+
+      const sessionCookie = callbackResponse.cookies.find((cookie) => cookie.name === SESSION_COOKIE_NAME);
+      expect(sessionCookie?.secure).toBe(true);
+      expect(sessionCookie?.httpOnly).toBe(true);
+      expect(sessionCookie?.sameSite).toBe("Lax");
+
+      const sessionResponse = await secureApp.inject({
+        method: "GET",
+        url: "/api/v1/auth/session",
+        headers: {
+          host: "note.example.test",
+          "x-forwarded-proto": "https"
+        },
+        cookies: {
+          [SESSION_COOKIE_NAME]: sessionCookie?.value ?? ""
+        }
+      });
+
+      expect(sessionResponse.statusCode).toBe(200);
+      expect(sessionResponse.json()).toEqual({
+        authenticated: true,
+        user: {
+          email: "proxy@example.com",
+          name: "Proxy User",
+          theme: "sea"
+        }
+      });
+    } finally {
+      await secureApp.close();
+    }
   });
 });
 

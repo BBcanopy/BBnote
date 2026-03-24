@@ -35,6 +35,7 @@ export async function buildApp(options: BuildAppOptions = {}) {
   const config = options.config ?? buildConfig();
   const app = Fastify({
     logger: true,
+    trustProxy: true,
     ajv: {
       plugins: [
         (ajv) => {

@@ -270,5 +270,99 @@ describe("noteController integration", () => {
       ["Beta", 2]
     ]);
   });
+
+  it("moves notes into another notebook through the dedicated move endpoint", async () => {
+    const sourceNotebookResponse = await app.inject({
+      method: "POST",
+      url: "/api/v1/folders",
+      headers: authHeaders(token),
+      payload: {
+        name: "Source",
+        parentId: null
+      }
+    });
+    expect(sourceNotebookResponse.statusCode).toBe(201);
+    const sourceNotebook = sourceNotebookResponse.json();
+
+    const targetNotebookResponse = await app.inject({
+      method: "POST",
+      url: "/api/v1/folders",
+      headers: authHeaders(token),
+      payload: {
+        name: "Target",
+        parentId: null
+      }
+    });
+    expect(targetNotebookResponse.statusCode).toBe(201);
+    const targetNotebook = targetNotebookResponse.json();
+
+    const existingTargetResponse = await app.inject({
+      method: "POST",
+      url: "/api/v1/notes",
+      headers: authHeaders(token),
+      payload: {
+        folderId: targetNotebook.id,
+        title: "Existing target note",
+        bodyMarkdown: "target"
+      }
+    });
+    expect(existingTargetResponse.statusCode).toBe(201);
+
+    const createResponse = await app.inject({
+      method: "POST",
+      url: "/api/v1/notes",
+      headers: authHeaders(token),
+      payload: {
+        folderId: sourceNotebook.id,
+        title: "Move me",
+        bodyMarkdown: "keep this body"
+      }
+    });
+    expect(createResponse.statusCode).toBe(201);
+    const created = createResponse.json();
+
+    const firstRow = app.bbnote.database.connection
+      .prepare<[string], { filePath: string }>("select file_path as filePath from notes where id = ?")
+      .get(created.id);
+
+    const moveResponse = await app.inject({
+      method: "PATCH",
+      url: `/api/v1/notes/${created.id}/move`,
+      headers: authHeaders(token),
+      payload: {
+        folderId: targetNotebook.id
+      }
+    });
+    expect(moveResponse.statusCode).toBe(200);
+    expect(moveResponse.json()).toMatchObject({
+      id: created.id,
+      folderId: targetNotebook.id,
+      sortOrder: 1,
+      title: "Move me"
+    });
+
+    const updatedRow = app.bbnote.database.connection
+      .prepare<[string], { filePath: string; folderId: string; sortOrder: number }>(
+        "select file_path as filePath, folder_id as folderId, sort_order as sortOrder from notes where id = ?"
+      )
+      .get(created.id);
+    expect(updatedRow?.folderId).toBe(targetNotebook.id);
+    expect(updatedRow?.sortOrder).toBe(1);
+    expect(updatedRow?.filePath).not.toBe(firstRow?.filePath);
+    expect(updatedRow?.filePath).toContain("Target");
+    await expect(fs.readFile(updatedRow!.filePath, "utf8")).resolves.toContain("keep this body");
+    await expect(fs.access(firstRow!.filePath)).rejects.toThrow();
+
+    const targetPriorityResponse = await app.inject({
+      method: "GET",
+      url: `/api/v1/notes?folderId=${targetNotebook.id}&sort=priority&order=asc`,
+      headers: authHeaders(token)
+    });
+    expect(targetPriorityResponse.statusCode).toBe(200);
+    expect(targetPriorityResponse.json().items.map((note: { title: string; sortOrder: number }) => [note.title, note.sortOrder])).toEqual([
+      ["Existing target note", 0],
+      ["Move me", 1]
+    ]);
+  });
 });
 
