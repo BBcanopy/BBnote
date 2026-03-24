@@ -10,6 +10,7 @@ await rm(dataRoot, { recursive: true, force: true });
 
 const env = {
   ...process.env,
+  API_ORIGIN: "http://127.0.0.1:3000",
   APP_BASE_URL: "http://127.0.0.1:5173",
   OIDC_ISSUER_URL: "https://issuer.example.com",
   OIDC_CLIENT_ID_WEB: "bbnote-web",
