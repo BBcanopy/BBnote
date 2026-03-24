@@ -1,6 +1,6 @@
 services:
   app:
-    image: "${BBNOTE_IMAGE:-ghcr.io/bbcanopy/bbnote:latest}"
+    image: "ghcr.io/bbcanopy/bbnote:${BBNOTE_IMAGE_TAG:-latest}"
     ports:
       - "${APP_HOST_PORT:-8082}:3000"
     user: "${BBNOTE_UID:-1000}:${BBNOTE_GID:-1000}"
