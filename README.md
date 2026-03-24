@@ -2,26 +2,27 @@
 
 `bbnote` is yet another notebook app.
 
-## Run with Docker Compose
+## Run the project
 
-1. Create a `.env` file from `.env.example` and adjust the OIDC settings as needed.
+1. You should have an OIDC client ready. 
 
-Keep `APP_BASE_URL` aligned with the public web URL. With the default split-stack compose file that means `http://localhost:${APP_HOST_PORT}`.
+Use `https://<hostname>/auth/callback` as the redirect URI.
 
-2. Start the default split deployment:
+For local run, you can use `http://localhost:8080`.
 
-```bash
-cp .env.example .env
-docker compose up -d --build
-```
-
-This exposes the web app on `http://localhost:8080` by default and the server directly on `http://localhost:3000`.
-
-3. Start the all-in-one deployment instead:
+2. Run docker compose 
 
 ```bash
-cp .env.example .env
-docker compose -f docker-compose.all-in-one.yml up -d --build
+# Create .env file and modify as you wish
+wget https://raw.githubusercontent.com/BBcanopy/bbnote/refs/heads/main/.env.example -O .env 
+
+# Download the all-in-one docker compose file
+wget https://raw.githubusercontent.com/BBcanopy/bbnote/refs/heads/main/docker-compose.all-in-one.yml -O docker-compose.yml
+
+# Create data folder
+mkdir data
+
+docker compose up -d
 ```
 
-Use `https://<hostname>/auth/callback` as the redirect URI for real OIDC setups. The checked-in example keeps `MOCK_OIDC_ENABLED=true` so local Docker smoke tests work out of the box.
+The app is available at `http://localhost:8080` by default.
