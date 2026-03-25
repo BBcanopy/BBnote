@@ -174,9 +174,35 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
   await login(page);
 
   await expect(page.getByText("No notebooks yet.")).toBeVisible();
-  const topbarBox = await page.locator(".bb-topbar").boundingBox();
+  const topbar = page.locator(".bb-topbar").first();
+  const topbarBox = await topbar.boundingBox();
   const viewport = page.viewportSize();
   expect(topbarBox?.width ?? 0).toBeGreaterThan(((viewport?.width ?? 0) * 0.95));
+  const topbarStyles = await topbar.evaluate((element) => {
+    const styles = getComputedStyle(element);
+    return {
+      backgroundColor: styles.backgroundColor,
+      borderTopWidth: styles.borderTopWidth,
+      boxShadow: styles.boxShadow,
+      backdropFilter: styles.backdropFilter
+    };
+  });
+  expect(topbarStyles.backgroundColor).toBe("rgba(0, 0, 0, 0)");
+  expect(topbarStyles.borderTopWidth).toBe("0px");
+  expect(topbarStyles.boxShadow).toBe("none");
+  expect(topbarStyles.backdropFilter).toBe("none");
+  const brandMark = page.getByRole("link", { name: /bbnote home/i }).first();
+  const brandPill = brandMark.locator(".bb-brand-mark__pill");
+  const brandTitle = brandMark.locator(".bb-brand-mark__title");
+  const brandPillBox = await brandPill.boundingBox();
+  const brandTitleBox = await brandTitle.boundingBox();
+  expect(brandPillBox).not.toBeNull();
+  expect(brandTitleBox).not.toBeNull();
+  if (!brandPillBox || !brandTitleBox) {
+    throw new Error("Expected the topbar brand mark to be visible.");
+  }
+  expect(brandTitleBox.x).toBeGreaterThan(brandPillBox.x + brandPillBox.width - 2);
+  expect(Math.abs((brandPillBox.y + brandPillBox.height / 2) - (brandTitleBox.y + brandTitleBox.height / 2))).toBeLessThan(10);
   await expect(page.getByRole("navigation", { name: /primary navigation/i })).toHaveCount(0);
   await expect(page.getByText("Markdown workspace")).toHaveCount(0);
   await expect(page.getByRole("link", { name: /bbnote home/i })).toHaveAttribute("href", "/");
@@ -476,7 +502,8 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
 
   const uploadFile = await createTempFile("budget.txt", "budget attachment");
   await page.locator('input[type="file"]').first().setInputFiles(uploadFile);
-  await expect(page.getByText("Linked files and embeds").first()).toBeVisible();
+  await expect(page.getByText("Attachments").first()).toBeVisible();
+  await expect(page.getByText("Linked files and embeds")).toHaveCount(0);
   await expect(page.getByText("budget.txt").first()).toBeVisible();
 
   await page.getByRole("button", { name: /^link$/i }).click();
