@@ -257,24 +257,70 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
   await page.getByRole("button", { name: new RegExp(`choose icon for ${archiveNotebookName}`, "i") }).click();
 
   const archiveNotebookRow = page.getByTestId(buildNotebookTestId("drag", archiveNotebookName));
+  const archiveNotebookHandle = page.getByTestId(buildNotebookHandleTestId(archiveNotebookName));
   await expect(archiveNotebookRow).toBeVisible();
-  await dragToDropZone(
+  await expect(archiveNotebookHandle).toBeVisible();
+
+  await dragLocatorToLocator(
     page,
-    archiveNotebookRow,
-    page.getByTestId(buildNotebookTestId("before", notebookName))
+    archiveNotebookHandle,
+    page.getByTestId(buildNotebookTestId("drag", notebookName))
   );
   await expect
     .poll(async () => {
       const items = await page
         .locator('[data-testid^="notebook-drag-"]')
         .evaluateAll((elements) => elements.map((element) => element.textContent?.replace(/\s+/g, " ").trim() ?? ""));
-      return items[0]?.includes(archiveNotebookName) && items[1]?.includes(notebookName);
+      return items.slice(0, 3);
     })
-    .toBeTruthy();
+    .toEqual([
+      expect.stringContaining(notebookName),
+      expect.stringContaining(subNotebookName),
+      expect.stringContaining(archiveNotebookName)
+    ]);
+  await expect
+    .poll(async () => {
+      const subNotebookBox = await notebookRowContainer(page, subNotebookName).boundingBox();
+      const archiveNotebookBox = await notebookRowContainer(page, archiveNotebookName).boundingBox();
+      if (!subNotebookBox || !archiveNotebookBox) {
+        return Number.POSITIVE_INFINITY;
+      }
 
-  await archiveNotebookRow.dragTo(
-    page.getByTestId(buildNotebookTestId("drag", notebookName))
+      return Math.abs(archiveNotebookBox.x - subNotebookBox.x);
+    })
+    .toBeLessThan(6);
+
+  await dragToDropZone(
+    page,
+    archiveNotebookHandle,
+    page.getByTestId(buildNotebookTestId("before", subNotebookName))
   );
+  await expect
+    .poll(async () => {
+      const items = await page
+        .locator('[data-testid^="notebook-drag-"]')
+        .evaluateAll((elements) => elements.map((element) => element.textContent?.replace(/\s+/g, " ").trim() ?? ""));
+      return items.slice(0, 3);
+    })
+    .toEqual([
+      expect.stringContaining(notebookName),
+      expect.stringContaining(archiveNotebookName),
+      expect.stringContaining(subNotebookName)
+    ]);
+
+  await page.reload();
+  await expect
+    .poll(async () => {
+      const items = await page
+        .locator('[data-testid^="notebook-drag-"]')
+        .evaluateAll((elements) => elements.map((element) => element.textContent?.replace(/\s+/g, " ").trim() ?? ""));
+      return items.slice(0, 3);
+    })
+    .toEqual([
+      expect.stringContaining(notebookName),
+      expect.stringContaining(archiveNotebookName),
+      expect.stringContaining(subNotebookName)
+    ]);
 
   await notebookRow(page, subNotebookName).click();
   await expect(page.getByRole("button", { name: /^new note$/i }).first()).toBeEnabled();
@@ -415,17 +461,19 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
   await expect(page.getByText(followUpNoteTitle).first()).toHaveCount(0);
   await expect(page.getByText("No note selected").first()).toBeVisible();
 
-  const blockedNotebookDrag = await startDrag(page, page.getByTestId(buildNotebookTestId("drag", subNotebookName)));
+  const blockedNotebookHandle = page.getByTestId(buildNotebookHandleTestId(subNotebookName));
+  const blockedNotebookDrag = await startDrag(page, blockedNotebookHandle);
   const deleteNotebookTarget = page.getByRole("button", { name: /^delete notebook$/i });
   await expect(deleteNotebookTarget).toBeVisible();
   await expect(deleteNotebookTarget).toBeDisabled();
-  await endDrag(page.getByTestId(buildNotebookTestId("drag", subNotebookName)), blockedNotebookDrag);
+  await endDrag(blockedNotebookHandle, blockedNotebookDrag);
   await expect(page.getByRole("dialog", { name: /^delete notebook\?$/i })).toHaveCount(0);
 
-  const archiveNotebookDrag = await startDrag(page, page.getByTestId(buildNotebookTestId("drag", archiveNotebookName)));
+  const archiveNotebookHandleForDelete = page.getByTestId(buildNotebookHandleTestId(archiveNotebookName));
+  const archiveNotebookDrag = await startDrag(page, archiveNotebookHandleForDelete);
   await expect(deleteNotebookTarget).toBeVisible();
   await expect(deleteNotebookTarget).toBeEnabled();
-  await dropOnTarget(page.getByTestId(buildNotebookTestId("drag", archiveNotebookName)), deleteNotebookTarget, archiveNotebookDrag);
+  await dropOnTarget(archiveNotebookHandleForDelete, deleteNotebookTarget, archiveNotebookDrag);
   const deleteNotebookDialog = page.getByRole("dialog", { name: /^delete notebook\?$/i });
   await expect(deleteNotebookDialog).toBeVisible();
   await deleteNotebookDialog.getByRole("button", { name: /^delete notebook$/i }).click();
@@ -517,6 +565,10 @@ async function createNotebookAndPersistedNote(page: import("@playwright/test").P
 
 function buildNotebookTestId(kind: "drag" | "before" | "after", name: string) {
   return `notebook-${kind}-${encodeURIComponent(name)}`;
+}
+
+function buildNotebookHandleTestId(name: string) {
+  return `notebook-handle-${encodeURIComponent(name)}`;
 }
 
 function buildNoteTestId(kind: "drag" | "before" | "after", title: string) {
