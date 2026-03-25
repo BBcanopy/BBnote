@@ -33,7 +33,7 @@
   --ease: cubic-bezier(0.16, 1, 0.3, 1);
   --font-content: "Open Sans", "Segoe UI", sans-serif;
   color: var(--ink);
-  font-family: "Geist Sans", "Segoe UI Variable Display", "Segoe UI", sans-serif;
+  font-family: "Open Sans", "Segoe UI Variable Display", "Segoe UI", sans-serif;
 }
 
 :root[data-theme="ember"] {
@@ -692,7 +692,7 @@ button:disabled {
   width: 3.6rem;
   height: 3.6rem;
   border-radius: 1.2rem;
-  font-family: "Geist Sans", "Segoe UI Variable Display", "Segoe UI", sans-serif;
+  font-family: "Open Sans", "Segoe UI Variable Display", "Segoe UI", sans-serif;
   font-size: 1.7rem;
   font-weight: 500;
   letter-spacing: -0.08em;

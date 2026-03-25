@@ -156,9 +156,10 @@ function renderAuthError(message: string) {
       <head>
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
         <title>BBNote sign-in error</title>
         <style>
-          :root { color: #102022; font-family: "Outfit", "Segoe UI Variable Display", "Segoe UI", sans-serif; }
+          :root { color: #102022; font-family: "Open Sans", "Segoe UI Variable Display", "Segoe UI", sans-serif; }
           * { box-sizing: border-box; }
           body { margin: 0; min-height: 100dvh; background:
             radial-gradient(circle at 14% 8%, rgba(47,119,116,0.16), transparent 22%),

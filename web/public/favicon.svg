@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="BBNote">
+  <defs>
+    <linearGradient id="bbnote-favicon-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#3a8c88" />
+      <stop offset="100%" stop-color="#235e5b" />
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="18" fill="url(#bbnote-favicon-gradient)" />
+  <text
+    x="50%"
+    y="50%"
+    fill="#f8fbfb"
+    font-family="'Open Sans', 'Segoe UI', sans-serif"
+    font-size="28"
+    font-weight="700"
+    letter-spacing="-2"
+    text-anchor="middle"
+    dominant-baseline="central"
+  >bb</text>
+</svg>
