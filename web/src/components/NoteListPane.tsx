@@ -169,11 +169,6 @@ export function NoteListPane(props: {
           className="text-sm"
         />
       </label>
-      {!props.canCreateNote ? (
-        <div className="bb-panel-note text-sm">
-          Select or create a notebook to add a new note.
-        </div>
-      ) : null}
       <div className="bb-note-list">
         {props.loading ? (
           <>
