@@ -191,12 +191,18 @@ button:disabled {
   width: 100%;
   max-width: 96rem;
   margin: 0 auto;
+  justify-self: center;
   display: grid;
   gap: 1rem;
 }
 
 .bb-shell--app {
+  width: 100%;
+}
+
+.bb-shell--workspace {
   max-width: none;
+  justify-self: stretch;
 }
 
 .bb-shell--auth {
