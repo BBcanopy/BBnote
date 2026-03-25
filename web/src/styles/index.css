@@ -250,16 +250,15 @@ button:disabled {
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 1rem;
-  padding: 0.72rem 0.9rem;
-  border-radius: 1.8rem;
+  padding: 0.3rem 0;
+  border: none;
+  border-radius: 0;
   position: sticky;
   top: 0.75rem;
   z-index: 10;
-  border-color: color-mix(in srgb, var(--line) 70%, transparent);
-  background: color-mix(in srgb, var(--surface-strong) 86%, transparent);
-  box-shadow:
-    inset 0 1px 0 var(--surface-highlight),
-    0 16px 32px -32px rgba(18, 34, 36, 0.3);
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
 }
 
 .bb-topbar__nav {
@@ -272,14 +271,14 @@ button:disabled {
 
 .bb-topbar__nav--brand-only {
   grid-template-columns: auto;
+  justify-self: start;
 }
 
 .bb-brand-mark {
-  display: inline-grid;
-  grid-template-columns: auto auto;
+  display: inline-flex;
   align-items: center;
-  gap: 0.8rem;
-  min-width: fit-content;
+  gap: 0.55rem;
+  min-width: 0;
   transition:
     transform 220ms var(--ease),
     opacity 220ms var(--ease);
@@ -307,16 +306,12 @@ button:disabled {
   text-transform: uppercase;
 }
 
-.bb-brand-mark__copy {
-  display: grid;
-  gap: 0.12rem;
-}
-
 .bb-brand-mark__title {
-  font-size: 1rem;
+  display: inline-block;
+  font-size: 1.02rem;
   font-weight: 700;
   line-height: 1;
-  letter-spacing: -0.03em;
+  letter-spacing: -0.035em;
   color: var(--ink);
 }
 
