@@ -1,14 +1,11 @@
 import { CircleNotch } from "@phosphor-icons/react";
-import { Outlet, useLocation } from "react-router-dom";
+import { Outlet } from "react-router-dom";
 import { useAuth } from "../auth/AuthProvider";
 import { AuthSplash } from "./AuthSplash";
 import { PageNav } from "./PageNav";
-import { isNotesPathname } from "../utils/noteRoute";
 
 export function AppShell() {
   const auth = useAuth();
-  const location = useLocation();
-  const useWorkspaceShell = isNotesPathname(location.pathname);
 
   if (auth.status === "loading") {
     return (
@@ -33,7 +30,7 @@ export function AppShell() {
 
   return (
     <main className="bb-page-shell">
-      <div className={`bb-shell bb-shell--app ${useWorkspaceShell ? "bb-shell--workspace" : ""}`}>
+      <div className="bb-shell bb-shell--app">
         <PageNav
           user={auth.user}
           onLogout={() => void auth.logout()}
