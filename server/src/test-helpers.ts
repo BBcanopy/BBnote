@@ -17,6 +17,7 @@ export function createTestConfig(tempRoot: string, overrides: Partial<AppConfig>
     sqlitePath: path.join(tempRoot, "db", "bbnote.sqlite"),
     notesRoot: path.join(tempRoot, "notes"),
     attachmentsRoot: path.join(tempRoot, "attachments"),
+    attachmentMaxBytes: 100 * 1024 * 1024,
     exportsRoot: path.join(tempRoot, "exports"),
     ...overrides
   };

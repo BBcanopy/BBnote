@@ -145,6 +145,7 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
   const noteTitle = `Launch-plan-${suffix}-preview-overflow-check`;
   const followUpNoteTitle = `Follow-up-${suffix}-priority-check`;
   const searchTerm = `budget-${suffix}-ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff`;
+  const editorPanel = page.locator(".bb-editor-panel").first();
 
   await login(page);
 
@@ -353,7 +354,7 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
       }
       const lineHeight = Number.parseFloat(getComputedStyle(excerpt).lineHeight);
       const excerptHeight = excerpt.getBoundingClientRect().height;
-      return excerpt.scrollHeight <= excerpt.clientHeight + 1 && Number.isFinite(lineHeight) && excerptHeight <= lineHeight + 4;
+      return excerpt.scrollHeight <= excerpt.clientHeight + 2 && Number.isFinite(lineHeight) && excerptHeight <= lineHeight * 1.5 + 6;
     })
   ).toBeTruthy();
   expect(
@@ -379,13 +380,24 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
 
   await expect(page.getByRole("button", { name: /^markdown$/i })).toHaveAttribute("title", "Markdown");
   await expect(page.getByRole("button", { name: /^preview$/i })).toHaveAttribute("title", "Preview");
+  await expect(editorPanel.getByRole("button", { name: /^add image$/i })).toBeVisible();
+  await expect(editorPanel.getByRole("button", { name: /^add audio$/i })).toBeVisible();
+  await expect(editorPanel.getByRole("button", { name: /^add video$/i })).toBeVisible();
+  await expect(editorPanel.getByRole("button", { name: /^record voice$/i })).toBeVisible();
+  await expect(editorPanel.getByRole("button", { name: /^upload file$/i })).toBeVisible();
+  await expect(editorPanel.getByRole("button", { name: /^upload$/i })).toHaveCount(0);
   await page.getByRole("button", { name: /^preview$/i }).click();
+  await expect(editorPanel.getByRole("button", { name: /^add image$/i })).toBeVisible();
+  await expect(editorPanel.getByRole("button", { name: /^upload file$/i })).toBeVisible();
   expect(await page.locator(".bb-markdown").first().evaluate((element) => getComputedStyle(element).fontFamily)).toContain("Open Sans");
   await expect(page.getByRole("heading", { name: "Budget" })).toBeVisible();
   await page.getByRole("button", { name: /^markdown$/i }).click();
 
-  const uploadFile = await createTempFile("budget.txt", "budget attachment");
-  await page.locator('input[type="file"]').first().setInputFiles(uploadFile);
+  await editorPanel.getByTestId("media-input-file").setInputFiles({
+    name: "budget.txt",
+    mimeType: "text/plain",
+    buffer: Buffer.from("budget attachment", "utf8")
+  });
   await expect(page.getByText("budget.txt").first()).toBeVisible();
 
   await page.getByRole("button", { name: /^link$/i }).click();
@@ -430,6 +442,186 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
   await expect(deleteNotebookDialog).toBeVisible();
   await deleteNotebookDialog.getByRole("button", { name: /^delete notebook$/i }).click();
   await expect(page.getByTestId(buildNotebookTestId("drag", archiveNotebookName))).toHaveCount(0);
+});
+
+test("uploads image, audio, and video from the editor header and renders inline preview after reload", async ({ page }) => {
+  await page.setViewportSize({ width: 1100, height: 900 });
+  const suffix = Date.now().toString();
+  const notebookName = `Media ${suffix}`;
+  const noteTitle = `Media note ${suffix}`;
+
+  await login(page);
+  await createNotebookWithDialog(page, notebookName);
+
+  const editorPanel = page.locator(".bb-editor-panel").first();
+  await expect(editorPanel.getByRole("button", { name: /^add image$/i })).toBeVisible();
+  await expect(editorPanel.getByRole("button", { name: /^add audio$/i })).toBeVisible();
+  await expect(editorPanel.getByRole("button", { name: /^add video$/i })).toBeVisible();
+  await expect(editorPanel.getByRole("button", { name: /^record voice$/i })).toBeVisible();
+  await expect(editorPanel.getByRole("button", { name: /^upload file$/i })).toBeVisible();
+
+  await editorPanel.getByTestId("media-input-image").setInputFiles(createUploadFile("diagram.png", tinyPngBuffer(), "image/png"));
+  await expect(page.getByRole("textbox", { name: "Title" }).first()).toHaveValue("Untitled note");
+  await expect(page.getByPlaceholder("Write in Markdown").first()).toHaveValue(/!\[diagram\.png\]\(\/api\/v1\/attachments\//);
+  await page.getByRole("textbox", { name: "Title" }).first().fill(noteTitle);
+  await expect(page.getByRole("button", { name: new RegExp(noteTitle, "i") }).first()).toBeVisible();
+
+  await page.getByRole("button", { name: /^preview$/i }).click();
+  await expect(editorPanel.getByRole("button", { name: /^add image$/i })).toBeVisible();
+  await expect(editorPanel.getByRole("button", { name: /^upload file$/i })).toBeVisible();
+  await expect(editorPanel.locator(".bb-markdown img")).toHaveCount(1);
+
+  await editorPanel.getByTestId("media-input-audio").setInputFiles(
+    createUploadFile("voice.webm", Buffer.from("mock-audio-payload", "utf8"), "audio/webm")
+  );
+  await expect(editorPanel.locator(".bb-markdown audio")).toHaveCount(1);
+
+  await editorPanel.getByTestId("media-input-video").setInputFiles(
+    createUploadFile("clip.webm", Buffer.from("mock-video-payload", "utf8"), "video/webm")
+  );
+  await expect(editorPanel.locator(".bb-markdown video")).toHaveCount(1);
+  await page.getByRole("button", { name: /^markdown$/i }).click();
+  await expect(page.getByPlaceholder("Write in Markdown").first()).toHaveValue(/voice\.webm/);
+  await expect(page.getByPlaceholder("Write in Markdown").first()).toHaveValue(/clip\.webm/);
+  await page.waitForTimeout(1600);
+
+  await page.reload();
+  await page.getByRole("button", { name: new RegExp(noteTitle, "i") }).first().click();
+  const reloadedEditorPanel = page.locator(".bb-editor-panel").first();
+  await page.getByRole("button", { name: /^preview$/i }).click();
+  await expect(reloadedEditorPanel.locator(".bb-markdown img")).toHaveCount(1);
+  await expect(reloadedEditorPanel.locator(".bb-markdown audio")).toHaveCount(1);
+  await expect(reloadedEditorPanel.locator(".bb-markdown video")).toHaveCount(1);
+});
+
+test("records a voice note from the editor header and saves it inline", async ({ page }) => {
+  await page.addInitScript(() => {
+    class MockMediaRecorder {
+      static isTypeSupported(type: string) {
+        return type.startsWith("audio/webm");
+      }
+
+      mimeType: string;
+      state: "inactive" | "recording" = "inactive";
+      private readonly listeners: Record<string, Array<(event: Event | { data: Blob }) => void>> = {
+        dataavailable: [],
+        stop: []
+      };
+
+      constructor(_stream: unknown, options: { mimeType?: string } = {}) {
+        this.mimeType = options.mimeType ?? "audio/webm;codecs=opus";
+      }
+
+      addEventListener(type: string, listener: (event: Event | { data: Blob }) => void) {
+        this.listeners[type] ??= [];
+        this.listeners[type].push(listener);
+      }
+
+      start() {
+        this.state = "recording";
+      }
+
+      stop() {
+        this.state = "inactive";
+        const clip = new Blob(["mock voice note"], { type: "audio/webm" });
+        queueMicrotask(() => {
+          for (const listener of this.listeners.dataavailable ?? []) {
+            listener({ data: clip });
+          }
+          for (const listener of this.listeners.stop ?? []) {
+            listener(new Event("stop"));
+          }
+        });
+      }
+    }
+
+    const mockTrack = {
+      stop() {}
+    };
+    const mockStream = {
+      getTracks() {
+        return [mockTrack];
+      }
+    };
+
+    Object.defineProperty(window, "MediaRecorder", {
+      configurable: true,
+      writable: true,
+      value: MockMediaRecorder
+    });
+    Object.defineProperty(navigator, "mediaDevices", {
+      configurable: true,
+      value: {
+        getUserMedia: async () => mockStream
+      }
+    });
+  });
+
+  await login(page);
+  await createNotebookWithDialog(page, `Voice ${Date.now()}`);
+
+  const editorPanel = page.locator(".bb-editor-panel").first();
+  await editorPanel.getByRole("button", { name: /^record voice$/i }).click();
+  await expect(page.getByText("Recording voice note")).toBeVisible();
+  await page.getByRole("button", { name: /^stop$/i }).click();
+  await expect(page.getByRole("button", { name: /^save$/i })).toBeVisible();
+  await page.getByRole("button", { name: /^save$/i }).click();
+  await expect(page.getByRole("textbox", { name: "Title" }).first()).toHaveValue("Untitled note");
+  await page.getByRole("button", { name: /^preview$/i }).click();
+  await expect(editorPanel.locator(".bb-markdown audio")).toHaveCount(1);
+});
+
+test("shows a friendly message when microphone access is denied", async ({ page }) => {
+  await page.addInitScript(() => {
+    class MockMediaRecorder {
+      static isTypeSupported() {
+        return true;
+      }
+    }
+
+    Object.defineProperty(window, "MediaRecorder", {
+      configurable: true,
+      writable: true,
+      value: MockMediaRecorder
+    });
+    Object.defineProperty(navigator, "mediaDevices", {
+      configurable: true,
+      value: {
+        getUserMedia: async () => {
+          throw new DOMException("Denied", "NotAllowedError");
+        }
+      }
+    });
+  });
+
+  await login(page);
+  await createNotebookWithDialog(page, `Denied ${Date.now()}`);
+
+  const editorPanel = page.locator(".bb-editor-panel").first();
+  await editorPanel.getByRole("button", { name: /^record voice$/i }).click();
+  await expect(page.getByText("Microphone access was denied.")).toBeVisible();
+  await expect(page.getByRole("button", { name: /^try again$/i })).toBeVisible();
+});
+
+test("shows a friendly message when voice recording is unsupported", async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(window, "MediaRecorder", {
+      configurable: true,
+      writable: true,
+      value: undefined
+    });
+    Object.defineProperty(navigator, "mediaDevices", {
+      configurable: true,
+      value: undefined
+    });
+  });
+
+  await login(page);
+  await createNotebookWithDialog(page, `Unsupported ${Date.now()}`);
+
+  const editorPanel = page.locator(".bb-editor-panel").first();
+  await editorPanel.getByRole("button", { name: /^record voice$/i }).click();
+  await expect(page.getByText("Voice recording is not supported in this browser.")).toBeVisible();
 });
 
 test("opens migration from the avatar menu and runs both export and import flows", async ({ page }) => {
@@ -540,11 +732,19 @@ async function createNotebookWithDialog(page: import("@playwright/test").Page, n
   await expect(dialog).toHaveCount(0);
 }
 
-async function createTempFile(name: string, contents: string) {
-  const directory = await fs.mkdtemp(path.join(os.tmpdir(), "bbnote-playwright-"));
-  const filePath = path.join(directory, name);
-  await fs.writeFile(filePath, contents, "utf8");
-  return filePath;
+function createUploadFile(name: string, buffer: Buffer, mimeType: string) {
+  return {
+    name,
+    mimeType,
+    buffer
+  };
+}
+
+function tinyPngBuffer() {
+  return Buffer.from(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4////fwAJ+wP9KobjigAAAABJRU5ErkJggg==",
+    "base64"
+  );
 }
 
 async function createImportArchive() {

@@ -87,6 +87,7 @@ function buildConfig(issuer: string): AppConfig {
     sqlitePath: "/tmp/db.sqlite",
     notesRoot: "/tmp/notes",
     attachmentsRoot: "/tmp/attachments",
+    attachmentMaxBytes: 100 * 1024 * 1024,
     exportsRoot: "/tmp/exports"
   };
 }
