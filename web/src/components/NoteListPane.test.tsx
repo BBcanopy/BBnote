@@ -46,6 +46,7 @@ function renderNoteListPane(overrides?: {
       selectedNoteId="note-1"
       onSelectNote={vi.fn()}
       onCreateNote={vi.fn()}
+      onDraggedNoteChange={vi.fn()}
       onRequestDeleteNote={overrides?.onRequestDeleteNote ?? vi.fn()}
       onCollapse={vi.fn()}
       loading={false}

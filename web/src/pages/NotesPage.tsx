@@ -104,6 +104,7 @@ export function NotesPage() {
   const [saving, setSaving] = useState(false);
   const [uploadingAttachment, setUploadingAttachment] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [draggedNoteDeleteCandidate, setDraggedNoteDeleteCandidate] = useState<PendingNoteDelete | null>(null);
   const [pendingNoteDelete, setPendingNoteDelete] = useState<PendingNoteDelete | null>(null);
   const [pendingFolderDelete, setPendingFolderDelete] = useState<FolderNode | null>(null);
   const [lastSyncedContentKey, setLastSyncedContentKey] = useState<string | null>(null);
@@ -606,6 +607,7 @@ export function NotesPage() {
     if (!editorNote?.noteId) {
       return;
     }
+    setDraggedNoteDeleteCandidate(null);
     setPendingNoteDelete({
       id: editorNote.noteId,
       title: editorNote.title || "Untitled note"
@@ -613,6 +615,7 @@ export function NotesPage() {
   }
 
   function handleRequestDeleteNote(note: PendingNoteDelete) {
+    setDraggedNoteDeleteCandidate(null);
     setPendingNoteDelete(note);
   }
 
@@ -817,9 +820,11 @@ export function NotesPage() {
                   <FolderTree
                     folders={folders}
                     selectedFolderId={selectedFolderId}
+                    draggedNote={draggedNoteDeleteCandidate}
                     onCreateNotebook={openCreateNotebookDialog}
                     onMoveNotebook={(move) => void handleMoveNotebook(move)}
                     onMoveNote={(noteId, folderId) => void handleMoveNoteToNotebook(noteId, folderId)}
+                    onRequestDeleteNote={handleRequestDeleteNote}
                     onRequestDeleteNotebook={handleRequestDeleteNotebook}
                     onUpdateNotebookIcon={(folderId, icon) => handleUpdateNotebookIcon(folderId, icon)}
                     onCollapse={() => setFolderPaneCollapsed(true)}
@@ -858,6 +863,7 @@ export function NotesPage() {
                     selectedNoteId={selectedNoteId}
                     onSelectNote={handleSelectNote}
                     onCreateNote={handleCreateDraft}
+                    onDraggedNoteChange={setDraggedNoteDeleteCandidate}
                     onRequestDeleteNote={handleRequestDeleteNote}
                     onCollapse={() => setNotePaneCollapsed(true)}
                     loading={loadingNotes}
@@ -938,9 +944,11 @@ export function NotesPage() {
         <FolderTree
           folders={folders}
           selectedFolderId={selectedFolderId}
+          draggedNote={draggedNoteDeleteCandidate}
           onCreateNotebook={openCreateNotebookDialog}
           onMoveNotebook={(move) => void handleMoveNotebook(move)}
           onMoveNote={(noteId, folderId) => void handleMoveNoteToNotebook(noteId, folderId)}
+          onRequestDeleteNote={handleRequestDeleteNote}
           onRequestDeleteNotebook={handleRequestDeleteNotebook}
           onUpdateNotebookIcon={(folderId, icon) => handleUpdateNotebookIcon(folderId, icon)}
           onSelectFolder={handleSelectFolder}
@@ -957,6 +965,7 @@ export function NotesPage() {
           selectedNoteId={selectedNoteId}
           onSelectNote={handleSelectNote}
           onCreateNote={handleCreateDraft}
+          onDraggedNoteChange={setDraggedNoteDeleteCandidate}
           onRequestDeleteNote={handleRequestDeleteNote}
           loading={loadingNotes}
           notebookName={selectedFolder?.name ?? null}

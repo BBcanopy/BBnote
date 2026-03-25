@@ -18,6 +18,7 @@ export function NoteListPane(props: {
   selectedNoteId: string | null;
   onSelectNote(noteId: string): void;
   onCreateNote(): void;
+  onDraggedNoteChange(note: Pick<NoteSummary, "id" | "title"> | null): void;
   onRequestDeleteNote(note: Pick<NoteSummary, "id" | "title">): void;
   onCollapse?(): void;
   loading: boolean;
@@ -47,6 +48,7 @@ export function NoteListPane(props: {
     setDraggedNoteId(null);
     setDropTarget(null);
     setDeleteTargetActive(false);
+    props.onDraggedNoteChange(null);
   }
 
   function handleDragStart(event: DragEvent<HTMLDivElement>, note: NoteSummary) {
@@ -61,6 +63,10 @@ export function NoteListPane(props: {
       folderId: note.folderId
     });
     setDraggedNoteId(note.id);
+    props.onDraggedNoteChange({
+      id: note.id,
+      title: note.title
+    });
   }
 
   function handleDragOver(event: DragEvent<HTMLElement>, targetId: string, position: NoteMovePosition) {

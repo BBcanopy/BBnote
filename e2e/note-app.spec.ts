@@ -511,6 +511,26 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
 
   await expect(page.getByTestId("notes-delete-target")).toHaveCount(0);
   const followUpNoteDrag = page.getByTestId(buildNoteTestId("drag", followUpNoteTitle));
+  await expect(page.getByTestId("notebooks-delete-target")).toHaveCount(0);
+
+  const cancelDeleteFromNotebookLaneDrag = await startDrag(page, followUpNoteDrag);
+  const deleteNotebookTargetForNote = page.getByTestId("notebooks-delete-target");
+  await expect(deleteNotebookTargetForNote).toBeVisible();
+  await expect
+    .poll(async () => {
+      const labels = await page.getByTestId("notebooks-actions").locator("button").evaluateAll((buttons) =>
+        buttons.map((button) => button.getAttribute("aria-label") ?? button.textContent?.trim() ?? "")
+      );
+      return labels.join("|");
+    })
+    .toContain("Delete note");
+  await dropOnTarget(followUpNoteDrag, deleteNotebookTargetForNote, cancelDeleteFromNotebookLaneDrag);
+  const deleteNoteDialog = page.getByRole("dialog", { name: /^delete note\?$/i });
+  await expect(deleteNoteDialog).toBeVisible();
+  await deleteNoteDialog.getByRole("button", { name: /^cancel$/i }).click();
+  await expect(deleteNoteDialog).toHaveCount(0);
+  await expect(page.getByText(followUpNoteTitle).first()).toBeVisible();
+
   const cancelDeleteDrag = await startDrag(page, followUpNoteDrag);
   const deleteNoteTarget = page.getByTestId("notes-delete-target");
   await expect(deleteNoteTarget).toBeVisible();
@@ -523,10 +543,10 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
     })
     .toBe("New note|Delete note|Collapse notes pane");
   await dropOnTarget(followUpNoteDrag, deleteNoteTarget, cancelDeleteDrag);
-  const deleteNoteDialog = page.getByRole("dialog", { name: /^delete note\?$/i });
-  await expect(deleteNoteDialog).toBeVisible();
-  await deleteNoteDialog.getByRole("button", { name: /^cancel$/i }).click();
-  await expect(deleteNoteDialog).toHaveCount(0);
+  const deleteNoteDialogFromNotesLane = page.getByRole("dialog", { name: /^delete note\?$/i });
+  await expect(deleteNoteDialogFromNotesLane).toBeVisible();
+  await deleteNoteDialogFromNotesLane.getByRole("button", { name: /^cancel$/i }).click();
+  await expect(deleteNoteDialogFromNotesLane).toHaveCount(0);
   await expect(page.getByText(followUpNoteTitle).first()).toBeVisible();
 
   const confirmDeleteDrag = await startDrag(page, followUpNoteDrag);

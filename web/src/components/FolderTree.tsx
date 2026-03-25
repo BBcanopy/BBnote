@@ -1,6 +1,6 @@
 import { ArrowsInSimple, ArrowsOutSimple, CaretDown, CaretLeft, DotsSixVertical, FolderSimplePlus, Trash } from "@phosphor-icons/react";
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent } from "react";
-import type { FolderIconId, FolderNode } from "../api/types";
+import type { FolderIconId, FolderNode, NoteSummary } from "../api/types";
 import { FolderIconGlyph, folderIconOptions } from "./folderIcons";
 import { getDragPayload, setDragPayload } from "../utils/dragPayload";
 import type { FolderMoveInstruction, FolderMovePosition } from "../utils/folderTree";
@@ -13,9 +13,11 @@ interface FolderDropTarget {
 export function FolderTree(props: {
   folders: FolderNode[];
   selectedFolderId: string | null;
+  draggedNote: Pick<NoteSummary, "id" | "title"> | null;
   onCreateNotebook(): void;
   onMoveNotebook(move: FolderMoveInstruction): void;
   onMoveNote(noteId: string, folderId: string): void;
+  onRequestDeleteNote(note: Pick<NoteSummary, "id" | "title">): void;
   onRequestDeleteNotebook(folder: FolderNode): void;
   onSelectFolder(folderId: string | null): void;
   onUpdateNotebookIcon(folderId: string, icon: FolderIconId): Promise<void>;
@@ -50,6 +52,7 @@ export function FolderTree(props: {
   const anyParentExpanded = [...parentFolderIds].some((folderId) => expandedFolderIds.has(folderId));
   const allNotesCount = props.folders.reduce((total, folder) => total + folder.noteCount, 0);
   const draggedFolder = draggedFolderId ? folderById.get(draggedFolderId) ?? null : null;
+  const showDeleteTarget = draggedFolder !== null || props.draggedNote !== null;
   const canDeleteDraggedFolder = Boolean(
     props.enableFolderDragAndDrop !== false &&
       draggedFolder &&
@@ -417,16 +420,31 @@ export function FolderTree(props: {
             </button>
           ) : null}
         </div>
-        {draggedFolder ? (
+        {showDeleteTarget ? (
           <button
             type="button"
             data-testid="notebooks-delete-target"
-            aria-label="Delete notebook"
-            title={canDeleteDraggedFolder ? "Drop the dragged notebook here to delete it" : "Only empty notebooks can be deleted"}
-            disabled={!canDeleteDraggedFolder}
+            aria-label={draggedFolder ? "Delete notebook" : "Delete note"}
+            title={
+              draggedFolder
+                ? canDeleteDraggedFolder
+                  ? "Drop the dragged notebook here to delete it"
+                  : "Only empty notebooks can be deleted"
+                : props.draggedNote
+                  ? `Drop ${props.draggedNote.title} here to delete it`
+                  : "Delete item"
+            }
+            disabled={draggedFolder ? !canDeleteDraggedFolder : false}
             onDragOver={(event) => {
               const payload = getDragPayload(event.dataTransfer);
-              if ((payload?.kind !== "folder" && !draggedFolderId) || !canDeleteDraggedFolder) {
+              if (payload?.kind === "note" && props.draggedNote) {
+                event.preventDefault();
+                setTrashActive(true);
+                return;
+              }
+
+              const isFolderDrag = payload?.kind === "folder" || (!payload && draggedFolderId !== null);
+              if (!isFolderDrag || !canDeleteDraggedFolder) {
                 return;
               }
               event.preventDefault();
@@ -437,7 +455,14 @@ export function FolderTree(props: {
               const payload = getDragPayload(event.dataTransfer);
               const isFolderDrag = payload?.kind === "folder" || draggedFolderId !== null;
               const folderToDelete = draggedFolder;
+              const draggedNote = props.draggedNote;
               clearDragState();
+              if (payload?.kind === "note" && draggedNote) {
+                event.preventDefault();
+                props.onRequestDeleteNote(draggedNote);
+                return;
+              }
+
               if (!isFolderDrag || !canDeleteDraggedFolder || !folderToDelete) {
                 return;
               }
@@ -445,7 +470,7 @@ export function FolderTree(props: {
               event.preventDefault();
               props.onRequestDeleteNotebook(folderToDelete);
             }}
-            className={`bb-pane-card__header-center-action bb-folder-trash-target ${trashActive ? "is-active" : ""}`}
+            className={`bb-pane-card__header-center-action ${draggedFolder ? "bb-folder-trash-target" : "bb-note-trash-target"} ${trashActive ? "is-active" : ""}`}
           >
             <Trash size={16} />
           </button>
