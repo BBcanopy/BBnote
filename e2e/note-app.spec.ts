@@ -145,6 +145,19 @@ test("keeps desktop lanes viewport-height and only shows the pane grip on border
     .toBeGreaterThan(48);
 });
 
+test("shows a branded 404 page instead of the router default error screen", async ({ page }) => {
+  await page.goto("/missing/notebook/path");
+
+  await expect(page.getByTestId("route-error-page")).toBeVisible();
+  await expect(page.getByRole("heading", { name: /that page slipped out of this notebook/i })).toBeVisible();
+  await expect(page.getByText("/missing/notebook/path")).toBeVisible();
+  await expect(page.getByRole("button", { name: /^sign in$/i })).toBeVisible();
+  await expect(page.getByRole("link", { name: /^back to home$/i })).toBeVisible();
+  await expect(page.getByRole("button", { name: /^go back$/i })).toBeVisible();
+  await expect(page.getByText("Unexpected Application Error!")).toHaveCount(0);
+  await expect(page.getByText(/^404 Not Found$/i)).toHaveCount(0);
+});
+
 test("starts empty, restores separate notebook and notes lanes, supports drag interactions, autosaves notes, and keeps panes open on note selection", async ({ page }) => {
   await page.setViewportSize({ width: 1900, height: 1000 });
   const suffix = Date.now().toString();
