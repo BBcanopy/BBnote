@@ -33,7 +33,7 @@
   --ease: cubic-bezier(0.16, 1, 0.3, 1);
   --font-content: "Open Sans", "Segoe UI", sans-serif;
   color: var(--ink);
-  font-family: "Geist Sans", "Segoe UI Variable Display", "Segoe UI", sans-serif;
+  font-family: "Open Sans", "Segoe UI Variable Display", "Segoe UI", sans-serif;
 }
 
 :root[data-theme="ember"] {
@@ -250,15 +250,16 @@ button:disabled {
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 1rem;
-  padding: 0.3rem 0;
-  border: none;
-  border-radius: 0;
+  padding: 0.72rem 0.9rem;
+  border-radius: 1.8rem;
   position: sticky;
   top: 0.75rem;
   z-index: 10;
-  background: transparent;
-  box-shadow: none;
-  backdrop-filter: none;
+  border-color: color-mix(in srgb, var(--line) 70%, transparent);
+  background: color-mix(in srgb, var(--surface-strong) 86%, transparent);
+  box-shadow:
+    inset 0 1px 0 var(--surface-highlight),
+    0 16px 32px -32px rgba(18, 34, 36, 0.3);
 }
 
 .bb-topbar__nav {
@@ -271,14 +272,14 @@ button:disabled {
 
 .bb-topbar__nav--brand-only {
   grid-template-columns: auto;
-  justify-self: start;
 }
 
 .bb-brand-mark {
-  display: inline-flex;
+  display: inline-grid;
+  grid-template-columns: auto auto;
   align-items: center;
-  gap: 0.55rem;
-  min-width: 0;
+  gap: 0.8rem;
+  min-width: fit-content;
   transition:
     transform 220ms var(--ease),
     opacity 220ms var(--ease);
@@ -306,12 +307,16 @@ button:disabled {
   text-transform: uppercase;
 }
 
+.bb-brand-mark__copy {
+  display: grid;
+  gap: 0.12rem;
+}
+
 .bb-brand-mark__title {
-  display: inline-block;
-  font-size: 1.02rem;
+  font-size: 1rem;
   font-weight: 700;
   line-height: 1;
-  letter-spacing: -0.035em;
+  letter-spacing: -0.03em;
   color: var(--ink);
 }
 
@@ -637,12 +642,6 @@ button:disabled {
   color: var(--accent-strong);
 }
 
-.bb-icon-button--is-active {
-  border-color: color-mix(in srgb, var(--accent) 34%, var(--line));
-  background: color-mix(in srgb, var(--accent-soft) 75%, var(--surface-strong));
-  color: var(--accent-strong);
-}
-
 .bb-icon-button--danger:hover {
   border-color: color-mix(in srgb, var(--danger) 35%, var(--line));
   color: var(--danger);
@@ -692,7 +691,7 @@ button:disabled {
   width: 3.6rem;
   height: 3.6rem;
   border-radius: 1.2rem;
-  font-family: "Geist Sans", "Segoe UI Variable Display", "Segoe UI", sans-serif;
+  font-family: "Open Sans", "Segoe UI Variable Display", "Segoe UI", sans-serif;
   font-size: 1.7rem;
   font-weight: 500;
   letter-spacing: -0.08em;
@@ -1359,32 +1358,6 @@ button:disabled {
   letter-spacing: -0.02em;
 }
 
-.bb-tree-drag-handle,
-.bb-note-drag-handle {
-  display: inline-grid;
-  place-items: center;
-  width: 1.3rem;
-  height: 1.3rem;
-  padding: 0;
-  border-radius: 0.64rem;
-  color: var(--ink-soft);
-  background: color-mix(in srgb, var(--surface-strong) 80%, transparent);
-  border: 1px solid color-mix(in srgb, var(--line) 82%, transparent);
-}
-
-.bb-tree-drag-handle {
-  flex-shrink: 0;
-  cursor: grab;
-}
-
-.bb-tree-drag-handle:hover {
-  background: color-mix(in srgb, var(--surface-strong) 92%, transparent);
-}
-
-.bb-tree-drag-handle:active {
-  cursor: grabbing;
-}
-
 .bb-tree-node {
   display: grid;
   gap: 0.1rem;
@@ -1407,7 +1380,17 @@ button:disabled {
   border-left: 1px solid color-mix(in srgb, var(--line) 86%, transparent);
 }
 
-.bb-tree-row.is-active .bb-tree-drag-handle,
+.bb-note-drag-handle {
+  display: inline-grid;
+  place-items: center;
+  width: 1.3rem;
+  height: 1.3rem;
+  border-radius: 0.64rem;
+  color: var(--ink-soft);
+  background: color-mix(in srgb, var(--surface-strong) 80%, transparent);
+  border: 1px solid color-mix(in srgb, var(--line) 82%, transparent);
+}
+
 .bb-note-card.is-active .bb-note-drag-handle {
   color: #f5fffe;
   background: rgba(255, 255, 255, 0.12);
@@ -1513,12 +1496,15 @@ button:disabled {
   color: var(--accent-strong);
 }
 
-.bb-folder-trash-target {
+.bb-folder-trash-target,
+.bb-note-trash-target {
   color: var(--danger);
 }
 
 .bb-folder-trash-target.is-active,
-.bb-folder-trash-target:hover {
+.bb-folder-trash-target:hover,
+.bb-note-trash-target.is-active,
+.bb-note-trash-target:hover {
   background: color-mix(in srgb, var(--surface-popover) 92%, var(--danger) 8%);
   box-shadow:
     inset 0 1px 0 var(--surface-highlight-strong),
@@ -1578,22 +1564,6 @@ button:disabled {
   flex-wrap: wrap;
 }
 
-.bb-editor-body-actions {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  flex-wrap: wrap;
-  min-width: 0;
-}
-
-.bb-editor-media-toolbar {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  flex-wrap: wrap;
-  max-width: 100%;
-}
-
 .bb-editor-mode {
   display: inline-flex;
   align-items: center;
@@ -1631,28 +1601,6 @@ button:disabled {
   background: color-mix(in srgb, var(--accent-soft) 80%, var(--surface-strong));
   color: var(--accent-strong);
   box-shadow: none;
-}
-
-.bb-recorder-panel {
-  display: grid;
-  gap: 0.85rem;
-}
-
-.bb-recorder-panel__copy {
-  display: grid;
-  gap: 0.3rem;
-}
-
-.bb-recorder-panel__preview {
-  width: min(100%, 26rem);
-}
-
-.bb-panel-note {
-  padding: 0.95rem 1rem;
-  border: 1px dashed var(--line);
-  border-radius: 1.15rem;
-  background: color-mix(in srgb, var(--surface-muted) 78%, transparent);
-  color: var(--ink-soft);
 }
 
 .bb-editor-footer {
@@ -1958,21 +1906,6 @@ button:disabled {
 
 .bb-markdown__empty {
   color: color-mix(in srgb, var(--ink-soft) 84%, transparent);
-}
-
-.bb-markdown__media {
-  display: grid;
-  gap: 0.55rem;
-  margin: 0;
-}
-
-.bb-markdown__media-player {
-  width: min(100%, 100%);
-}
-
-.bb-markdown__media-caption {
-  color: var(--ink-soft);
-  font-size: 0.9rem;
 }
 
 .bb-link-button {

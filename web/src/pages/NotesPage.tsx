@@ -15,6 +15,7 @@ import {
   VideoCamera
 } from "@phosphor-icons/react";
 import { startTransition, useDeferredValue, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import {
   createFolder,
   createNote,
@@ -41,6 +42,7 @@ import { MarkdownPreview } from "../components/MarkdownPreview";
 import { NoteListPane } from "../components/NoteListPane";
 import { TextPromptDialog } from "../components/TextPromptDialog";
 import { buildFolderMutations, moveFolders, type FolderMoveInstruction } from "../utils/folderTree";
+import { buildNotesPath } from "../utils/noteRoute";
 import { buildNoteOrderIds, moveNotes, type NoteMoveInstruction } from "../utils/noteOrder";
 
 type EditorPane = "markdown" | "preview";
@@ -76,14 +78,26 @@ interface PaneResizeState {
   startWidth: number;
 }
 
+interface PendingNoteDelete {
+  id: string;
+  title: string;
+}
+
 export function NotesPage() {
   const auth = useAuth();
+  const navigate = useNavigate();
+  const params = useParams<{ folderId?: string; noteId?: string }>();
+  const routeFolderId = params.folderId ?? null;
+  const routeNoteId = params.noteId ?? null;
   const [folders, setFolders] = useState<FolderNode[]>([]);
-  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
+  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(routeFolderId);
   const [createNotebookOpen, setCreateNotebookOpen] = useState(false);
   const [newNotebookName, setNewNotebookName] = useState("");
+  const [renameNotebookOpen, setRenameNotebookOpen] = useState(false);
+  const [renameNotebookName, setRenameNotebookName] = useState("");
+  const [renameNotebookId, setRenameNotebookId] = useState<string | null>(null);
   const [notes, setNotes] = useState<NoteSummary[]>([]);
-  const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null);
+  const [selectedNoteId, setSelectedNoteId] = useState<string | null>(routeNoteId);
   const [editorNote, setEditorNote] = useState<EditorState | null>(null);
   const [search, setSearch] = useState("");
   const [editorPane, setEditorPane] = useState<EditorPane>("markdown");
@@ -99,14 +113,24 @@ export function NotesPage() {
   const [saving, setSaving] = useState(false);
   const [uploadingAttachment, setUploadingAttachment] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [deleteNoteOpen, setDeleteNoteOpen] = useState(false);
+  const [draggedNoteDeleteCandidate, setDraggedNoteDeleteCandidate] = useState<PendingNoteDelete | null>(null);
+  const [pendingNoteDelete, setPendingNoteDelete] = useState<PendingNoteDelete | null>(null);
   const [pendingFolderDelete, setPendingFolderDelete] = useState<FolderNode | null>(null);
   const [lastSyncedContentKey, setLastSyncedContentKey] = useState<string | null>(null);
   const deferredSearch = useDeferredValue(search);
   const saveInFlightRef = useRef(false);
   const autosaveTimerRef = useRef<number | null>(null);
   const editorSessionRef = useRef(0);
+  const notesRefreshRef = useRef(0);
   const noteLoadRef = useRef(0);
+  const skipNextNoteLoadRef = useRef<string | null>(null);
+  const syncingRouteRef = useRef(false);
+  const previousRouteSelectionRef = useRef(JSON.stringify({
+    folderId: routeFolderId,
+    noteId: routeNoteId
+  }));
+  const selectedFolderIdRef = useRef(selectedFolderId);
+  const deferredSearchRef = useRef(deferredSearch);
 
   const selectedFolder = useMemo(
     () => folders.find((folder) => folder.id === selectedFolderId) ?? null,
@@ -116,11 +140,57 @@ export function NotesPage() {
     () => (editorNote ? buildContentKey(editorNote.folderId, editorNote.title, editorNote.bodyMarkdown) : null),
     [editorNote]
   );
-  const canPersistEditor = Boolean(editorNote?.folderId && editorNote.title.trim().length > 0);
+  const canPersistEditor = Boolean(editorNote?.folderId);
   const explorerCollapsed = folderPaneCollapsed && notePaneCollapsed;
   const canCreateDraft = selectedFolderId !== null;
   const canReorderNotes = Boolean(selectedFolderId && search.trim().length === 0);
   const canUseMediaActions = Boolean(editorNote?.folderId ?? selectedFolderId);
+
+  selectedFolderIdRef.current = selectedFolderId;
+  deferredSearchRef.current = deferredSearch;
+
+  function updateSelectedFolderId(folderId: string | null) {
+    selectedFolderIdRef.current = folderId;
+    setSelectedFolderId(folderId);
+  }
+
+  useEffect(() => {
+    const routeSelectionKey = JSON.stringify({
+      folderId: routeFolderId,
+      noteId: routeNoteId
+    });
+    if (previousRouteSelectionRef.current === routeSelectionKey) {
+      return;
+    }
+
+    previousRouteSelectionRef.current = routeSelectionKey;
+    syncingRouteRef.current = true;
+    updateSelectedFolderId(routeFolderId);
+    setSelectedNoteId(routeNoteId);
+  }, [routeFolderId, routeNoteId]);
+
+  useEffect(() => {
+    if (syncingRouteRef.current) {
+      if (selectedFolderId === routeFolderId && selectedNoteId === routeNoteId) {
+        syncingRouteRef.current = false;
+      }
+      return;
+    }
+
+    const nextPath = buildNotesPath({
+      folderId: selectedFolderId,
+      noteId: selectedNoteId
+    });
+    const currentPath = buildNotesPath({
+      folderId: routeFolderId,
+      noteId: routeNoteId
+    });
+    if (nextPath === currentPath) {
+      return;
+    }
+
+    navigate(nextPath);
+  }, [navigate, routeFolderId, routeNoteId, selectedFolderId, selectedNoteId]);
 
   useEffect(() => {
     if (!auth.user) {
@@ -138,6 +208,13 @@ export function NotesPage() {
 
   useEffect(() => {
     if (!auth.user || !selectedNoteId) {
+      noteLoadRef.current += 1;
+      setLoadingEditor(false);
+      return;
+    }
+
+    if (skipNextNoteLoadRef.current === selectedNoteId) {
+      skipNextNoteLoadRef.current = null;
       return;
     }
 
@@ -152,6 +229,9 @@ export function NotesPage() {
         }
 
         editorSessionRef.current += 1;
+        if (routeFolderId && routeFolderId !== note.folderId) {
+          updateSelectedFolderId(note.folderId);
+        }
         setEditorNote(mapNoteDetail(note));
         setLastSyncedContentKey(buildContentKey(note.folderId, note.title, note.bodyMarkdown));
       })
@@ -166,7 +246,7 @@ export function NotesPage() {
           setLoadingEditor(false);
         }
       });
-  }, [auth.user, selectedNoteId]);
+  }, [auth.user, routeFolderId, selectedNoteId]);
 
   useEffect(() => {
     if (!auth.user || !editorNote || !currentContentKey || !canPersistEditor || currentContentKey === lastSyncedContentKey) {
@@ -185,8 +265,12 @@ export function NotesPage() {
       bodyMarkdown: editorNote.bodyMarkdown
     };
     clearAutosaveTimer();
-    autosaveTimerRef.current = window.setTimeout(() => {
-      void persistEditorPayload(payload, sessionId);
+    autosaveTimerRef.current = window.setTimeout(async () => {
+      autosaveTimerRef.current = null;
+      const persisted = await persistEditorPayload(payload, sessionId);
+      if (persisted) {
+        skipNextNoteLoadRef.current = persisted.id;
+      }
     }, AUTOSAVE_DELAY_MS);
 
     return () => clearAutosaveTimer();
@@ -236,7 +320,7 @@ export function NotesPage() {
       setFolders(nextFolders);
 
       if (selectedFolderId && !nextFolders.some((folder) => folder.id === selectedFolderId)) {
-        setSelectedFolderId(null);
+        updateSelectedFolderId(null);
         setFolderPaneCollapsed(false);
       }
 
@@ -253,8 +337,9 @@ export function NotesPage() {
     search?: string;
     showLoading?: boolean;
   }) {
-    const nextFolderId = options?.folderId === undefined ? selectedFolderId : options.folderId;
-    const nextSearch = options?.search === undefined ? deferredSearch : options.search;
+    const requestId = ++notesRefreshRef.current;
+    const nextFolderId = options?.folderId === undefined ? selectedFolderIdRef.current : options.folderId;
+    const nextSearch = options?.search === undefined ? deferredSearchRef.current : options.search;
     const shouldShowLoading = options?.showLoading !== false;
 
     try {
@@ -267,11 +352,17 @@ export function NotesPage() {
         sort: nextFolderId && !nextSearch ? "priority" : undefined,
         order: nextFolderId && !nextSearch ? "asc" : undefined
       });
+      if (requestId !== notesRefreshRef.current) {
+        return;
+      }
       setNotes(payload.items);
     } catch (notesError) {
+      if (requestId !== notesRefreshRef.current) {
+        return;
+      }
       setError(String(notesError));
     } finally {
-      if (shouldShowLoading) {
+      if (shouldShowLoading && requestId === notesRefreshRef.current) {
         setLoadingNotes(false);
       }
     }
@@ -399,7 +490,6 @@ export function NotesPage() {
 
     return persisted?.id ?? null;
   }
-
   async function handleUpdateNotebookIcon(folderId: string, icon: FolderNode["icon"]) {
     if (!auth.user) {
       return;
@@ -429,6 +519,18 @@ export function NotesPage() {
     setNewNotebookName("");
   }
 
+  function openRenameNotebookDialog(folder: FolderNode) {
+    setRenameNotebookId(folder.id);
+    setRenameNotebookName(folder.name);
+    setRenameNotebookOpen(true);
+  }
+
+  function closeRenameNotebookDialog() {
+    setRenameNotebookOpen(false);
+    setRenameNotebookId(null);
+    setRenameNotebookName("");
+  }
+
   async function handleCreateNotebook() {
     if (!auth.user || !newNotebookName.trim()) {
       return;
@@ -443,7 +545,7 @@ export function NotesPage() {
       });
       closeCreateNotebookDialog();
       await refreshFolders();
-      setSelectedFolderId(created.id);
+      updateSelectedFolderId(created.id);
       setFolderPaneCollapsed(false);
       setNotePaneCollapsed(false);
       setMobileFoldersOpen(false);
@@ -533,24 +635,97 @@ export function NotesPage() {
   }
 
   function handleCreateDraft() {
-    if (!canCreateDraft) {
+    if (!auth.user || !canCreateDraft || !selectedFolderId || saveInFlightRef.current) {
       return;
     }
 
-    editorSessionRef.current += 1;
-    noteLoadRef.current += 1;
+    clearAutosaveTimer();
     setError(null);
-    setSelectedNoteId(null);
-    setEditorNote(createDraft(selectedFolderId));
-    setLastSyncedContentKey(null);
-    setEditorPane("markdown");
     setFolderPaneCollapsed(false);
     setNotePaneCollapsed(false);
     setMobileNotesOpen(false);
+    setEditorPane("markdown");
+
+    const nextSessionId = editorSessionRef.current + 1;
+    const previousEditor = editorNote;
+    const previousContentKey = currentContentKey;
+    const shouldPersistPreviousEditor = Boolean(previousEditor && previousContentKey && canPersistEditor && previousContentKey !== lastSyncedContentKey);
+
+    editorSessionRef.current = nextSessionId;
+    noteLoadRef.current += 1;
+    setSelectedNoteId(null);
+    setEditorNote(createDraft(selectedFolderId));
+    setLastSyncedContentKey(null);
+
+    saveInFlightRef.current = true;
+    setSaving(true);
+
+    void (async () => {
+      try {
+        if (previousEditor && shouldPersistPreviousEditor) {
+          const refreshFoldersAfterSave = !previousEditor.noteId;
+
+          if (previousEditor.noteId) {
+            await updateNote(previousEditor.noteId, {
+              folderId: previousEditor.folderId as string,
+              title: previousEditor.title.trim(),
+              bodyMarkdown: previousEditor.bodyMarkdown
+            });
+          } else {
+            await createNote({
+              folderId: previousEditor.folderId as string,
+              title: previousEditor.title.trim(),
+              bodyMarkdown: previousEditor.bodyMarkdown
+            });
+          }
+
+          if (refreshFoldersAfterSave) {
+            await Promise.all([refreshNotes(), refreshFolders()]);
+          } else {
+            await refreshNotes();
+          }
+        }
+
+        const created = await createNote({
+          folderId: selectedFolderId,
+          title: "",
+          bodyMarkdown: ""
+        });
+
+        if (nextSessionId === editorSessionRef.current) {
+          setLastSyncedContentKey(buildContentKey(created.folderId, created.title, created.bodyMarkdown));
+          skipNextNoteLoadRef.current = created.id;
+          startTransition(() => {
+            setSelectedNoteId(created.id);
+            setEditorNote((current) => {
+              if (!current || current.noteId || current.folderId !== created.folderId) {
+                return current;
+              }
+
+              return {
+                ...current,
+                noteId: created.id,
+                attachments: created.attachments,
+                createdAt: created.createdAt,
+                updatedAt: created.updatedAt,
+                isDraft: false
+              };
+            });
+          });
+        }
+
+        await Promise.all([refreshNotes(), refreshFolders()]);
+      } catch (noteError) {
+        setError(String(noteError));
+      } finally {
+        saveInFlightRef.current = false;
+        setSaving(false);
+      }
+    })();
   }
 
   function handleSelectFolder(folderId: string | null) {
-    setSelectedFolderId(folderId);
+    updateSelectedFolderId(folderId);
     setFolderPaneCollapsed(false);
     setNotePaneCollapsed(false);
     setMobileFoldersOpen(false);
@@ -573,7 +748,7 @@ export function NotesPage() {
     try {
       const movedNote = await moveNote(noteId, { folderId });
       setSearch("");
-      setSelectedFolderId(folderId);
+      updateSelectedFolderId(folderId);
       setFolderPaneCollapsed(false);
       setNotePaneCollapsed(false);
       setMobileFoldersOpen(false);
@@ -583,6 +758,8 @@ export function NotesPage() {
         setSelectedNoteId(noteId);
         setEditorNote(mapNoteDetail(movedNote));
         setLastSyncedContentKey(buildContentKey(movedNote.folderId, movedNote.title, movedNote.bodyMarkdown));
+      } else {
+        setSelectedNoteId(null);
       }
 
       await Promise.all([
@@ -601,27 +778,74 @@ export function NotesPage() {
     if (!editorNote?.noteId) {
       return;
     }
-    setDeleteNoteOpen(true);
+    setDraggedNoteDeleteCandidate(null);
+    setPendingNoteDelete({
+      id: editorNote.noteId,
+      title: editorNote.title.trim() || "Untitled note"
+    });
   }
 
-  async function handleDeleteCurrentNote() {
-    if (!auth.user || !editorNote?.noteId) {
+  function handleRequestDeleteNote(note: PendingNoteDelete) {
+    setDraggedNoteDeleteCandidate(null);
+    setPendingNoteDelete({
+      id: note.id,
+      title: note.title.trim() || "Untitled note"
+    });
+  }
+
+  async function handleDeleteNote() {
+    if (!auth.user || !pendingNoteDelete) {
+      return;
+    }
+
+    const noteId = pendingNoteDelete.id;
+    const deletingSelectedNote = selectedNoteId === noteId || editorNote?.noteId === noteId;
+    const previousNotes = notes;
+    setError(null);
+    setNotes((current) => current.filter((note) => note.id !== noteId));
+
+    try {
+      await deleteNote(noteId);
+      editorSessionRef.current += 1;
+      noteLoadRef.current += 1;
+      setPendingNoteDelete(null);
+
+      if (deletingSelectedNote) {
+        setEditorNote(null);
+        setSelectedNoteId(null);
+        setLastSyncedContentKey(null);
+      }
+
+      await Promise.all([refreshNotes(), refreshFolders()]);
+    } catch (deleteError) {
+      setNotes(previousNotes);
+      setError(String(deleteError));
+    }
+  }
+
+  async function handleRenameNotebook() {
+    if (!auth.user || !renameNotebookId || !renameNotebookName.trim()) {
+      return;
+    }
+
+    const folder = folders.find((entry) => entry.id === renameNotebookId);
+    if (!folder) {
+      closeRenameNotebookDialog();
       return;
     }
 
     setError(null);
 
     try {
-      await deleteNote(editorNote.noteId);
-      editorSessionRef.current += 1;
-      noteLoadRef.current += 1;
-      setDeleteNoteOpen(false);
-      setEditorNote(null);
-      setSelectedNoteId(null);
-      setLastSyncedContentKey(null);
-      await Promise.all([refreshNotes(), refreshFolders()]);
-    } catch (deleteError) {
-      setError(String(deleteError));
+      await updateFolder(renameNotebookId, {
+        name: renameNotebookName.trim(),
+        icon: folder.icon,
+        parentId: folder.parentId
+      });
+      closeRenameNotebookDialog();
+      await refreshFolders();
+    } catch (folderError) {
+      setError(String(folderError));
     }
   }
 
@@ -639,7 +863,7 @@ export function NotesPage() {
     try {
       await deleteFolder(pendingFolderDelete.id);
       if (selectedFolderId === pendingFolderDelete.id) {
-        setSelectedFolderId(null);
+        updateSelectedFolderId(null);
       }
       setPendingFolderDelete(null);
       await Promise.all([refreshFolders(), refreshNotes({ folderId: null })]);
@@ -796,9 +1020,12 @@ export function NotesPage() {
                   <FolderTree
                     folders={folders}
                     selectedFolderId={selectedFolderId}
+                    draggedNote={draggedNoteDeleteCandidate}
                     onCreateNotebook={openCreateNotebookDialog}
                     onMoveNotebook={(move) => void handleMoveNotebook(move)}
                     onMoveNote={(noteId, folderId) => void handleMoveNoteToNotebook(noteId, folderId)}
+                    onRenameNotebook={openRenameNotebookDialog}
+                    onRequestDeleteNote={handleRequestDeleteNote}
                     onRequestDeleteNotebook={handleRequestDeleteNotebook}
                     onUpdateNotebookIcon={(folderId, icon) => handleUpdateNotebookIcon(folderId, icon)}
                     onCollapse={() => setFolderPaneCollapsed(true)}
@@ -837,6 +1064,8 @@ export function NotesPage() {
                     selectedNoteId={selectedNoteId}
                     onSelectNote={handleSelectNote}
                     onCreateNote={handleCreateDraft}
+                    onDraggedNoteChange={setDraggedNoteDeleteCandidate}
+                    onRequestDeleteNote={handleRequestDeleteNote}
                     onCollapse={() => setNotePaneCollapsed(true)}
                     loading={loadingNotes}
                     notebookName={selectedFolder?.name ?? null}
@@ -916,9 +1145,12 @@ export function NotesPage() {
         <FolderTree
           folders={folders}
           selectedFolderId={selectedFolderId}
+          draggedNote={draggedNoteDeleteCandidate}
           onCreateNotebook={openCreateNotebookDialog}
           onMoveNotebook={(move) => void handleMoveNotebook(move)}
           onMoveNote={(noteId, folderId) => void handleMoveNoteToNotebook(noteId, folderId)}
+          onRenameNotebook={openRenameNotebookDialog}
+          onRequestDeleteNote={handleRequestDeleteNote}
           onRequestDeleteNotebook={handleRequestDeleteNotebook}
           onUpdateNotebookIcon={(folderId, icon) => handleUpdateNotebookIcon(folderId, icon)}
           onSelectFolder={handleSelectFolder}
@@ -935,6 +1167,8 @@ export function NotesPage() {
           selectedNoteId={selectedNoteId}
           onSelectNote={handleSelectNote}
           onCreateNote={handleCreateDraft}
+          onDraggedNoteChange={setDraggedNoteDeleteCandidate}
+          onRequestDeleteNote={handleRequestDeleteNote}
           loading={loadingNotes}
           notebookName={selectedFolder?.name ?? null}
           canCreateNote={canCreateDraft}
@@ -955,15 +1189,26 @@ export function NotesPage() {
         onClose={closeCreateNotebookDialog}
         onConfirm={() => void handleCreateNotebook()}
       />
+      <TextPromptDialog
+        open={renameNotebookOpen}
+        title="Rename notebook"
+        description="Double-click a notebook in the tree to change its name."
+        value={renameNotebookName}
+        placeholder="Notebook name"
+        confirmLabel="Rename notebook"
+        onChange={setRenameNotebookName}
+        onClose={closeRenameNotebookDialog}
+        onConfirm={() => void handleRenameNotebook()}
+      />
 
       <ConfirmationDialog
-        open={deleteNoteOpen}
+        open={pendingNoteDelete !== null}
         title="Delete note?"
-        description="This note will be removed permanently."
+        description={pendingNoteDelete ? `${pendingNoteDelete.title} will be removed permanently.` : undefined}
         confirmLabel="Delete note"
         tone="danger"
-        onClose={() => setDeleteNoteOpen(false)}
-        onConfirm={() => void handleDeleteCurrentNote()}
+        onClose={() => setPendingNoteDelete(null)}
+        onConfirm={() => void handleDeleteNote()}
       />
 
       <ConfirmationDialog
@@ -1798,10 +2043,6 @@ function getEditorStatus(props: {
 
   if (!props.editorNote.folderId) {
     return "Select a notebook to save";
-  }
-
-  if (!props.editorNote.title.trim()) {
-    return "Add a title to save";
   }
 
   if (props.editorNote.updatedAt) {

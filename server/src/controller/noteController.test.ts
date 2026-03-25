@@ -33,6 +33,8 @@ describe("noteController integration", () => {
   });
 
   it("requires notebooks for persisted notes and rewrites markdown paths when title or notebook changes", async () => {
+    const hyphenatedSearchTerm = "budget-20260325-ffffffffffffffffffffffffffffffff";
+
     const listResponse = await app.inject({
       method: "GET",
       url: "/api/v1/folders",
@@ -88,18 +90,6 @@ describe("noteController integration", () => {
     expect(archiveNotebookResponse.statusCode).toBe(201);
     const archiveNotebook = archiveNotebookResponse.json();
 
-    const blankTitleResponse = await app.inject({
-      method: "POST",
-      url: "/api/v1/notes",
-      headers: authHeaders(token),
-      payload: {
-        folderId: nestedNotebook.id,
-        title: "   ",
-        bodyMarkdown: ""
-      }
-    });
-    expect(blankTitleResponse.statusCode).toBe(400);
-
     const createResponse = await app.inject({
       method: "POST",
       url: "/api/v1/notes",
@@ -107,7 +97,7 @@ describe("noteController integration", () => {
       payload: {
         folderId: nestedNotebook.id,
         title: "Meeting outline",
-        bodyMarkdown: "# Budget\n\nPlan the Q2 launch."
+        bodyMarkdown: `# Budget\n\nPlan the Q2 launch around ${hyphenatedSearchTerm}.`
       }
     });
     expect(createResponse.statusCode).toBe(201);
@@ -120,7 +110,7 @@ describe("noteController integration", () => {
     expect(firstRow?.filePath).toContain("Roadmaps");
     expect(firstRow?.filePath).toContain("Meeting-outline");
     expect(firstRow?.filePath).toContain(created.id);
-    await expect(fs.readFile(firstRow!.filePath, "utf8")).resolves.toContain("Plan the Q2 launch.");
+    await expect(fs.readFile(firstRow!.filePath, "utf8")).resolves.toContain(hyphenatedSearchTerm);
 
     const searchResponse = await app.inject({
       method: "GET",
@@ -129,6 +119,14 @@ describe("noteController integration", () => {
     });
     expect(searchResponse.statusCode).toBe(200);
     expect(searchResponse.json().items).toHaveLength(1);
+
+    const hyphenSearchResponse = await app.inject({
+      method: "GET",
+      url: `/api/v1/notes?q=${encodeURIComponent(hyphenatedSearchTerm)}&folderId=${nestedNotebook.id}`,
+      headers: authHeaders(token)
+    });
+    expect(hyphenSearchResponse.statusCode).toBe(200);
+    expect(hyphenSearchResponse.json().items).toHaveLength(1);
 
     const secondCreateResponse = await app.inject({
       method: "POST",
@@ -183,6 +181,59 @@ describe("noteController integration", () => {
     });
     expect(archivePriorityResponse.statusCode).toBe(200);
     expect(archivePriorityResponse.json().items.map((note: { title: string }) => note.title)).toEqual(["Launch review"]);
+  });
+
+  it("persists notes with blank titles using untitled slugs and allows blank-title updates", async () => {
+    const notebookResponse = await app.inject({
+      method: "POST",
+      url: "/api/v1/folders",
+      headers: authHeaders(token),
+      payload: {
+        name: "Scratch",
+        parentId: null
+      }
+    });
+    expect(notebookResponse.statusCode).toBe(201);
+    const notebook = notebookResponse.json();
+
+    const createResponse = await app.inject({
+      method: "POST",
+      url: "/api/v1/notes",
+      headers: authHeaders(token),
+      payload: {
+        folderId: notebook.id,
+        title: "   ",
+        bodyMarkdown: ""
+      }
+    });
+    expect(createResponse.statusCode).toBe(201);
+    const created = createResponse.json();
+    expect(created.title).toBe("");
+
+    const createdRow = app.bbnote.database.connection
+      .prepare<[string], { filePath: string }>("select file_path as filePath from notes where id = ?")
+      .get(created.id);
+    expect(createdRow?.filePath).toContain("Scratch");
+    expect(createdRow?.filePath).toContain("untitled");
+
+    const updateResponse = await app.inject({
+      method: "PUT",
+      url: `/api/v1/notes/${created.id}`,
+      headers: authHeaders(token),
+      payload: {
+        folderId: notebook.id,
+        title: "",
+        bodyMarkdown: "still blank title"
+      }
+    });
+    expect(updateResponse.statusCode).toBe(200);
+    expect(updateResponse.json().title).toBe("");
+
+    const updatedRow = app.bbnote.database.connection
+      .prepare<[string], { filePath: string }>("select file_path as filePath from notes where id = ?")
+      .get(created.id);
+    expect(updatedRow?.filePath).toContain("untitled");
+    await expect(fs.readFile(updatedRow!.filePath, "utf8")).resolves.toContain("still blank title");
   });
 
   it("reorders notes within a notebook and rejects incomplete reorder payloads", async () => {

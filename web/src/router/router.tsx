@@ -13,6 +13,18 @@ export const router = createBrowserRouter([
         element: <NotesPage />
       },
       {
+        path: "folders/:folderId",
+        element: <NotesPage />
+      },
+      {
+        path: "folders/:folderId/notes/:noteId",
+        element: <NotesPage />
+      },
+      {
+        path: "notes/:noteId",
+        element: <NotesPage />
+      },
+      {
         path: "migration",
         element: <MigrationPage />
       }

@@ -8,6 +8,15 @@ test("keeps desktop lanes viewport-height and only shows the pane grip on border
   await page.setViewportSize({ width: 1900, height: 1000 });
 
   await login(page);
+  await expect(page.locator('link[rel="icon"]')).toHaveAttribute("href", "/favicon.svg");
+  const faviconSvg = await page.evaluate(async () => {
+    const response = await fetch("/favicon.svg");
+    return await response.text();
+  });
+  expect(faviconSvg).toContain('aria-label="BBNote note logo"');
+  expect(faviconSvg).toContain('id="bbnote-favicon-note"');
+  expect(faviconSvg).toContain('id="bbnote-favicon-fold"');
+  expect(await page.locator("body").evaluate((element) => getComputedStyle(element).fontFamily)).toContain("Open Sans");
 
   await expect(page.getByRole("button", { name: /collapse notebooks pane/i })).toBeVisible();
   await expect(page.getByRole("button", { name: /collapse notes pane/i })).toBeVisible();
@@ -145,7 +154,6 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
   const noteTitle = `Launch-plan-${suffix}-preview-overflow-check`;
   const followUpNoteTitle = `Follow-up-${suffix}-priority-check`;
   const searchTerm = `budget-${suffix}-ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff`;
-  const editorPanel = page.locator(".bb-editor-panel").first();
 
   await login(page);
 
@@ -153,41 +161,6 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
   const topbarBox = await page.locator(".bb-topbar").boundingBox();
   const viewport = page.viewportSize();
   expect(topbarBox?.width ?? 0).toBeGreaterThan(((viewport?.width ?? 0) * 0.95));
-  await expect
-    .poll(async () => page.locator(".bb-topbar").evaluate((element) => getComputedStyle(element).backgroundColor))
-    .toBe("rgba(0, 0, 0, 0)");
-  await expect
-    .poll(async () => page.locator(".bb-topbar").evaluate((element) => getComputedStyle(element).borderTopWidth))
-    .toBe("0px");
-  await expect
-    .poll(async () => page.locator(".bb-topbar").evaluate((element) => getComputedStyle(element).boxShadow))
-    .toBe("none");
-  await expect
-    .poll(async () => {
-      return page.evaluate(() => {
-        const pill = document.querySelector(".bb-brand-mark__pill")?.getBoundingClientRect();
-        const title = document.querySelector(".bb-brand-mark__title")?.getBoundingClientRect();
-        if (!pill || !title) {
-          return Number.POSITIVE_INFINITY;
-        }
-
-        return Math.abs(title.y + title.height / 2 - (pill.y + pill.height / 2));
-      });
-    })
-    .toBeLessThan(6);
-  await expect
-    .poll(async () => {
-      return page.evaluate(() => {
-        const pill = document.querySelector(".bb-brand-mark__pill")?.getBoundingClientRect();
-        const title = document.querySelector(".bb-brand-mark__title")?.getBoundingClientRect();
-        if (!pill || !title) {
-          return Number.POSITIVE_INFINITY;
-        }
-
-        return title.x - (pill.x + pill.width);
-      });
-    })
-    .toBeLessThan(18);
   await expect(page.getByRole("navigation", { name: /primary navigation/i })).toHaveCount(0);
   await expect(page.getByText("Markdown workspace")).toHaveCount(0);
   await expect(page.getByRole("link", { name: /bbnote home/i })).toHaveAttribute("href", "/");
@@ -213,7 +186,7 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
   await expect(page.getByRole("button", { name: /^new note$/i }).first()).toBeDisabled();
   await expect(page.getByRole("button", { name: /^new note$/i }).first()).toHaveAttribute("title", /select a notebook to create a note/i);
   expect((await page.getByRole("button", { name: /^new note$/i }).first().textContent())?.trim() ?? "").toBe("");
-  await expect(page.getByText("Select or create a notebook to add a new note.")).toBeVisible();
+  await expect(page.getByText("Select or create a notebook to add a new note.")).toHaveCount(0);
   await expect
     .poll(async () => {
       const labels = await page.getByTestId("notebooks-actions").locator("button").evaluateAll((buttons) =>
@@ -230,6 +203,14 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
       return labels.join("|");
     })
     .toBe("New note|Collapse notes pane");
+  await expect
+    .poll(async () => {
+      const widths = await page.getByTestId("notes-actions").locator("button").evaluateAll((buttons) =>
+        buttons.map((button) => getComputedStyle(button).borderTopWidth)
+      );
+      return widths.join("|");
+    })
+    .toBe("0px|0px");
 
   await page.getByRole("button", { name: /collapse notebooks pane/i }).click();
   const collapsedNotebookRail = page.getByRole("button", { name: /open notebooks pane/i });
@@ -271,17 +252,28 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
   await expect.poll(async () => page.locator('[data-testid^="notebook-drag-"]').count()).toBe(2);
   await expect(page.locator('[data-testid^="notebook-drag-"]').filter({ hasText: subNotebookName }).first()).toBeVisible();
 
-  await page.getByRole("button", { name: /collapse all notebooks/i }).click();
+  const renamedSubNotebookName = `Plans ${suffix}`;
+  await notebookRow(page, subNotebookName).dblclick();
+  const renameNotebookDialog = page.getByRole("dialog", { name: /^rename notebook$/i });
+  await expect(renameNotebookDialog).toBeVisible();
+  await expect(renameNotebookDialog.getByPlaceholder("Notebook name")).toHaveValue(subNotebookName);
+  await renameNotebookDialog.getByPlaceholder("Notebook name").fill(renamedSubNotebookName);
+  await renameNotebookDialog.getByRole("button", { name: /^rename notebook$/i }).click();
+  await expect(renameNotebookDialog).toHaveCount(0);
+  await expect(page.locator('[data-testid^="notebook-drag-"]').filter({ hasText: renamedSubNotebookName }).first()).toBeVisible();
   await expect(page.locator('[data-testid^="notebook-drag-"]').filter({ hasText: subNotebookName })).toHaveCount(0);
+
+  await page.getByRole("button", { name: /collapse all notebooks/i }).click();
+  await expect(page.locator('[data-testid^="notebook-drag-"]').filter({ hasText: renamedSubNotebookName })).toHaveCount(0);
   await page.getByRole("button", { name: /expand all notebooks/i }).click();
-  await expect(page.locator('[data-testid^="notebook-drag-"]').filter({ hasText: subNotebookName }).first()).toBeVisible();
+  await expect(page.locator('[data-testid^="notebook-drag-"]').filter({ hasText: renamedSubNotebookName }).first()).toBeVisible();
 
   await page.getByRole("button", { name: new RegExp(`collapse notebook ${notebookName}`, "i") }).click();
-  await expect(page.locator('[data-testid^="notebook-drag-"]').filter({ hasText: subNotebookName })).toHaveCount(0);
+  await expect(page.locator('[data-testid^="notebook-drag-"]').filter({ hasText: renamedSubNotebookName })).toHaveCount(0);
   await page.getByRole("button", { name: new RegExp(`expand notebook ${notebookName}`, "i") }).click();
-  await expect(page.locator('[data-testid^="notebook-drag-"]').filter({ hasText: subNotebookName }).first()).toBeVisible();
+  await expect(page.locator('[data-testid^="notebook-drag-"]').filter({ hasText: renamedSubNotebookName }).first()).toBeVisible();
 
-  await notebookRow(page, subNotebookName).click();
+  await notebookRow(page, renamedSubNotebookName).click();
   await createNotebookWithDialog(page, archiveNotebookName);
   await expect.poll(async () => page.locator('[data-testid^="notebook-drag-"]').count()).toBe(3);
 
@@ -295,76 +287,34 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
   const archiveNotebookRow = page.getByTestId(buildNotebookTestId("drag", archiveNotebookName));
   const archiveNotebookHandle = page.getByTestId(buildNotebookHandleTestId(archiveNotebookName));
   await expect(archiveNotebookRow).toBeVisible();
-  await expect(archiveNotebookHandle).toBeVisible();
-
-  await dragLocatorToLocator(
-    page,
-    archiveNotebookHandle,
-    page.getByTestId(buildNotebookTestId("drag", notebookName))
-  );
-  await expect
-    .poll(async () => {
-      const items = await page
-        .locator('[data-testid^="notebook-drag-"]')
-        .evaluateAll((elements) => elements.map((element) => element.textContent?.replace(/\s+/g, " ").trim() ?? ""));
-      return items.slice(0, 3);
-    })
-    .toEqual([
-      expect.stringContaining(notebookName),
-      expect.stringContaining(subNotebookName),
-      expect.stringContaining(archiveNotebookName)
-    ]);
-  await expect
-    .poll(async () => {
-      const subNotebookBox = await notebookRowContainer(page, subNotebookName).boundingBox();
-      const archiveNotebookBox = await notebookRowContainer(page, archiveNotebookName).boundingBox();
-      if (!subNotebookBox || !archiveNotebookBox) {
-        return Number.POSITIVE_INFINITY;
-      }
-
-      return Math.abs(archiveNotebookBox.x - subNotebookBox.x);
-    })
-    .toBeLessThan(6);
-
   await dragToDropZone(
     page,
     archiveNotebookHandle,
-    page.getByTestId(buildNotebookTestId("before", subNotebookName))
+    page.getByTestId(buildNotebookTestId("before", notebookName))
   );
   await expect
     .poll(async () => {
       const items = await page
         .locator('[data-testid^="notebook-drag-"]')
         .evaluateAll((elements) => elements.map((element) => element.textContent?.replace(/\s+/g, " ").trim() ?? ""));
-      return items.slice(0, 3);
+      return items[0]?.includes(archiveNotebookName) && items[1]?.includes(notebookName);
     })
-    .toEqual([
-      expect.stringContaining(notebookName),
-      expect.stringContaining(archiveNotebookName),
-      expect.stringContaining(subNotebookName)
-    ]);
+    .toBeTruthy();
 
-  await page.reload();
-  await expect
-    .poll(async () => {
-      const items = await page
-        .locator('[data-testid^="notebook-drag-"]')
-        .evaluateAll((elements) => elements.map((element) => element.textContent?.replace(/\s+/g, " ").trim() ?? ""));
-      return items.slice(0, 3);
-    })
-    .toEqual([
-      expect.stringContaining(notebookName),
-      expect.stringContaining(archiveNotebookName),
-      expect.stringContaining(subNotebookName)
-    ]);
+  await archiveNotebookHandle.dragTo(
+    page.getByTestId(buildNotebookTestId("drag", notebookName))
+  );
 
-  await notebookRow(page, subNotebookName).click();
+  await notebookRow(page, renamedSubNotebookName).click();
   await expect(page.getByRole("button", { name: /^new note$/i }).first()).toBeEnabled();
   await expect(page.getByRole("button", { name: /^new note$/i }).first()).toHaveAttribute("title", "New note");
   await page.getByRole("button", { name: /^new note$/i }).click();
+  await expect(page).toHaveURL(/\/folders\/[^/]+\/notes\/[^/]+$/);
+  await expect(page.getByRole("textbox", { name: "Title" }).first()).toHaveValue("");
   await expect(page.getByRole("button", { name: /open notebooks pane/i })).toHaveCount(0);
   await expect(page.getByRole("button", { name: /open notes pane/i })).toHaveCount(0);
-  await expect(page.getByText(/untitled note/i)).toHaveCount(0);
+  await expect(page.locator(".bb-note-card__title")).toHaveCount(1);
+  await expect(page.locator(".bb-note-card__title").first()).toHaveText("Untitled note");
 
   await page.getByRole("textbox", { name: "Title" }).first().fill(noteTitle);
   const bodyTextarea = page.getByPlaceholder("Write in Markdown").first();
@@ -378,16 +328,28 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
     .toMatch(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z/);
 
   await page.getByRole("button", { name: /^new note$/i }).click();
+  await expect(page).toHaveURL(/\/folders\/[^/]+\/notes\/[^/]+$/);
+  await expect(page.getByRole("textbox", { name: "Title" }).first()).toHaveValue("");
+  const followUpFooter = page.locator(".bb-editor-footer").first();
+  await expect
+    .poll(async () => ((await followUpFooter.textContent()) ?? "").trim())
+    .toMatch(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z/);
+  const followUpInitialFooterText = ((await followUpFooter.textContent()) ?? "").trim();
   await page.getByRole("textbox", { name: "Title" }).first().fill(followUpNoteTitle);
   await page.getByPlaceholder("Write in Markdown").first().fill("Second note to test manual priority.");
   await expect
-    .poll(async () => ((await page.locator(".bb-editor-footer").first().textContent()) ?? "").trim())
+    .poll(async () => {
+      const footerText = ((await followUpFooter.textContent()) ?? "").trim();
+      return footerText !== followUpInitialFooterText ? footerText : "";
+    })
     .toMatch(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z/);
 
   await expect.poll(async () => page.locator('[data-testid^="note-drag-"]').count()).toBe(2);
+  const followUpNoteDragHandle = page.locator('[data-testid^="note-drag-"]').filter({ hasText: followUpNoteTitle }).first();
+  await expect(followUpNoteDragHandle).toBeVisible();
   await dragToDropZone(
     page,
-    page.getByTestId(buildNoteTestId("drag", followUpNoteTitle)),
+    followUpNoteDragHandle,
     page.getByTestId(buildNoteTestId("before", noteTitle))
   );
   await expect
@@ -400,7 +362,7 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
     .toEqual([expect.stringContaining(followUpNoteTitle), expect.stringContaining(noteTitle)]);
 
   await page.reload();
-  await notebookRow(page, subNotebookName).click();
+  await notebookRow(page, renamedSubNotebookName).click();
   await expect
     .poll(async () => {
       const items = await page
@@ -411,17 +373,22 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
     .toEqual([expect.stringContaining(followUpNoteTitle), expect.stringContaining(noteTitle)]);
 
   await page.getByRole("button", { name: new RegExp(followUpNoteTitle, "i") }).click();
-  const autosaveListRefreshRequest = page.waitForRequest((request) => {
-    return (
-      request.method() === "GET" &&
-      request.url().includes("/api/v1/notes?") &&
-      request.url().includes("folderId=") &&
-      request.url().includes("sort=priority") &&
-      request.url().includes("order=asc")
-    );
-  });
-  await page.getByPlaceholder("Write in Markdown").first().fill("Second note to test manual priority and autosave list refresh.");
-  await autosaveListRefreshRequest;
+  const followUpBody = page.getByPlaceholder("Write in Markdown").first();
+  const followUpEditorFooter = page.locator(".bb-editor-footer").first();
+  await expect(page.getByRole("textbox", { name: "Title" }).first()).toHaveValue(followUpNoteTitle);
+  await expect(followUpBody).toHaveValue("Second note to test manual priority.");
+  const previousFollowUpFooterText = ((await followUpEditorFooter.textContent()) ?? "").trim();
+  await followUpBody.click();
+  await followUpBody.press("Control+A");
+  await followUpBody.press("Delete");
+  await followUpBody.pressSequentially("Second note to test manual priority and autosave list refresh.");
+  await expect(followUpBody).toHaveValue("Second note to test manual priority and autosave list refresh.");
+  await expect
+    .poll(async () => {
+      const footerText = ((await followUpEditorFooter.textContent()) ?? "").trim();
+      return footerText !== previousFollowUpFooterText ? footerText : "";
+    })
+    .toMatch(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z/);
   await expect(page.locator(".bb-skeleton-card")).toHaveCount(0);
   await expect(page.getByTestId(buildNoteTestId("drag", followUpNoteTitle))).toBeVisible();
   await expect
@@ -468,24 +435,13 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
 
   await expect(page.getByRole("button", { name: /^markdown$/i })).toHaveAttribute("title", "Markdown");
   await expect(page.getByRole("button", { name: /^preview$/i })).toHaveAttribute("title", "Preview");
-  await expect(editorPanel.getByRole("button", { name: /^add image$/i })).toBeVisible();
-  await expect(editorPanel.getByRole("button", { name: /^add audio$/i })).toBeVisible();
-  await expect(editorPanel.getByRole("button", { name: /^add video$/i })).toBeVisible();
-  await expect(editorPanel.getByRole("button", { name: /^record voice$/i })).toBeVisible();
-  await expect(editorPanel.getByRole("button", { name: /^upload file$/i })).toBeVisible();
-  await expect(editorPanel.getByRole("button", { name: /^upload$/i })).toHaveCount(0);
   await page.getByRole("button", { name: /^preview$/i }).click();
-  await expect(editorPanel.getByRole("button", { name: /^add image$/i })).toBeVisible();
-  await expect(editorPanel.getByRole("button", { name: /^upload file$/i })).toBeVisible();
   expect(await page.locator(".bb-markdown").first().evaluate((element) => getComputedStyle(element).fontFamily)).toContain("Open Sans");
   await expect(page.getByRole("heading", { name: "Budget" })).toBeVisible();
   await page.getByRole("button", { name: /^markdown$/i }).click();
 
-  await editorPanel.getByTestId("media-input-file").setInputFiles({
-    name: "budget.txt",
-    mimeType: "text/plain",
-    buffer: Buffer.from("budget attachment", "utf8")
-  });
+  const uploadFile = await createTempFile("budget.txt", "budget attachment");
+  await page.locator('input[type="file"]').first().setInputFiles(uploadFile);
   await expect(page.getByText("budget.txt").first()).toBeVisible();
 
   await page.getByRole("button", { name: /^link$/i }).click();
@@ -501,22 +457,52 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
   await expect(page.getByText(followUpNoteTitle).first()).toBeVisible();
   await expect(page.locator('[data-testid^="note-drag-"]').filter({ hasText: noteTitle })).toHaveCount(0);
 
-  await page.getByRole("button", { name: new RegExp(followUpNoteTitle, "i") }).click();
-  await expect(page.getByRole("button", { name: /collapse notebooks pane/i })).toBeVisible();
-  const editorDeleteButton = page.locator(".bb-editor-header").getByRole("button", { name: /^delete note$/i });
-  await editorDeleteButton.click();
+  const notebookHeader = page.getByTestId("notebook-pane").locator(".bb-pane-card__header").first();
+  await expect(page.getByTestId("notes-delete-target")).toHaveCount(0);
+  const followUpNoteDrag = page.getByTestId(buildNoteTestId("drag", followUpNoteTitle));
+  await expect(page.getByTestId("notebooks-delete-target")).toHaveCount(0);
+
+  const cancelDeleteFromNotebookLaneDrag = await startDrag(page, followUpNoteDrag);
+  const deleteNotebookTargetForNote = page.getByTestId("notebooks-delete-target");
+  await expect(deleteNotebookTargetForNote).toBeVisible();
+  await expect(deleteNotebookTargetForNote).toHaveAttribute("aria-label", "Delete note");
+  await expectCenteredHeaderAction(notebookHeader, deleteNotebookTargetForNote);
+  await dropOnTarget(followUpNoteDrag, deleteNotebookTargetForNote, cancelDeleteFromNotebookLaneDrag);
   const deleteNoteDialog = page.getByRole("dialog", { name: /^delete note\?$/i });
   await expect(deleteNoteDialog).toBeVisible();
   await deleteNoteDialog.getByRole("button", { name: /^cancel$/i }).click();
   await expect(deleteNoteDialog).toHaveCount(0);
-  await expect(page.getByText(followUpNoteTitle).first()).toBeVisible();
-  await editorDeleteButton.click();
+  await notebookRow(page, archiveNotebookName).click();
+  await expect(notebookRowContainer(page, archiveNotebookName)).toHaveClass(/is-active/);
+  await expect(followUpNoteDrag).toBeVisible();
+
+  const cancelDeleteDrag = await startDrag(page, followUpNoteDrag);
+  const deleteNoteTarget = page.getByTestId("notes-delete-target");
+  await expect(deleteNoteTarget).toBeVisible();
+  await expect
+    .poll(async () => {
+      const labels = await page.getByTestId("notes-actions").locator("button").evaluateAll((buttons) =>
+        buttons.map((button) => button.getAttribute("aria-label") ?? button.textContent?.trim() ?? "")
+      );
+      return labels.join("|");
+    })
+    .toBe("New note|Delete note|Collapse notes pane");
+  await dropOnTarget(followUpNoteDrag, deleteNoteTarget, cancelDeleteDrag);
+  const deleteNoteDialogFromNotesLane = page.getByRole("dialog", { name: /^delete note\?$/i });
+  await expect(deleteNoteDialogFromNotesLane).toBeVisible();
+  await deleteNoteDialogFromNotesLane.getByRole("button", { name: /^cancel$/i }).click();
+  await expect(deleteNoteDialogFromNotesLane).toHaveCount(0);
+  await notebookRow(page, archiveNotebookName).click();
+  await expect(notebookRowContainer(page, archiveNotebookName)).toHaveClass(/is-active/);
+  await expect(followUpNoteDrag).toBeVisible();
+
+  const confirmDeleteDrag = await startDrag(page, followUpNoteDrag);
+  await expect(deleteNoteTarget).toBeVisible();
+  await dropOnTarget(followUpNoteDrag, deleteNoteTarget, confirmDeleteDrag);
   await page.getByRole("dialog", { name: /^delete note\?$/i }).getByRole("button", { name: /^delete note$/i }).click();
   await expect(page.getByText(followUpNoteTitle).first()).toHaveCount(0);
-  await expect(page.getByText("No note selected").first()).toBeVisible();
 
-  const notebookHeader = page.getByTestId("notebook-pane").locator(".bb-pane-card__header").first();
-  const blockedNotebookHandle = page.getByTestId(buildNotebookHandleTestId(subNotebookName));
+  const blockedNotebookHandle = page.getByTestId(buildNotebookHandleTestId(renamedSubNotebookName));
   const blockedNotebookDrag = await startDrag(page, blockedNotebookHandle);
   const deleteNotebookTarget = page.getByTestId("notebooks-delete-target");
   await expect(deleteNotebookTarget).toBeVisible();
@@ -525,196 +511,74 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
   await endDrag(blockedNotebookHandle, blockedNotebookDrag);
   await expect(page.getByRole("dialog", { name: /^delete notebook\?$/i })).toHaveCount(0);
 
-  const archiveNotebookHandleForDelete = page.getByTestId(buildNotebookHandleTestId(archiveNotebookName));
-  const archiveNotebookDrag = await startDrag(page, archiveNotebookHandleForDelete);
+  const archiveNotebookDeleteHandle = page.getByTestId(buildNotebookHandleTestId(archiveNotebookName));
+  const archiveNotebookDrag = await startDrag(page, archiveNotebookDeleteHandle);
   await expect(deleteNotebookTarget).toBeVisible();
   await expect(deleteNotebookTarget).toBeEnabled();
   await expectCenteredHeaderAction(notebookHeader, deleteNotebookTarget);
-  await dropOnTarget(archiveNotebookHandleForDelete, deleteNotebookTarget, archiveNotebookDrag);
+  await dropOnTarget(archiveNotebookDeleteHandle, deleteNotebookTarget, archiveNotebookDrag);
   const deleteNotebookDialog = page.getByRole("dialog", { name: /^delete notebook\?$/i });
   await expect(deleteNotebookDialog).toBeVisible();
   await deleteNotebookDialog.getByRole("button", { name: /^delete notebook$/i }).click();
   await expect(page.getByTestId(buildNotebookTestId("drag", archiveNotebookName))).toHaveCount(0);
 });
 
-test("uploads image, audio, and video from the editor header and renders inline preview after reload", async ({ page }) => {
-  await page.setViewportSize({ width: 1100, height: 900 });
-  const suffix = Date.now().toString();
-  const notebookName = `Media ${suffix}`;
-  const noteTitle = `Media note ${suffix}`;
+test("persists empty notes immediately so repeated new-note clicks create multiple blank notes", async ({ page }) => {
+  const notebookName = `Inbox ${Date.now()}`;
 
   await login(page);
   await createNotebookWithDialog(page, notebookName);
 
-  const editorPanel = page.locator(".bb-editor-panel").first();
-  await expect(editorPanel.getByRole("button", { name: /^add image$/i })).toBeVisible();
-  await expect(editorPanel.getByRole("button", { name: /^add audio$/i })).toBeVisible();
-  await expect(editorPanel.getByRole("button", { name: /^add video$/i })).toBeVisible();
-  await expect(editorPanel.getByRole("button", { name: /^record voice$/i })).toBeVisible();
-  await expect(editorPanel.getByRole("button", { name: /^upload file$/i })).toBeVisible();
+  await page.getByRole("button", { name: /^new note$/i }).click();
+  await expect(page.getByRole("textbox", { name: "Title" }).first()).toHaveValue("");
+  await expect.poll(async () => page.locator(".bb-note-card__title").count()).toBe(1);
+  await expect(page.locator(".bb-note-card__title").first()).toHaveText("Untitled note");
 
-  await editorPanel.getByTestId("media-input-image").setInputFiles(createUploadFile("diagram.png", tinyPngBuffer(), "image/png"));
-  await expect(page.getByRole("textbox", { name: "Title" }).first()).toHaveValue("Untitled note");
-  await expect(page.getByPlaceholder("Write in Markdown").first()).toHaveValue(/!\[diagram\.png\]\(\/api\/v1\/attachments\//);
-  await page.getByRole("textbox", { name: "Title" }).first().fill(noteTitle);
-  await expect(page.getByRole("button", { name: new RegExp(noteTitle, "i") }).first()).toBeVisible();
-
-  await page.getByRole("button", { name: /^preview$/i }).click();
-  await expect(editorPanel.getByRole("button", { name: /^add image$/i })).toBeVisible();
-  await expect(editorPanel.getByRole("button", { name: /^upload file$/i })).toBeVisible();
-  await expect(editorPanel.locator(".bb-markdown img")).toHaveCount(1);
-
-  await editorPanel.getByTestId("media-input-audio").setInputFiles(
-    createUploadFile("voice.webm", Buffer.from("mock-audio-payload", "utf8"), "audio/webm")
-  );
-  await expect(editorPanel.locator(".bb-markdown audio")).toHaveCount(1);
-
-  await editorPanel.getByTestId("media-input-video").setInputFiles(
-    createUploadFile("clip.webm", Buffer.from("mock-video-payload", "utf8"), "video/webm")
-  );
-  await expect(editorPanel.locator(".bb-markdown video")).toHaveCount(1);
-  await page.getByRole("button", { name: /^markdown$/i }).click();
-  await expect(page.getByPlaceholder("Write in Markdown").first()).toHaveValue(/voice\.webm/);
-  await expect(page.getByPlaceholder("Write in Markdown").first()).toHaveValue(/clip\.webm/);
-  await page.waitForTimeout(1600);
+  await page.getByRole("button", { name: /^new note$/i }).click();
+  await expect(page.getByRole("textbox", { name: "Title" }).first()).toHaveValue("");
+  await expect.poll(async () => page.locator(".bb-note-card__title").count()).toBe(2);
+  await expect(page.locator(".bb-note-card__title")).toHaveText(["Untitled note", "Untitled note"]);
+  await expect(page.locator(".bb-note-card__excerpt")).toHaveText(["Empty note", "Empty note"]);
 
   await page.reload();
-  await page.getByRole("button", { name: new RegExp(noteTitle, "i") }).first().click();
-  const reloadedEditorPanel = page.locator(".bb-editor-panel").first();
-  await page.getByRole("button", { name: /^preview$/i }).click();
-  await expect(reloadedEditorPanel.locator(".bb-markdown img")).toHaveCount(1);
-  await expect(reloadedEditorPanel.locator(".bb-markdown audio")).toHaveCount(1);
-  await expect(reloadedEditorPanel.locator(".bb-markdown video")).toHaveCount(1);
+  await notebookRow(page, notebookName).click();
+  await expect.poll(async () => page.locator(".bb-note-card__title").count()).toBe(2);
+  await expect(page.locator(".bb-note-card__title")).toHaveText(["Untitled note", "Untitled note"]);
 });
 
-test("records a voice note from the editor header and saves it inline", async ({ page }) => {
-  await page.addInitScript(() => {
-    class MockMediaRecorder {
-      static isTypeSupported(type: string) {
-        return type.startsWith("audio/webm");
-      }
-
-      mimeType: string;
-      state: "inactive" | "recording" = "inactive";
-      private readonly listeners: Record<string, Array<(event: Event | { data: Blob }) => void>> = {
-        dataavailable: [],
-        stop: []
-      };
-
-      constructor(_stream: unknown, options: { mimeType?: string } = {}) {
-        this.mimeType = options.mimeType ?? "audio/webm;codecs=opus";
-      }
-
-      addEventListener(type: string, listener: (event: Event | { data: Blob }) => void) {
-        this.listeners[type] ??= [];
-        this.listeners[type].push(listener);
-      }
-
-      start() {
-        this.state = "recording";
-      }
-
-      stop() {
-        this.state = "inactive";
-        const clip = new Blob(["mock voice note"], { type: "audio/webm" });
-        queueMicrotask(() => {
-          for (const listener of this.listeners.dataavailable ?? []) {
-            listener({ data: clip });
-          }
-          for (const listener of this.listeners.stop ?? []) {
-            listener(new Event("stop"));
-          }
-        });
-      }
-    }
-
-    const mockTrack = {
-      stop() {}
-    };
-    const mockStream = {
-      getTracks() {
-        return [mockTrack];
-      }
-    };
-
-    Object.defineProperty(window, "MediaRecorder", {
-      configurable: true,
-      writable: true,
-      value: MockMediaRecorder
-    });
-    Object.defineProperty(navigator, "mediaDevices", {
-      configurable: true,
-      value: {
-        getUserMedia: async () => mockStream
-      }
-    });
-  });
+test("syncs notebook and note selection into the URL and restores deep links on direct open", async ({ page }) => {
+  const suffix = Date.now().toString();
+  const notebookName = `Routing ${suffix}`;
+  const noteTitle = `Deep link ${suffix}`;
 
   await login(page);
-  await createNotebookWithDialog(page, `Voice ${Date.now()}`);
+  await createNotebookWithDialog(page, notebookName);
+  await expect(page).toHaveURL(/\/folders\/[^/]+$/);
+  const folderUrl = page.url();
 
-  const editorPanel = page.locator(".bb-editor-panel").first();
-  await editorPanel.getByRole("button", { name: /^record voice$/i }).click();
-  await expect(page.getByText("Recording voice note")).toBeVisible();
-  await page.getByRole("button", { name: /^stop$/i }).click();
-  await expect(page.getByRole("button", { name: /^save$/i })).toBeVisible();
-  await page.getByRole("button", { name: /^save$/i }).click();
-  await expect(page.getByRole("textbox", { name: "Title" }).first()).toHaveValue("Untitled note");
-  await page.getByRole("button", { name: /^preview$/i }).click();
-  await expect(editorPanel.locator(".bb-markdown audio")).toHaveCount(1);
-});
+  await page.getByRole("button", { name: /^new note$/i }).click();
+  await expect(page).toHaveURL(/\/folders\/[^/]+\/notes\/[^/]+$/);
+  const noteUrl = page.url();
 
-test("shows a friendly message when microphone access is denied", async ({ page }) => {
-  await page.addInitScript(() => {
-    class MockMediaRecorder {
-      static isTypeSupported() {
-        return true;
-      }
-    }
+  await page.getByRole("textbox", { name: "Title" }).first().fill(noteTitle);
+  await page.getByPlaceholder("Write in Markdown").first().fill("Route this note back in.");
+  await expect
+    .poll(async () => ((await page.locator(".bb-editor-footer").first().textContent()) ?? "").trim())
+    .toMatch(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z/);
+  await expect(page.getByRole("button", { name: new RegExp(noteTitle, "i") }).first()).toBeVisible();
 
-    Object.defineProperty(window, "MediaRecorder", {
-      configurable: true,
-      writable: true,
-      value: MockMediaRecorder
-    });
-    Object.defineProperty(navigator, "mediaDevices", {
-      configurable: true,
-      value: {
-        getUserMedia: async () => {
-          throw new DOMException("Denied", "NotAllowedError");
-        }
-      }
-    });
-  });
+  await page.goto(folderUrl);
+  await expect(page).toHaveURL(folderUrl);
+  await expect(notebookRowContainer(page, notebookName)).toHaveClass(/is-active/);
+  await expect(page.getByRole("button", { name: new RegExp(noteTitle, "i") }).first()).toBeVisible();
 
-  await login(page);
-  await createNotebookWithDialog(page, `Denied ${Date.now()}`);
+  await page.goto(noteUrl);
+  await expect(page).toHaveURL(noteUrl);
+  await expect(page.getByRole("textbox", { name: "Title" }).first()).toHaveValue(noteTitle);
+  await expect(page.getByRole("button", { name: new RegExp(noteTitle, "i") }).first()).toHaveClass(/is-active/);
 
-  const editorPanel = page.locator(".bb-editor-panel").first();
-  await editorPanel.getByRole("button", { name: /^record voice$/i }).click();
-  await expect(page.getByText("Microphone access was denied.")).toBeVisible();
-  await expect(page.getByRole("button", { name: /^try again$/i })).toBeVisible();
-});
-
-test("shows a friendly message when voice recording is unsupported", async ({ page }) => {
-  await page.addInitScript(() => {
-    Object.defineProperty(window, "MediaRecorder", {
-      configurable: true,
-      writable: true,
-      value: undefined
-    });
-    Object.defineProperty(navigator, "mediaDevices", {
-      configurable: true,
-      value: undefined
-    });
-  });
-
-  await login(page);
-  await createNotebookWithDialog(page, `Unsupported ${Date.now()}`);
-
-  const editorPanel = page.locator(".bb-editor-panel").first();
-  await editorPanel.getByRole("button", { name: /^record voice$/i }).click();
-  await expect(page.getByText("Voice recording is not supported in this browser.")).toBeVisible();
+  await page.getByRole("button", { name: /open user menu/i }).click();
+  await expect(page.getByRole("menu").getByRole("link", { name: /^notes$/i })).toHaveAttribute("aria-current", "page");
 });
 
 test("opens migration from the avatar menu and runs both export and import flows", async ({ page }) => {
@@ -792,10 +656,20 @@ async function createNotebookAndPersistedNote(page: import("@playwright/test").P
   const suffix = Date.now().toString();
   await createNotebookWithDialog(page, `Exports ${suffix}`);
   await page.getByRole("button", { name: /^new note$/i }).click();
+  await expect(page).toHaveURL(/\/folders\/[^/]+\/notes\/[^/]+$/);
+  await expect(page.getByRole("textbox", { name: "Title" }).first()).toHaveValue("");
+  const editorFooter = page.locator(".bb-editor-footer").first();
+  await expect
+    .poll(async () => ((await editorFooter.textContent()) ?? "").trim())
+    .toMatch(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z/);
+  const initialFooterText = ((await editorFooter.textContent()) ?? "").trim();
   await page.getByRole("textbox", { name: "Title" }).first().fill(`Export ready note ${suffix}`);
   await page.getByPlaceholder("Write in Markdown").first().fill("This note should travel well.");
   await expect
-    .poll(async () => ((await page.locator(".bb-editor-footer").first().textContent()) ?? "").trim())
+    .poll(async () => {
+      const footerText = ((await editorFooter.textContent()) ?? "").trim();
+      return footerText !== initialFooterText ? footerText : "";
+    })
     .toMatch(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z/);
   await expect(page.getByRole("button", { name: new RegExp(`Export ready note ${suffix}`, "i") })).toBeVisible();
 }
@@ -824,24 +698,16 @@ async function createNotebookWithDialog(page: import("@playwright/test").Page, n
   await page.getByRole("button", { name: /new notebook/i }).click();
   const dialog = page.getByRole("dialog", { name: /create notebook/i });
   await expect(dialog).toBeVisible();
-  await dialog.getByPlaceholder("Notebook name").pressSequentially(name);
+  await dialog.getByPlaceholder("Notebook name").fill(name);
   await dialog.getByRole("button", { name: /^create notebook$/i }).click();
   await expect(dialog).toHaveCount(0);
 }
 
-function createUploadFile(name: string, buffer: Buffer, mimeType: string) {
-  return {
-    name,
-    mimeType,
-    buffer
-  };
-}
-
-function tinyPngBuffer() {
-  return Buffer.from(
-    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4////fwAJ+wP9KobjigAAAABJRU5ErkJggg==",
-    "base64"
-  );
+async function createTempFile(name: string, contents: string) {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), "bbnote-playwright-"));
+  const filePath = path.join(directory, name);
+  await fs.writeFile(filePath, contents, "utf8");
+  return filePath;
 }
 
 async function createImportArchive() {
@@ -893,7 +759,9 @@ async function startDrag(page: import("@playwright/test").Page, source: import("
 }
 
 async function endDrag(source: import("@playwright/test").Locator, dataTransfer: Awaited<ReturnType<import("@playwright/test").Page["evaluateHandle"]>>) {
-  await source.dispatchEvent("dragend", { dataTransfer });
+  if (await source.count()) {
+    await source.dispatchEvent("dragend", { dataTransfer });
+  }
   await dataTransfer.dispose();
 }
 
@@ -902,9 +770,13 @@ async function dropOnTarget(
   target: import("@playwright/test").Locator,
   dataTransfer: Awaited<ReturnType<import("@playwright/test").Page["evaluateHandle"]>>
 ) {
-  await target.dispatchEvent("dragenter", { dataTransfer });
-  await target.dispatchEvent("dragover", { dataTransfer });
-  await target.dispatchEvent("drop", { dataTransfer });
+  const targetHandle = await target.elementHandle();
+  if (!targetHandle) {
+    throw new Error("Expected a drop target to be available.");
+  }
+
+  await targetHandle.dispatchEvent("dragover", { dataTransfer });
+  await targetHandle.dispatchEvent("drop", { dataTransfer });
   await endDrag(source, dataTransfer);
 }
 

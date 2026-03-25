@@ -1,5 +1,5 @@
-import { CaretLeft, DotsSixVertical, MagnifyingGlass, NotePencil, Plus } from "@phosphor-icons/react";
-import { useEffect, useState, type DragEvent } from "react";
+import { CaretLeft, DotsSixVertical, MagnifyingGlass, NotePencil, Plus, Trash } from "@phosphor-icons/react";
+import { useEffect, useMemo, useState, type DragEvent } from "react";
 import type { NoteSummary } from "../api/types";
 import { getDragPayload, setDragPayload } from "../utils/dragPayload";
 import type { NoteMoveInstruction, NoteMovePosition } from "../utils/noteOrder";
@@ -18,6 +18,8 @@ export function NoteListPane(props: {
   selectedNoteId: string | null;
   onSelectNote(noteId: string): void;
   onCreateNote(): void;
+  onDraggedNoteChange(note: Pick<NoteSummary, "id" | "title"> | null): void;
+  onRequestDeleteNote(note: Pick<NoteSummary, "id" | "title">): void;
   onCollapse?(): void;
   loading: boolean;
   notebookName: string | null;
@@ -27,9 +29,15 @@ export function NoteListPane(props: {
   onMoveNote(move: NoteMoveInstruction): void;
 }) {
   const [draggedNoteId, setDraggedNoteId] = useState<string | null>(null);
+  const [draggedNoteFolderId, setDraggedNoteFolderId] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<NoteDropTarget | null>(null);
+  const [deleteTargetActive, setDeleteTargetActive] = useState(false);
   const canDragNotes = props.enableCrossNotebookMove || props.canReorder;
   const dragging = canDragNotes && draggedNoteId !== null;
+  const draggedNote = useMemo(
+    () => props.notes.find((note) => note.id === draggedNoteId) ?? null,
+    [draggedNoteId, props.notes]
+  );
 
   useEffect(() => {
     if (!props.canReorder) {
@@ -37,9 +45,18 @@ export function NoteListPane(props: {
     }
   }, [props.canReorder]);
 
+  useEffect(() => {
+    if (draggedNoteId && (!draggedNote || (draggedNoteFolderId !== null && draggedNote.folderId !== draggedNoteFolderId))) {
+      clearDragState();
+    }
+  }, [draggedNote, draggedNoteFolderId, draggedNoteId]);
+
   function clearDragState() {
     setDraggedNoteId(null);
+    setDraggedNoteFolderId(null);
     setDropTarget(null);
+    setDeleteTargetActive(false);
+    props.onDraggedNoteChange(null);
   }
 
   function handleDragStart(event: DragEvent<HTMLDivElement>, note: NoteSummary) {
@@ -54,6 +71,11 @@ export function NoteListPane(props: {
       folderId: note.folderId
     });
     setDraggedNoteId(note.id);
+    setDraggedNoteFolderId(note.folderId);
+    props.onDraggedNoteChange({
+      id: note.id,
+      title: getDisplayNoteTitle(note.title)
+    });
   }
 
   function handleDragOver(event: DragEvent<HTMLElement>, targetId: string, position: NoteMovePosition) {
@@ -92,16 +114,55 @@ export function NoteListPane(props: {
             title={props.canCreateNote ? "New note" : "Select a notebook to create a note"}
             onClick={props.onCreateNote}
             disabled={!props.canCreateNote}
-            className="bb-icon-button bb-icon-button--accent"
+            className="bb-icon-button bb-icon-button--bare bb-icon-button--accent"
           >
             <Plus size={17} />
           </button>
+          {draggedNote ? (
+            <button
+              type="button"
+              data-testid="notes-delete-target"
+              aria-label="Delete note"
+              title={`Drop ${getDisplayNoteTitle(draggedNote.title)} here to delete it`}
+              onDragOver={(event) => {
+                const payload = getDragPayload(event.dataTransfer);
+                const draggedId = payload?.kind === "note" ? payload.id : draggedNoteId;
+                if (!draggedId) {
+                  return;
+                }
+
+                event.preventDefault();
+                setDeleteTargetActive(true);
+                setDropTarget(null);
+              }}
+              onDragLeave={() => setDeleteTargetActive(false)}
+              onDrop={(event) => {
+                const payload = getDragPayload(event.dataTransfer);
+                const draggedId = payload?.kind === "note" ? payload.id : draggedNoteId;
+                const noteToDelete = props.notes.find((note) => note.id === draggedId) ?? draggedNote;
+                clearDragState();
+
+                if (!draggedId || !noteToDelete) {
+                  return;
+                }
+
+                event.preventDefault();
+                props.onRequestDeleteNote({
+                  id: noteToDelete.id,
+                  title: noteToDelete.title
+                });
+              }}
+              className={`bb-icon-button bb-icon-button--bare bb-icon-button--danger bb-note-trash-target ${deleteTargetActive ? "is-active" : ""}`}
+            >
+              <Trash size={16} />
+            </button>
+          ) : null}
           {props.onCollapse ? (
             <button
               type="button"
               aria-label="Collapse notes pane"
               onClick={props.onCollapse}
-              className="bb-icon-button"
+              className="bb-icon-button bb-icon-button--bare"
             >
               <CaretLeft size={16} />
             </button>
@@ -117,11 +178,6 @@ export function NoteListPane(props: {
           className="text-sm"
         />
       </label>
-      {!props.canCreateNote ? (
-        <div className="bb-panel-note text-sm">
-          Select or create a notebook to add a new note.
-        </div>
-      ) : null}
       <div className="bb-note-list">
         {props.loading ? (
           <>
@@ -185,6 +241,7 @@ function renderNote(
 ) {
   const selected = helpers.selectedNoteId === note.id;
   const previewExcerpt = formatPreviewExcerpt(note.excerpt);
+  const displayTitle = getDisplayNoteTitle(note.title);
   const noteCard = (
     <button
       type="button"
@@ -193,7 +250,7 @@ function renderNote(
     >
       <div className="bb-note-card__layout">
         <div className="bb-note-card__copy">
-          <p className="bb-note-card__title">{note.title}</p>
+          <p className="bb-note-card__title">{displayTitle}</p>
           <p className="bb-note-card__excerpt">
             {previewExcerpt || "Empty note"}
           </p>
@@ -274,4 +331,9 @@ function NoteDropZone(props: {
 
 function buildNoteTestId(kind: "drag" | "before" | "after", title: string) {
   return `note-${kind}-${encodeURIComponent(title)}`;
+}
+
+function getDisplayNoteTitle(title: string) {
+  const trimmedTitle = title.trim();
+  return trimmedTitle || "Untitled note";
 }
