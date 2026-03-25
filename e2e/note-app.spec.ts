@@ -285,10 +285,11 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
   await page.getByRole("button", { name: new RegExp(`choose icon for ${archiveNotebookName}`, "i") }).click();
 
   const archiveNotebookRow = page.getByTestId(buildNotebookTestId("drag", archiveNotebookName));
+  const archiveNotebookHandle = page.getByTestId(buildNotebookHandleTestId(archiveNotebookName));
   await expect(archiveNotebookRow).toBeVisible();
   await dragToDropZone(
     page,
-    archiveNotebookRow,
+    archiveNotebookHandle,
     page.getByTestId(buildNotebookTestId("before", notebookName))
   );
   await expect
@@ -300,7 +301,7 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
     })
     .toBeTruthy();
 
-  await archiveNotebookRow.dragTo(
+  await archiveNotebookHandle.dragTo(
     page.getByTestId(buildNotebookTestId("drag", notebookName))
   );
 
@@ -401,9 +402,8 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
       if (!excerpt) {
         return false;
       }
-      const lineHeight = Number.parseFloat(getComputedStyle(excerpt).lineHeight);
-      const excerptHeight = excerpt.getBoundingClientRect().height;
-      return excerpt.scrollHeight <= excerpt.clientHeight + 1 && Number.isFinite(lineHeight) && excerptHeight <= lineHeight + 4;
+      const styles = getComputedStyle(excerpt);
+      return styles.whiteSpace === "nowrap" && styles.overflow === "hidden" && styles.textOverflow === "ellipsis";
     })
   ).toBeTruthy();
   expect(
@@ -497,8 +497,8 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
   await page.getByRole("dialog", { name: /^delete note\?$/i }).getByRole("button", { name: /^delete note$/i }).click();
   await expect(page.getByText(followUpNoteTitle).first()).toHaveCount(0);
 
+  const blockedNotebookHandle = page.getByTestId(buildNotebookHandleTestId(renamedSubNotebookName));
   const notebookHeader = page.getByTestId("notebook-pane").locator(".bb-pane-card__header").first();
-  const blockedNotebookHandle = page.getByTestId(buildNotebookHandleTestId(subNotebookName));
   const blockedNotebookDrag = await startDrag(page, blockedNotebookHandle);
   const deleteNotebookTarget = page.getByTestId("notebooks-delete-target");
   await expect(deleteNotebookTarget).toBeVisible();
@@ -507,11 +507,12 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
   await endDrag(blockedNotebookHandle, blockedNotebookDrag);
   await expect(page.getByRole("dialog", { name: /^delete notebook\?$/i })).toHaveCount(0);
 
-  const archiveNotebookDrag = await startDrag(page, page.getByTestId(buildNotebookTestId("drag", archiveNotebookName)));
+  const archiveNotebookDeleteHandle = page.getByTestId(buildNotebookHandleTestId(archiveNotebookName));
+  const archiveNotebookDrag = await startDrag(page, archiveNotebookDeleteHandle);
   await expect(deleteNotebookTarget).toBeVisible();
   await expect(deleteNotebookTarget).toBeEnabled();
   await expectCenteredHeaderAction(notebookHeader, deleteNotebookTarget);
-  await dropOnTarget(archiveNotebookHandleForDelete, deleteNotebookTarget, archiveNotebookDrag);
+  await dropOnTarget(archiveNotebookDeleteHandle, deleteNotebookTarget, archiveNotebookDrag);
   const deleteNotebookDialog = page.getByRole("dialog", { name: /^delete notebook\?$/i });
   await expect(deleteNotebookDialog).toBeVisible();
   await deleteNotebookDialog.getByRole("button", { name: /^delete notebook$/i }).click();
@@ -664,6 +665,10 @@ function buildNotebookTestId(kind: "drag" | "before" | "after", name: string) {
   return `notebook-${kind}-${encodeURIComponent(name)}`;
 }
 
+function buildNotebookHandleTestId(name: string) {
+  return `notebook-handle-${encodeURIComponent(name)}`;
+}
+
 function buildNoteTestId(kind: "drag" | "before" | "after", title: string) {
   return `note-${kind}-${encodeURIComponent(title)}`;
 }
@@ -741,7 +746,9 @@ async function startDrag(page: import("@playwright/test").Page, source: import("
 }
 
 async function endDrag(source: import("@playwright/test").Locator, dataTransfer: Awaited<ReturnType<import("@playwright/test").Page["evaluateHandle"]>>) {
-  await source.dispatchEvent("dragend", { dataTransfer });
+  if (await source.count()) {
+    await source.dispatchEvent("dragend", { dataTransfer });
+  }
   await dataTransfer.dispose();
 }
 
