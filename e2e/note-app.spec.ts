@@ -727,7 +727,7 @@ async function createNotebookWithDialog(page: import("@playwright/test").Page, n
   await page.getByRole("button", { name: /new notebook/i }).click();
   const dialog = page.getByRole("dialog", { name: /create notebook/i });
   await expect(dialog).toBeVisible();
-  await dialog.getByPlaceholder("Notebook name").fill(name);
+  await dialog.getByPlaceholder("Notebook name").pressSequentially(name);
   await dialog.getByRole("button", { name: /^create notebook$/i }).click();
   await expect(dialog).toHaveCount(0);
 }
