@@ -410,6 +410,24 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
     })
     .toEqual([expect.stringContaining(followUpNoteTitle), expect.stringContaining(noteTitle)]);
 
+  await page.getByRole("button", { name: new RegExp(followUpNoteTitle, "i") }).click();
+  const autosaveListRefreshRequest = page.waitForRequest((request) => {
+    return (
+      request.method() === "GET" &&
+      request.url().includes("/api/v1/notes?") &&
+      request.url().includes("folderId=") &&
+      request.url().includes("sort=priority") &&
+      request.url().includes("order=asc")
+    );
+  });
+  await page.getByPlaceholder("Write in Markdown").first().fill("Second note to test manual priority and autosave list refresh.");
+  await autosaveListRefreshRequest;
+  await expect(page.locator(".bb-skeleton-card")).toHaveCount(0);
+  await expect(page.getByTestId(buildNoteTestId("drag", followUpNoteTitle))).toBeVisible();
+  await expect
+    .poll(async () => ((await page.locator(".bb-editor-footer").first().textContent()) ?? "").trim())
+    .toMatch(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z/);
+
   await page.getByPlaceholder("Search notes").fill("priority");
   await expect(page.locator('[data-testid^="note-before-"]')).toHaveCount(0);
   await page.getByPlaceholder("Search notes").fill("");
