@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { NoteSummary } from "../api/types";
 import { NoteListPane } from "./NoteListPane";
 
@@ -51,6 +51,115 @@ describe("NoteListPane", () => {
 
     expect(screen.getByText("Untitled note")).toBeInTheDocument();
     expect(screen.getByText("Empty note")).toBeInTheDocument();
+  });
+
+  it("clears the temporary delete target when a dragged note leaves the current list", async () => {
+    const onDraggedNoteChange = vi.fn();
+    const dataTransfer = createDataTransfer();
+    const { rerender } = render(
+      <NoteListPane
+        notes={buildNotes()}
+        search=""
+        onSearchChange={vi.fn()}
+        selectedNoteId="note-1"
+        onSelectNote={vi.fn()}
+        onCreateNote={vi.fn()}
+        onDraggedNoteChange={onDraggedNoteChange}
+        onRequestDeleteNote={vi.fn()}
+        onCollapse={vi.fn()}
+        loading={false}
+        notebookName="Projects"
+        canCreateNote
+        canReorder
+        enableCrossNotebookMove
+        onMoveNote={vi.fn()}
+      />
+    );
+
+    fireEvent.dragStart(screen.getByTestId(buildNoteTestId("drag", "Quarterly review")), { dataTransfer });
+    expect(screen.getByTestId("notes-delete-target")).toBeInTheDocument();
+
+    rerender(
+      <NoteListPane
+        notes={[]}
+        search=""
+        onSearchChange={vi.fn()}
+        selectedNoteId={null}
+        onSelectNote={vi.fn()}
+        onCreateNote={vi.fn()}
+        onDraggedNoteChange={onDraggedNoteChange}
+        onRequestDeleteNote={vi.fn()}
+        onCollapse={vi.fn()}
+        loading={false}
+        notebookName="Projects"
+        canCreateNote
+        canReorder
+        enableCrossNotebookMove
+        onMoveNote={vi.fn()}
+      />
+    );
+
+    await waitFor(() => {
+      expect(screen.queryByTestId("notes-delete-target")).not.toBeInTheDocument();
+    });
+    expect(onDraggedNoteChange).toHaveBeenLastCalledWith(null);
+  });
+
+  it("clears the temporary delete target when a dragged note moves into a different notebook", async () => {
+    const onDraggedNoteChange = vi.fn();
+    const dataTransfer = createDataTransfer();
+    const { rerender } = render(
+      <NoteListPane
+        notes={buildNotes()}
+        search=""
+        onSearchChange={vi.fn()}
+        selectedNoteId="note-1"
+        onSelectNote={vi.fn()}
+        onCreateNote={vi.fn()}
+        onDraggedNoteChange={onDraggedNoteChange}
+        onRequestDeleteNote={vi.fn()}
+        onCollapse={vi.fn()}
+        loading={false}
+        notebookName="Projects"
+        canCreateNote
+        canReorder
+        enableCrossNotebookMove
+        onMoveNote={vi.fn()}
+      />
+    );
+
+    fireEvent.dragStart(screen.getByTestId(buildNoteTestId("drag", "Quarterly review")), { dataTransfer });
+    expect(screen.getByTestId("notes-delete-target")).toBeInTheDocument();
+
+    rerender(
+      <NoteListPane
+        notes={[
+          {
+            ...buildNotes()[0],
+            folderId: "folder-2"
+          }
+        ]}
+        search=""
+        onSearchChange={vi.fn()}
+        selectedNoteId="note-1"
+        onSelectNote={vi.fn()}
+        onCreateNote={vi.fn()}
+        onDraggedNoteChange={onDraggedNoteChange}
+        onRequestDeleteNote={vi.fn()}
+        onCollapse={vi.fn()}
+        loading={false}
+        notebookName="Archive"
+        canCreateNote
+        canReorder
+        enableCrossNotebookMove
+        onMoveNote={vi.fn()}
+      />
+    );
+
+    await waitFor(() => {
+      expect(screen.queryByTestId("notes-delete-target")).not.toBeInTheDocument();
+    });
+    expect(onDraggedNoteChange).toHaveBeenLastCalledWith(null);
   });
 });
 

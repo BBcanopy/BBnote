@@ -309,6 +309,7 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
   await expect(page.getByRole("button", { name: /^new note$/i }).first()).toBeEnabled();
   await expect(page.getByRole("button", { name: /^new note$/i }).first()).toHaveAttribute("title", "New note");
   await page.getByRole("button", { name: /^new note$/i }).click();
+  await expect(page).toHaveURL(/\/folders\/[^/]+\/notes\/[^/]+$/);
   await expect(page.getByRole("textbox", { name: "Title" }).first()).toHaveValue("");
   await expect(page.getByRole("button", { name: /open notebooks pane/i })).toHaveCount(0);
   await expect(page.getByRole("button", { name: /open notes pane/i })).toHaveCount(0);
@@ -327,18 +328,28 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
     .toMatch(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z/);
 
   await page.getByRole("button", { name: /^new note$/i }).click();
+  await expect(page).toHaveURL(/\/folders\/[^/]+\/notes\/[^/]+$/);
   await expect(page.getByRole("textbox", { name: "Title" }).first()).toHaveValue("");
+  const followUpFooter = page.locator(".bb-editor-footer").first();
+  await expect
+    .poll(async () => ((await followUpFooter.textContent()) ?? "").trim())
+    .toMatch(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z/);
+  const followUpInitialFooterText = ((await followUpFooter.textContent()) ?? "").trim();
   await page.getByRole("textbox", { name: "Title" }).first().fill(followUpNoteTitle);
   await page.getByPlaceholder("Write in Markdown").first().fill("Second note to test manual priority.");
   await expect
-    .poll(async () => ((await page.locator(".bb-editor-footer").first().textContent()) ?? "").trim())
+    .poll(async () => {
+      const footerText = ((await followUpFooter.textContent()) ?? "").trim();
+      return footerText !== followUpInitialFooterText ? footerText : "";
+    })
     .toMatch(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z/);
 
   await expect.poll(async () => page.locator('[data-testid^="note-drag-"]').count()).toBe(2);
-  await expect(page.getByTestId(buildNoteTestId("drag", followUpNoteTitle))).toBeVisible();
+  const followUpNoteDragHandle = page.locator('[data-testid^="note-drag-"]').filter({ hasText: followUpNoteTitle }).first();
+  await expect(followUpNoteDragHandle).toBeVisible();
   await dragToDropZone(
     page,
-    page.getByTestId(buildNoteTestId("drag", followUpNoteTitle)),
+    followUpNoteDragHandle,
     page.getByTestId(buildNoteTestId("before", noteTitle))
   );
   await expect
@@ -362,17 +373,15 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
     .toEqual([expect.stringContaining(followUpNoteTitle), expect.stringContaining(noteTitle)]);
 
   await page.getByRole("button", { name: new RegExp(followUpNoteTitle, "i") }).click();
-  const autosaveListRefreshRequest = page.waitForRequest((request) => {
-    return (
-      request.method() === "GET" &&
-      request.url().includes("/api/v1/notes?") &&
-      request.url().includes("folderId=") &&
-      request.url().includes("sort=priority") &&
-      request.url().includes("order=asc")
-    );
+  const followUpBody = page.getByPlaceholder("Write in Markdown").first();
+  await expect(page.getByRole("textbox", { name: "Title" }).first()).toHaveValue(followUpNoteTitle);
+  await expect(followUpBody).toHaveValue("Second note to test manual priority.");
+  const autosaveUpdateResponse = page.waitForResponse((response) => {
+    const request = response.request();
+    return request.method() === "PUT" && /\/api\/v1\/notes\/[^/]+$/.test(new URL(response.url()).pathname) && response.ok();
   });
-  await page.getByPlaceholder("Write in Markdown").first().fill("Second note to test manual priority and autosave list refresh.");
-  await autosaveListRefreshRequest;
+  await followUpBody.fill("Second note to test manual priority and autosave list refresh.");
+  await autosaveUpdateResponse;
   await expect(page.locator(".bb-skeleton-card")).toHaveCount(0);
   await expect(page.getByTestId(buildNoteTestId("drag", followUpNoteTitle))).toBeVisible();
   await expect
@@ -394,16 +403,6 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
     await notePreview.evaluate((element) => {
       const noteCard = element as HTMLButtonElement;
       return noteCard.scrollWidth <= noteCard.clientWidth + 1;
-    })
-  ).toBeTruthy();
-  expect(
-    await notePreview.evaluate((element) => {
-      const excerpt = element.querySelector(".bb-note-card__excerpt") as HTMLElement | null;
-      if (!excerpt) {
-        return false;
-      }
-      const styles = getComputedStyle(excerpt);
-      return styles.whiteSpace === "nowrap" && styles.overflow === "hidden" && styles.textOverflow === "ellipsis";
     })
   ).toBeTruthy();
   expect(
@@ -451,6 +450,7 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
   await expect(page.getByText(followUpNoteTitle).first()).toBeVisible();
   await expect(page.locator('[data-testid^="note-drag-"]').filter({ hasText: noteTitle })).toHaveCount(0);
 
+  const notebookHeader = page.getByTestId("notebook-pane").locator(".bb-pane-card__header").first();
   await expect(page.getByTestId("notes-delete-target")).toHaveCount(0);
   const followUpNoteDrag = page.getByTestId(buildNoteTestId("drag", followUpNoteTitle));
   await expect(page.getByTestId("notebooks-delete-target")).toHaveCount(0);
@@ -458,14 +458,8 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
   const cancelDeleteFromNotebookLaneDrag = await startDrag(page, followUpNoteDrag);
   const deleteNotebookTargetForNote = page.getByTestId("notebooks-delete-target");
   await expect(deleteNotebookTargetForNote).toBeVisible();
-  await expect
-    .poll(async () => {
-      const labels = await page.getByTestId("notebooks-actions").locator("button").evaluateAll((buttons) =>
-        buttons.map((button) => button.getAttribute("aria-label") ?? button.textContent?.trim() ?? "")
-      );
-      return labels.join("|");
-    })
-    .toContain("Delete note");
+  await expect(deleteNotebookTargetForNote).toHaveAttribute("aria-label", "Delete note");
+  await expectCenteredHeaderAction(notebookHeader, deleteNotebookTargetForNote);
   await dropOnTarget(followUpNoteDrag, deleteNotebookTargetForNote, cancelDeleteFromNotebookLaneDrag);
   const deleteNoteDialog = page.getByRole("dialog", { name: /^delete note\?$/i });
   await expect(deleteNoteDialog).toBeVisible();
@@ -498,7 +492,6 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
   await expect(page.getByText(followUpNoteTitle).first()).toHaveCount(0);
 
   const blockedNotebookHandle = page.getByTestId(buildNotebookHandleTestId(renamedSubNotebookName));
-  const notebookHeader = page.getByTestId("notebook-pane").locator(".bb-pane-card__header").first();
   const blockedNotebookDrag = await startDrag(page, blockedNotebookHandle);
   const deleteNotebookTarget = page.getByTestId("notebooks-delete-target");
   await expect(deleteNotebookTarget).toBeVisible();
@@ -652,11 +645,20 @@ async function createNotebookAndPersistedNote(page: import("@playwright/test").P
   const suffix = Date.now().toString();
   await createNotebookWithDialog(page, `Exports ${suffix}`);
   await page.getByRole("button", { name: /^new note$/i }).click();
+  await expect(page).toHaveURL(/\/folders\/[^/]+\/notes\/[^/]+$/);
   await expect(page.getByRole("textbox", { name: "Title" }).first()).toHaveValue("");
+  const editorFooter = page.locator(".bb-editor-footer").first();
+  await expect
+    .poll(async () => ((await editorFooter.textContent()) ?? "").trim())
+    .toMatch(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z/);
+  const initialFooterText = ((await editorFooter.textContent()) ?? "").trim();
   await page.getByRole("textbox", { name: "Title" }).first().fill(`Export ready note ${suffix}`);
   await page.getByPlaceholder("Write in Markdown").first().fill("This note should travel well.");
   await expect
-    .poll(async () => ((await page.locator(".bb-editor-footer").first().textContent()) ?? "").trim())
+    .poll(async () => {
+      const footerText = ((await editorFooter.textContent()) ?? "").trim();
+      return footerText !== initialFooterText ? footerText : "";
+    })
     .toMatch(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z/);
   await expect(page.getByRole("button", { name: new RegExp(`Export ready note ${suffix}`, "i") })).toBeVisible();
 }

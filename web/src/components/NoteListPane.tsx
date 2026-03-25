@@ -29,6 +29,7 @@ export function NoteListPane(props: {
   onMoveNote(move: NoteMoveInstruction): void;
 }) {
   const [draggedNoteId, setDraggedNoteId] = useState<string | null>(null);
+  const [draggedNoteFolderId, setDraggedNoteFolderId] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<NoteDropTarget | null>(null);
   const [deleteTargetActive, setDeleteTargetActive] = useState(false);
   const canDragNotes = props.enableCrossNotebookMove || props.canReorder;
@@ -44,8 +45,15 @@ export function NoteListPane(props: {
     }
   }, [props.canReorder]);
 
+  useEffect(() => {
+    if (draggedNoteId && (!draggedNote || (draggedNoteFolderId !== null && draggedNote.folderId !== draggedNoteFolderId))) {
+      clearDragState();
+    }
+  }, [draggedNote, draggedNoteFolderId, draggedNoteId]);
+
   function clearDragState() {
     setDraggedNoteId(null);
+    setDraggedNoteFolderId(null);
     setDropTarget(null);
     setDeleteTargetActive(false);
     props.onDraggedNoteChange(null);
@@ -63,6 +71,7 @@ export function NoteListPane(props: {
       folderId: note.folderId
     });
     setDraggedNoteId(note.id);
+    setDraggedNoteFolderId(note.folderId);
     props.onDraggedNoteChange({
       id: note.id,
       title: getDisplayNoteTitle(note.title)
