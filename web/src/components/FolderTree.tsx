@@ -145,8 +145,17 @@ export function FolderTree(props: {
 
   function handleFolderDragOver(event: DragEvent<HTMLElement>, targetId: string, position: FolderMovePosition) {
     const payload = getDragPayload(event.dataTransfer);
+    const draggedNoteId = payload?.kind === "note" ? payload.id : props.draggedNote?.id ?? null;
+    const draggedNoteFolderId = payload?.kind === "note" ? payload.folderId : props.selectedFolderId;
     if (!payload) {
       if (props.enableFolderDragAndDrop === false || !draggedFolderId || draggedFolderId === targetId) {
+        if (!props.acceptDraggedNotes || !draggedNoteId || draggedNoteFolderId === targetId) {
+          return;
+        }
+
+        event.preventDefault();
+        setNoteDropFolderId(targetId);
+        setFolderDropTarget(null);
         return;
       }
 
@@ -157,7 +166,7 @@ export function FolderTree(props: {
     }
 
     if (payload.kind === "note") {
-      if (!props.acceptDraggedNotes || payload.folderId === targetId) {
+      if (!props.acceptDraggedNotes || draggedNoteFolderId === targetId) {
         return;
       }
 
@@ -180,19 +189,21 @@ export function FolderTree(props: {
   function handleFolderDrop(event: DragEvent<HTMLElement>, targetId: string, position: FolderMovePosition) {
     const payload = getDragPayload(event.dataTransfer);
     const draggedId = payload?.kind === "folder" ? payload.id : draggedFolderId;
+    const draggedNoteId = payload?.kind === "note" ? payload.id : props.draggedNote?.id ?? null;
+    const draggedNoteFolderId = payload?.kind === "note" ? payload.folderId : props.selectedFolderId;
     clearDragState();
 
-    if (!payload && !draggedId) {
+    if (!payload && !draggedId && !draggedNoteId) {
       return;
     }
 
-    if (payload?.kind === "note") {
-      if (!props.acceptDraggedNotes || payload.folderId === targetId) {
+    if ((payload?.kind === "note" || (!payload && draggedNoteId)) && draggedNoteId) {
+      if (!props.acceptDraggedNotes || draggedNoteFolderId === targetId) {
         return;
       }
 
       event.preventDefault();
-      props.onMoveNote(payload.id, targetId);
+      props.onMoveNote(draggedNoteId, targetId);
       return;
     }
 
@@ -428,7 +439,9 @@ export function FolderTree(props: {
             disabled={draggedFolder ? !canDeleteDraggedFolder : false}
             onDragOver={(event) => {
               const payload = getDragPayload(event.dataTransfer);
-              if (payload?.kind === "note" && props.draggedNote) {
+              const draggedNote = props.draggedNote;
+              const draggedNoteId = payload?.kind === "note" ? payload.id : draggedNote?.id;
+              if (draggedNote && draggedNoteId) {
                 event.preventDefault();
                 setTrashActive(true);
                 return;
@@ -447,8 +460,9 @@ export function FolderTree(props: {
               const isFolderDrag = payload?.kind === "folder" || draggedFolderId !== null;
               const folderToDelete = draggedFolder;
               const draggedNote = props.draggedNote;
+              const draggedNoteId = payload?.kind === "note" ? payload.id : draggedNote?.id;
               clearDragState();
-              if (payload?.kind === "note" && draggedNote) {
+              if (draggedNote && draggedNoteId) {
                 event.preventDefault();
                 props.onRequestDeleteNote(draggedNote);
                 return;

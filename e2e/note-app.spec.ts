@@ -643,10 +643,13 @@ test("syncs notebook and note selection into the URL and restores deep links on 
 });
 
 test("opens migration from the avatar menu and runs both export and import flows", async ({ page }) => {
+  await page.setViewportSize({ width: 1900, height: 1000 });
   await login(page);
   await createNotebookAndPersistedNote(page);
   const userMenuButton = page.getByRole("button", { name: /open user menu/i });
   const notesTopbarWidth = (await page.locator(".bb-topbar").boundingBox())?.width ?? 0;
+  const viewport = page.viewportSize();
+  expect(notesTopbarWidth).toBeGreaterThan(((viewport?.width ?? 0) * 0.95));
 
   await expect(page.getByRole("navigation", { name: /primary navigation/i })).toHaveCount(0);
   await expect(page.getByRole("link", { name: /bbnote home/i })).toHaveAttribute("href", "/");
@@ -670,10 +673,13 @@ test("opens migration from the avatar menu and runs both export and import flows
   await userMenu.getByRole("link", { name: /^migration$/i }).click();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "ember");
   await expect(page).toHaveURL(/\/migration$/);
-  const migrationTopbarWidth = (await page.locator(".bb-topbar").boundingBox())?.width ?? 0;
-  expect(Math.abs(migrationTopbarWidth - notesTopbarWidth)).toBeLessThan(5);
-  await expect(page.getByRole("heading", { name: /bring notes in, package everything out/i })).toHaveCount(0);
+  await expect(page.locator(".bb-shell").first()).not.toHaveClass(/bb-shell--workspace/);
   await expect(page.getByRole("heading", { name: /bring in an archive/i })).toBeVisible();
+  const migrationTopbarWidth = (await page.locator(".bb-topbar").boundingBox())?.width ?? 0;
+  expect(migrationTopbarWidth).toBeLessThan(((viewport?.width ?? 0) * 0.9));
+  expect(migrationTopbarWidth).toBeGreaterThan(((viewport?.width ?? 0) * 0.75));
+  expect(migrationTopbarWidth).toBeLessThan(notesTopbarWidth - 150);
+  await expect(page.getByRole("heading", { name: /bring notes in, package everything out/i })).toHaveCount(0);
   await expect(page.getByRole("heading", { name: /create a markdown bundle/i })).toBeVisible();
   await page.getByRole("button", { name: /export all notes/i }).click();
   const exportJobPanel = page.getByTestId("export-job-panel");

@@ -17,7 +17,11 @@ export function setDragPayload(dataTransfer: DataTransfer, payload: DragPayload)
   dataTransfer.setData("text/plain", encoded);
 }
 
-export function getDragPayload(dataTransfer: DataTransfer): DragPayload | null {
+export function getDragPayload(dataTransfer: DataTransfer | null | undefined): DragPayload | null {
+  if (!dataTransfer) {
+    return null;
+  }
+
   const rawPayload = dataTransfer.getData(DRAG_PAYLOAD_MIME) || dataTransfer.getData("text/plain");
   if (!rawPayload) {
     return null;

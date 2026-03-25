@@ -56,6 +56,23 @@ describe("FolderTree", () => {
     }));
   });
 
+  it("moves a dragged note into another notebook when the browser omits the drag payload", () => {
+    const handleMoveNote = vi.fn();
+
+    renderFolderTree({
+      draggedNote: {
+        id: "note-1",
+        title: "Quarterly review"
+      },
+      onMoveNote: handleMoveNote
+    });
+
+    fireEvent.dragOver(screen.getByTestId(buildNotebookTestId("drag", "Archive")));
+    fireEvent.drop(screen.getByTestId(buildNotebookTestId("drag", "Archive")));
+
+    expect(handleMoveNote).toHaveBeenCalledWith("note-1", "archive");
+  });
+
   it("shows a temporary note delete target in the notebooks header and requests confirmation on drop", () => {
     const handleRequestDeleteNote = vi.fn();
     const dataTransfer = createDataTransfer();
@@ -106,6 +123,7 @@ function renderFolderTree(overrides?: {
     id: string;
     title: string;
   } | null;
+  onMoveNote?: ReturnType<typeof vi.fn>;
   onMoveNotebook?: ReturnType<typeof vi.fn>;
   onRenameNotebook?: ReturnType<typeof vi.fn>;
   onRequestDeleteNote?: ReturnType<typeof vi.fn>;
@@ -117,7 +135,7 @@ function renderFolderTree(overrides?: {
       draggedNote={overrides?.draggedNote ?? null}
       onCreateNotebook={vi.fn()}
       onMoveNotebook={overrides?.onMoveNotebook ?? vi.fn()}
-      onMoveNote={vi.fn()}
+      onMoveNote={overrides?.onMoveNote ?? vi.fn()}
       onRenameNotebook={overrides?.onRenameNotebook ?? vi.fn()}
       onRequestDeleteNote={overrides?.onRequestDeleteNote ?? vi.fn()}
       onRequestDeleteNotebook={vi.fn()}
