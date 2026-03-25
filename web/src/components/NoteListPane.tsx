@@ -86,6 +86,10 @@ export function NoteListPane(props: {
     }
 
     event.preventDefault();
+    event.stopPropagation();
+    if (event.dataTransfer) {
+      event.dataTransfer.dropEffect = "move";
+    }
     setDropTarget({ targetId, position });
   }
 
@@ -98,13 +102,15 @@ export function NoteListPane(props: {
   function handleDrop(event: DragEvent<HTMLElement>, targetId: string, position: NoteMovePosition) {
     const payload = getDragPayload(event.dataTransfer);
     const draggedId = payload?.kind === "note" ? payload.id : draggedNoteId;
-    clearDragState();
 
     if (!props.canReorder || !draggedId || draggedId === targetId) {
+      clearDragState();
       return;
     }
 
     event.preventDefault();
+    event.stopPropagation();
+    clearDragState();
     props.onMoveNote({
       draggedId,
       targetId,
@@ -157,6 +163,9 @@ export function NoteListPane(props: {
               }
 
               event.preventDefault();
+              if (event.dataTransfer) {
+                event.dataTransfer.dropEffect = "move";
+              }
               setDeleteTargetActive(true);
               setDropTarget(null);
             }}
@@ -291,6 +300,7 @@ function renderNote(
       data-testid={buildNoteTestId("drag", note.title)}
       onDragStart={(event) => helpers.onDragStart(event, note)}
       onDragEnd={helpers.onDragEnd}
+      onDragEnter={helpers.canReorder ? (event) => helpers.onCardDragOver(event, note.id) : undefined}
       onDragOver={helpers.canReorder ? (event) => helpers.onCardDragOver(event, note.id) : undefined}
       onDrop={helpers.canReorder ? (event) => helpers.onCardDrop(event, note.id) : undefined}
       onClick={() => helpers.onSelectNote(note.id)}
@@ -320,7 +330,13 @@ function renderNote(
   }
 
   return (
-    <div key={note.id} className="min-w-0 space-y-0.5">
+    <div
+      key={note.id}
+      onDragEnter={helpers.canReorder ? (event) => helpers.onCardDragOver(event, note.id) : undefined}
+      onDragOver={helpers.canReorder ? (event) => helpers.onCardDragOver(event, note.id) : undefined}
+      onDrop={helpers.canReorder ? (event) => helpers.onCardDrop(event, note.id) : undefined}
+      className="bb-note-drop-slot min-w-0 space-y-0.5"
+    >
       {helpers.canReorder ? (
         <NoteDropZone
           testId={buildNoteTestId("before", note.title)}
@@ -362,9 +378,10 @@ function NoteDropZone(props: {
   return (
     <div
       data-testid={props.testId}
+      onDragEnter={(event) => props.onDragOver(event, props.noteId, props.position)}
       onDragOver={(event) => props.onDragOver(event, props.noteId, props.position)}
       onDrop={(event) => props.onDrop(event, props.noteId, props.position)}
-      className={`bb-dropzone ${props.dragging ? "is-visible" : ""} ${props.active ? "is-active" : ""}`}
+      className={`bb-dropzone bb-dropzone--note ${props.dragging ? "is-visible" : ""} ${props.active ? "is-active" : ""}`}
     />
   );
 }

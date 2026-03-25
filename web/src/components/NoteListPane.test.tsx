@@ -83,6 +83,30 @@ describe("NoteListPane", () => {
     });
   });
 
+  it("marks before and after note drop targets as move destinations during reorder", () => {
+    const dataTransfer = createDataTransfer();
+
+    renderNoteListPane({
+      notes: [
+        buildNote({
+          id: "note-1",
+          title: "Quarterly review",
+          sortOrder: 0
+        }),
+        buildNote({
+          id: "note-2",
+          title: "Roadmap follow-up",
+          sortOrder: 1
+        })
+      ]
+    });
+
+    fireEvent.dragStart(screen.getByTestId(buildNoteTestId("drag", "Roadmap follow-up")), { dataTransfer });
+    fireEvent.dragEnter(screen.getByTestId(buildNoteTestId("before", "Quarterly review")), { dataTransfer });
+
+    expect(dataTransfer.dropEffect).toBe("move");
+  });
+
   it("shows untitled note placeholder text for blank titles", () => {
     renderNoteListPane({
       notes: [

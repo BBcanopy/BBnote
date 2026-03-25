@@ -1059,6 +1059,12 @@ button:disabled {
   min-width: 0;
 }
 
+.bb-note-drop-slot {
+  position: relative;
+  padding-block: 0.18rem;
+  margin-block: -0.18rem;
+}
+
 .bb-search-shell input,
 .bb-input,
 .bb-select,
@@ -1603,10 +1609,22 @@ button:disabled {
   border-radius: 999px;
   border: 1px solid transparent;
   background: transparent;
+  opacity: 0;
   transition:
     height 220ms var(--ease),
+    opacity 220ms var(--ease),
     border-color 220ms var(--ease),
     background-color 220ms var(--ease);
+}
+
+.bb-dropzone--note {
+  height: 0.22rem;
+  opacity: 0.001;
+}
+
+.bb-dropzone--tree {
+  height: 0;
+  opacity: 1;
 }
 
 .bb-dropzone--tree.is-visible {
@@ -1660,10 +1678,10 @@ button:disabled {
 
 .bb-folder-trash-target,
 .bb-note-trash-target {
-  background: color-mix(in srgb, var(--danger) 58%, var(--surface-popover));
+  background: color-mix(in srgb, var(--danger) 36%, var(--surface-popover));
   box-shadow:
-    inset 0 1px 0 color-mix(in srgb, white 26%, transparent),
-    0 20px 32px -28px color-mix(in srgb, var(--danger) 42%, rgba(18, 34, 36, 0.24));
+    inset 0 1px 0 color-mix(in srgb, white 22%, transparent),
+    0 20px 32px -28px color-mix(in srgb, var(--danger) 28%, rgba(18, 34, 36, 0.24));
   color: color-mix(in srgb, white 88%, var(--surface-popover));
 }
 
@@ -1671,24 +1689,26 @@ button:disabled {
 .bb-folder-trash-target:hover,
 .bb-note-trash-target.is-active,
 .bb-note-trash-target:hover {
-  background: color-mix(in srgb, var(--danger) 72%, var(--surface-popover));
+  background: color-mix(in srgb, var(--danger) 48%, var(--surface-popover));
   box-shadow:
-    inset 0 1px 0 color-mix(in srgb, white 34%, transparent),
-    0 22px 34px -28px color-mix(in srgb, var(--danger) 56%, rgba(18, 34, 36, 0.28));
+    inset 0 1px 0 color-mix(in srgb, white 28%, transparent),
+    0 22px 34px -28px color-mix(in srgb, var(--danger) 34%, rgba(18, 34, 36, 0.28));
   color: color-mix(in srgb, white 92%, var(--surface-popover));
 }
 
-.bb-dropzone.is-visible {
-  height: 0.45rem;
+.bb-dropzone--note.is-visible {
+  height: 0.7rem;
 }
 
 .bb-dropzone.is-visible.is-active {
-  height: 0.7rem;
+  opacity: 1;
+  height: 1rem;
   border-color: color-mix(in srgb, var(--accent) 35%, var(--line));
   background: color-mix(in srgb, var(--accent) 18%, transparent);
 }
 
 .bb-dropzone.is-visible:not(.is-active) {
+  opacity: 1;
   border-color: color-mix(in srgb, var(--line) 72%, transparent);
   background: color-mix(in srgb, var(--bg-strong) 55%, transparent);
 }

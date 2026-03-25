@@ -408,10 +408,10 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
   await expect.poll(async () => page.locator('[data-testid^="note-drag-"]').count()).toBe(2);
   await expect(page.locator('[data-testid^="note-drag-"] .bb-note-icon')).toHaveCount(0);
   const followUpNoteCard = page.locator('[data-testid^="note-drag-"]').filter({ hasText: followUpNoteTitle }).first();
-  const targetNoteCard = page.getByTestId(buildNoteTestId("drag", noteTitle));
+  const targetNoteDropZone = page.getByTestId(buildNoteTestId("before", noteTitle));
   await expect(followUpNoteCard).toBeVisible();
-  await targetNoteCard.scrollIntoViewIfNeeded();
-  await followUpNoteCard.dragTo(targetNoteCard);
+  await targetNoteDropZone.scrollIntoViewIfNeeded();
+  await followUpNoteCard.dragTo(targetNoteDropZone);
   await expect
     .poll(async () => {
       const items = await page
@@ -510,7 +510,9 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
   await expect(page.getByPlaceholder("Write in Markdown").first()).toHaveValue(/budget\.txt/);
 
   await page.getByPlaceholder("Search notes").fill("");
-  await page.getByTestId(buildNoteTestId("drag", followUpNoteTitle)).dragTo(
+  await dragLocatorToLocator(
+    page,
+    page.getByTestId(buildNoteTestId("drag", followUpNoteTitle)),
     page.getByTestId(buildNotebookTestId("drag", archiveNotebookName))
   );
   await expect(notebookRowContainer(page, archiveNotebookName)).toHaveClass(/is-active/);
