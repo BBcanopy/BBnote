@@ -515,11 +515,13 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
   await expect(page.getByText(followUpNoteTitle).first()).toHaveCount(0);
   await expect(page.getByText("No note selected").first()).toBeVisible();
 
+  const notebookHeader = page.getByTestId("notebook-pane").locator(".bb-pane-card__header").first();
   const blockedNotebookHandle = page.getByTestId(buildNotebookHandleTestId(subNotebookName));
   const blockedNotebookDrag = await startDrag(page, blockedNotebookHandle);
-  const deleteNotebookTarget = page.getByRole("button", { name: /^delete notebook$/i });
+  const deleteNotebookTarget = page.getByTestId("notebooks-delete-target");
   await expect(deleteNotebookTarget).toBeVisible();
   await expect(deleteNotebookTarget).toBeDisabled();
+  await expectCenteredHeaderAction(notebookHeader, deleteNotebookTarget);
   await endDrag(blockedNotebookHandle, blockedNotebookDrag);
   await expect(page.getByRole("dialog", { name: /^delete notebook\?$/i })).toHaveCount(0);
 
@@ -527,6 +529,7 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
   const archiveNotebookDrag = await startDrag(page, archiveNotebookHandleForDelete);
   await expect(deleteNotebookTarget).toBeVisible();
   await expect(deleteNotebookTarget).toBeEnabled();
+  await expectCenteredHeaderAction(notebookHeader, deleteNotebookTarget);
   await dropOnTarget(archiveNotebookHandleForDelete, deleteNotebookTarget, archiveNotebookDrag);
   const deleteNotebookDialog = page.getByRole("dialog", { name: /^delete notebook\?$/i });
   await expect(deleteNotebookDialog).toBeVisible();
@@ -903,4 +906,35 @@ async function dropOnTarget(
   await target.dispatchEvent("dragover", { dataTransfer });
   await target.dispatchEvent("drop", { dataTransfer });
   await endDrag(source, dataTransfer);
+}
+
+async function expectCenteredHeaderAction(
+  header: import("@playwright/test").Locator,
+  action: import("@playwright/test").Locator
+) {
+  const headerBox = await header.boundingBox();
+  const actionBox = await action.boundingBox();
+  expect(headerBox).not.toBeNull();
+  expect(actionBox).not.toBeNull();
+  if (!headerBox || !actionBox) {
+    throw new Error("Expected the notebook header action to be visible.");
+  }
+
+  const headerCenterX = headerBox.x + headerBox.width / 2;
+  const actionCenterX = actionBox.x + actionBox.width / 2;
+  expect(Math.abs(actionCenterX - headerCenterX)).toBeLessThan(8);
+  expect(actionBox.width).toBeGreaterThan(46);
+
+  const shellStyles = await action.evaluate((element) => {
+    const styles = getComputedStyle(element);
+    return {
+      backgroundColor: styles.backgroundColor,
+      boxShadow: styles.boxShadow,
+      zIndex: styles.zIndex
+    };
+  });
+
+  expect(shellStyles.backgroundColor).not.toBe("rgba(0, 0, 0, 0)");
+  expect(shellStyles.boxShadow).not.toBe("none");
+  expect(Number(shellStyles.zIndex)).toBeGreaterThan(1);
 }
