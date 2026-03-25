@@ -510,9 +510,7 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
   await expect(page.getByPlaceholder("Write in Markdown").first()).toHaveValue(/budget\.txt/);
 
   await page.getByPlaceholder("Search notes").fill("");
-  await dragLocatorToLocator(
-    page,
-    page.getByTestId(buildNoteTestId("drag", followUpNoteTitle)),
+  await page.getByTestId(buildNoteTestId("drag", followUpNoteTitle)).dragTo(
     page.getByTestId(buildNotebookTestId("drag", archiveNotebookName))
   );
   await expect(notebookRowContainer(page, archiveNotebookName)).toHaveClass(/is-active/);
