@@ -406,12 +406,10 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
 
   await expect.poll(async () => page.locator('[data-testid^="note-drag-"]').count()).toBe(2);
   const followUpNoteCard = page.locator('[data-testid^="note-drag-"]').filter({ hasText: followUpNoteTitle }).first();
+  const targetNoteCard = page.getByTestId(buildNoteTestId("drag", noteTitle));
   await expect(followUpNoteCard).toBeVisible();
-  await dragToDropZone(
-    page,
-    followUpNoteCard,
-    page.getByTestId(buildNoteTestId("before", noteTitle))
-  );
+  await targetNoteCard.scrollIntoViewIfNeeded();
+  await followUpNoteCard.dragTo(targetNoteCard);
   await expect
     .poll(async () => {
       const items = await page

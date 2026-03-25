@@ -80,7 +80,8 @@ export function NoteListPane(props: {
 
   function handleDragOver(event: DragEvent<HTMLElement>, targetId: string, position: NoteMovePosition) {
     const payload = getDragPayload(event.dataTransfer);
-    if (!props.canReorder || payload?.kind !== "note" || payload.id === targetId) {
+    const draggedId = payload?.kind === "note" ? payload.id : draggedNoteId;
+    if (!props.canReorder || !draggedId || draggedId === targetId) {
       return;
     }
 
@@ -88,20 +89,55 @@ export function NoteListPane(props: {
     setDropTarget({ targetId, position });
   }
 
+  function handleNoteCardDragOver(event: DragEvent<HTMLElement>, targetId: string) {
+    const payload = getDragPayload(event.dataTransfer);
+    const draggedId = payload?.kind === "note" ? payload.id : draggedNoteId;
+    handleDragOver(event, targetId, resolveNoteCardDropPosition(event, targetId, draggedId));
+  }
+
   function handleDrop(event: DragEvent<HTMLElement>, targetId: string, position: NoteMovePosition) {
     const payload = getDragPayload(event.dataTransfer);
+    const draggedId = payload?.kind === "note" ? payload.id : draggedNoteId;
     clearDragState();
 
-    if (!props.canReorder || payload?.kind !== "note" || payload.id === targetId) {
+    if (!props.canReorder || !draggedId || draggedId === targetId) {
       return;
     }
 
     event.preventDefault();
     props.onMoveNote({
-      draggedId: payload.id,
+      draggedId,
       targetId,
       position
     });
+  }
+
+  function handleNoteCardDrop(event: DragEvent<HTMLElement>, targetId: string) {
+    const payload = getDragPayload(event.dataTransfer);
+    const draggedId = payload?.kind === "note" ? payload.id : draggedNoteId;
+    handleDrop(event, targetId, resolveNoteCardDropPosition(event, targetId, draggedId));
+  }
+
+  function resolveNoteCardDropPosition(event: DragEvent<HTMLElement>, targetId: string, draggedId: string | null): NoteMovePosition {
+    const fallbackPosition = resolveRelativeDropPosition(props.notes, targetId, draggedId);
+    const rect = event.currentTarget.getBoundingClientRect();
+    if (rect.height <= 0) {
+      return fallbackPosition;
+    }
+
+    const relativeY = event.clientY - rect.top;
+    const upperThreshold = rect.height * 0.35;
+    const lowerThreshold = rect.height * 0.65;
+
+    if (relativeY <= upperThreshold) {
+      return "before";
+    }
+
+    if (relativeY >= lowerThreshold) {
+      return "after";
+    }
+
+    return fallbackPosition;
   }
 
   return (
@@ -199,6 +235,8 @@ export function NoteListPane(props: {
               dragging,
               dropTarget,
               onDragEnd: clearDragState,
+              onCardDragOver: handleNoteCardDragOver,
+              onCardDrop: handleNoteCardDrop,
               onDragOver: handleDragOver,
               onDragStart: handleDragStart,
               onDrop: handleDrop,
@@ -233,6 +271,8 @@ function renderNote(
     dragging: boolean;
     dropTarget: NoteDropTarget | null;
     onDragEnd(): void;
+    onCardDragOver(event: DragEvent<HTMLElement>, targetId: string): void;
+    onCardDrop(event: DragEvent<HTMLElement>, targetId: string): void;
     onDragOver(event: DragEvent<HTMLElement>, targetId: string, position: NoteMovePosition): void;
     onDragStart(event: DragEvent<HTMLElement>, note: NoteSummary): void;
     onDrop(event: DragEvent<HTMLElement>, targetId: string, position: NoteMovePosition): void;
@@ -244,13 +284,22 @@ function renderNote(
   const previewExcerpt = formatPreviewExcerpt(note.excerpt);
   const displayTitle = getDisplayNoteTitle(note.title);
   const noteCard = (
-    <button
-      type="button"
+    <div
+      role="button"
+      tabIndex={0}
       draggable={helpers.canDragNotes}
       data-testid={buildNoteTestId("drag", note.title)}
       onDragStart={(event) => helpers.onDragStart(event, note)}
       onDragEnd={helpers.onDragEnd}
+      onDragOver={helpers.canReorder ? (event) => helpers.onCardDragOver(event, note.id) : undefined}
+      onDrop={helpers.canReorder ? (event) => helpers.onCardDrop(event, note.id) : undefined}
       onClick={() => helpers.onSelectNote(note.id)}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          helpers.onSelectNote(note.id);
+        }
+      }}
       className={`bb-note-card ${helpers.canDragNotes ? "bb-note-card--draggable" : ""} w-full text-left ${selected ? "is-active" : ""} ${
         helpers.canReorder && helpers.dropTarget?.targetId === note.id ? "bb-tree-drop-target" : ""
       }`}
@@ -266,7 +315,7 @@ function renderNote(
           <NotePencil size={16} />
         </span>
       </div>
-    </button>
+    </div>
   );
 
   if (!helpers.canDragNotes) {
@@ -330,4 +379,15 @@ function buildNoteTestId(kind: "drag" | "before" | "after", title: string) {
 function getDisplayNoteTitle(title: string) {
   const trimmedTitle = title.trim();
   return trimmedTitle || "Untitled note";
+}
+
+function resolveRelativeDropPosition(notes: NoteSummary[], targetId: string, draggedId: string | null): NoteMovePosition {
+  const targetIndex = notes.findIndex((note) => note.id === targetId);
+  const draggedIndex = draggedId ? notes.findIndex((note) => note.id === draggedId) : -1;
+
+  if (targetIndex < 0 || draggedIndex < 0) {
+    return "before";
+  }
+
+  return draggedIndex > targetIndex ? "before" : "after";
 }

@@ -45,6 +45,37 @@ describe("NoteListPane", () => {
     expect(screen.getByTestId("notes-delete-target")).toHaveClass("bb-pane-card__header-center-action");
   });
 
+  it("reorders a note when dropped directly onto another note card", () => {
+    const handleMoveNote = vi.fn();
+    const dataTransfer = createDataTransfer();
+
+    renderNoteListPane({
+      notes: [
+        buildNote({
+          id: "note-1",
+          title: "Quarterly review",
+          sortOrder: 0
+        }),
+        buildNote({
+          id: "note-2",
+          title: "Roadmap follow-up",
+          sortOrder: 1
+        })
+      ],
+      onMoveNote: handleMoveNote
+    });
+
+    fireEvent.dragStart(screen.getByTestId(buildNoteTestId("drag", "Roadmap follow-up")), { dataTransfer });
+    fireEvent.dragOver(screen.getByTestId(buildNoteTestId("drag", "Quarterly review")), { dataTransfer });
+    fireEvent.drop(screen.getByTestId(buildNoteTestId("drag", "Quarterly review")), { dataTransfer });
+
+    expect(handleMoveNote).toHaveBeenCalledWith({
+      draggedId: "note-2",
+      targetId: "note-1",
+      position: "before"
+    });
+  });
+
   it("shows untitled note placeholder text for blank titles", () => {
     renderNoteListPane({
       notes: [
@@ -177,6 +208,7 @@ describe("NoteListPane", () => {
 function renderNoteListPane(overrides?: {
   onRequestDeleteNote?: ReturnType<typeof vi.fn>;
   notes?: NoteSummary[];
+  onMoveNote?: ReturnType<typeof vi.fn>;
 }) {
   render(
     <NoteListPane
@@ -194,23 +226,26 @@ function renderNoteListPane(overrides?: {
       canCreateNote
       canReorder
       enableCrossNotebookMove
-      onMoveNote={vi.fn()}
+      onMoveNote={overrides?.onMoveNote ?? vi.fn()}
     />
   );
 }
 
 function buildNotes(): NoteSummary[] {
-  return [
-    {
-      id: "note-1",
-      folderId: "folder-1",
-      title: "Quarterly review",
-      excerpt: "Discuss roadmap and blockers.",
-      sortOrder: 0,
-      updatedAt: "2026-03-25T00:00:00.000Z",
-      attachmentCount: 0
-    }
-  ];
+  return [buildNote()];
+}
+
+function buildNote(overrides?: Partial<NoteSummary>): NoteSummary {
+  return {
+    id: "note-1",
+    folderId: "folder-1",
+    title: "Quarterly review",
+    excerpt: "Discuss roadmap and blockers.",
+    sortOrder: 0,
+    updatedAt: "2026-03-25T00:00:00.000Z",
+    attachmentCount: 0,
+    ...overrides
+  };
 }
 
 function createDataTransfer(): DataTransfer {
