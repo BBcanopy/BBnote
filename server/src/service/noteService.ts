@@ -114,9 +114,6 @@ export class NoteService {
       throw new Error("Folder not found.");
     }
     const trimmedTitle = input.title.trim();
-    if (!trimmedTitle) {
-      throw new Error("Note title is required.");
-    }
     const noteId = randomUUID();
     const createdAt = input.createdAt ?? new Date().toISOString();
     const updatedAt = input.updatedAt ?? createdAt;
@@ -174,9 +171,6 @@ export class NoteService {
       throw new Error("Folder not found.");
     }
     const trimmedTitle = input.title.trim();
-    if (!trimmedTitle) {
-      throw new Error("Note title is required.");
-    }
 
     const previousBody = await this.storageService.readMarkdown(record.filePath);
     const folderChanged = record.folderId !== folder.id;

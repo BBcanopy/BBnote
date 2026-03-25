@@ -11,7 +11,7 @@ import type { AppServices } from "../service/serviceFactory.js";
 
 const noteBodySchema = z.object({
   folderId: z.string().uuid(),
-  title: z.string().trim().min(1),
+  title: z.string().trim(),
   bodyMarkdown: z.string()
 });
 

@@ -33,14 +33,34 @@ describe("NoteListPane", () => {
       title: "Quarterly review"
     });
   });
+
+  it("shows untitled note placeholder text for blank titles", () => {
+    renderNoteListPane({
+      notes: [
+        {
+          id: "note-1",
+          folderId: "folder-1",
+          title: "   ",
+          excerpt: "",
+          sortOrder: 0,
+          updatedAt: "2026-03-25T00:00:00.000Z",
+          attachmentCount: 0
+        }
+      ]
+    });
+
+    expect(screen.getByText("Untitled note")).toBeInTheDocument();
+    expect(screen.getByText("Empty note")).toBeInTheDocument();
+  });
 });
 
 function renderNoteListPane(overrides?: {
   onRequestDeleteNote?: ReturnType<typeof vi.fn>;
+  notes?: NoteSummary[];
 }) {
   render(
     <NoteListPane
-      notes={buildNotes()}
+      notes={overrides?.notes ?? buildNotes()}
       search=""
       onSearchChange={vi.fn()}
       selectedNoteId="note-1"

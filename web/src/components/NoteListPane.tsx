@@ -65,7 +65,7 @@ export function NoteListPane(props: {
     setDraggedNoteId(note.id);
     props.onDraggedNoteChange({
       id: note.id,
-      title: note.title
+      title: getDisplayNoteTitle(note.title)
     });
   }
 
@@ -114,7 +114,7 @@ export function NoteListPane(props: {
               type="button"
               data-testid="notes-delete-target"
               aria-label="Delete note"
-              title={`Drop ${draggedNote.title} here to delete it`}
+              title={`Drop ${getDisplayNoteTitle(draggedNote.title)} here to delete it`}
               onDragOver={(event) => {
                 const payload = getDragPayload(event.dataTransfer);
                 const draggedId = payload?.kind === "note" ? payload.id : draggedNoteId;
@@ -237,6 +237,7 @@ function renderNote(
 ) {
   const selected = helpers.selectedNoteId === note.id;
   const previewExcerpt = formatPreviewExcerpt(note.excerpt);
+  const displayTitle = getDisplayNoteTitle(note.title);
   const noteCard = (
     <button
       type="button"
@@ -245,7 +246,7 @@ function renderNote(
     >
       <div className="bb-note-card__layout">
         <div className="bb-note-card__copy">
-          <p className="bb-note-card__title">{note.title}</p>
+          <p className="bb-note-card__title">{displayTitle}</p>
           <p className="bb-note-card__excerpt">
             {previewExcerpt || "Empty note"}
           </p>
@@ -326,4 +327,9 @@ function NoteDropZone(props: {
 
 function buildNoteTestId(kind: "drag" | "before" | "after", title: string) {
   return `note-${kind}-${encodeURIComponent(title)}`;
+}
+
+function getDisplayNoteTitle(title: string) {
+  const trimmedTitle = title.trim();
+  return trimmedTitle || "Untitled note";
 }

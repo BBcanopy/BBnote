@@ -88,18 +88,6 @@ describe("noteController integration", () => {
     expect(archiveNotebookResponse.statusCode).toBe(201);
     const archiveNotebook = archiveNotebookResponse.json();
 
-    const blankTitleResponse = await app.inject({
-      method: "POST",
-      url: "/api/v1/notes",
-      headers: authHeaders(token),
-      payload: {
-        folderId: nestedNotebook.id,
-        title: "   ",
-        bodyMarkdown: ""
-      }
-    });
-    expect(blankTitleResponse.statusCode).toBe(400);
-
     const createResponse = await app.inject({
       method: "POST",
       url: "/api/v1/notes",
@@ -183,6 +171,59 @@ describe("noteController integration", () => {
     });
     expect(archivePriorityResponse.statusCode).toBe(200);
     expect(archivePriorityResponse.json().items.map((note: { title: string }) => note.title)).toEqual(["Launch review"]);
+  });
+
+  it("persists notes with blank titles using untitled slugs and allows blank-title updates", async () => {
+    const notebookResponse = await app.inject({
+      method: "POST",
+      url: "/api/v1/folders",
+      headers: authHeaders(token),
+      payload: {
+        name: "Scratch",
+        parentId: null
+      }
+    });
+    expect(notebookResponse.statusCode).toBe(201);
+    const notebook = notebookResponse.json();
+
+    const createResponse = await app.inject({
+      method: "POST",
+      url: "/api/v1/notes",
+      headers: authHeaders(token),
+      payload: {
+        folderId: notebook.id,
+        title: "   ",
+        bodyMarkdown: ""
+      }
+    });
+    expect(createResponse.statusCode).toBe(201);
+    const created = createResponse.json();
+    expect(created.title).toBe("");
+
+    const createdRow = app.bbnote.database.connection
+      .prepare<[string], { filePath: string }>("select file_path as filePath from notes where id = ?")
+      .get(created.id);
+    expect(createdRow?.filePath).toContain("Scratch");
+    expect(createdRow?.filePath).toContain("untitled");
+
+    const updateResponse = await app.inject({
+      method: "PUT",
+      url: `/api/v1/notes/${created.id}`,
+      headers: authHeaders(token),
+      payload: {
+        folderId: notebook.id,
+        title: "",
+        bodyMarkdown: "still blank title"
+      }
+    });
+    expect(updateResponse.statusCode).toBe(200);
+    expect(updateResponse.json().title).toBe("");
+
+    const updatedRow = app.bbnote.database.connection
+      .prepare<[string], { filePath: string }>("select file_path as filePath from notes where id = ?")
+      .get(created.id);
+    expect(updatedRow?.filePath).toContain("untitled");
+    await expect(fs.readFile(updatedRow!.filePath, "utf8")).resolves.toContain("still blank title");
   });
 
   it("reorders notes within a notebook and rejects incomplete reorder payloads", async () => {

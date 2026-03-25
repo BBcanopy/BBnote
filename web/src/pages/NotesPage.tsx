@@ -3,18 +3,14 @@ import {
   CaretRight,
   CircleNotch,
   Eye,
-  FileArrowUp,
   FolderSimple,
-  ImageSquare,
   ListBullets,
-  Microphone,
-  MusicNotesSimple,
   PencilSimple,
   Plus,
-  Trash,
-  VideoCamera
+  Trash
 } from "@phosphor-icons/react";
 import { startTransition, useDeferredValue, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import {
   createFolder,
   createNote,
@@ -41,6 +37,7 @@ import { MarkdownPreview } from "../components/MarkdownPreview";
 import { NoteListPane } from "../components/NoteListPane";
 import { TextPromptDialog } from "../components/TextPromptDialog";
 import { buildFolderMutations, moveFolders, type FolderMoveInstruction } from "../utils/folderTree";
+import { buildNotesPath } from "../utils/noteRoute";
 import { buildNoteOrderIds, moveNotes, type NoteMoveInstruction } from "../utils/noteOrder";
 
 type EditorPane = "markdown" | "preview";
@@ -64,9 +61,6 @@ const MAX_FOLDER_PANE_WIDTH = 420;
 const MIN_NOTE_PANE_WIDTH = 280;
 const MAX_NOTE_PANE_WIDTH = 480;
 const KEYBOARD_RESIZE_STEP = 24;
-const MEDIA_PLACEHOLDER_TITLE = "Untitled note";
-
-type MediaInsertBehavior = "image" | "link" | "none";
 
 type PaneResizeTarget = "folders" | "notes";
 
@@ -83,12 +77,19 @@ interface PendingNoteDelete {
 
 export function NotesPage() {
   const auth = useAuth();
+  const navigate = useNavigate();
+  const params = useParams<{ folderId?: string; noteId?: string }>();
+  const routeFolderId = params.folderId ?? null;
+  const routeNoteId = params.noteId ?? null;
   const [folders, setFolders] = useState<FolderNode[]>([]);
-  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
+  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(routeFolderId);
   const [createNotebookOpen, setCreateNotebookOpen] = useState(false);
   const [newNotebookName, setNewNotebookName] = useState("");
+  const [renameNotebookOpen, setRenameNotebookOpen] = useState(false);
+  const [renameNotebookName, setRenameNotebookName] = useState("");
+  const [renameNotebookId, setRenameNotebookId] = useState<string | null>(null);
   const [notes, setNotes] = useState<NoteSummary[]>([]);
-  const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null);
+  const [selectedNoteId, setSelectedNoteId] = useState<string | null>(routeNoteId);
   const [editorNote, setEditorNote] = useState<EditorState | null>(null);
   const [search, setSearch] = useState("");
   const [editorPane, setEditorPane] = useState<EditorPane>("markdown");
@@ -113,6 +114,19 @@ export function NotesPage() {
   const autosaveTimerRef = useRef<number | null>(null);
   const editorSessionRef = useRef(0);
   const noteLoadRef = useRef(0);
+  const skipNextNoteLoadRef = useRef<string | null>(null);
+  const syncingRouteRef = useRef(false);
+  const previousRouteSelectionRef = useRef(JSON.stringify({
+    folderId: routeFolderId,
+    noteId: routeNoteId
+  }));
+
+  function clearAutosaveTimer() {
+    if (autosaveTimerRef.current !== null) {
+      window.clearTimeout(autosaveTimerRef.current);
+      autosaveTimerRef.current = null;
+    }
+  }
 
   const selectedFolder = useMemo(
     () => folders.find((folder) => folder.id === selectedFolderId) ?? null,
@@ -122,11 +136,48 @@ export function NotesPage() {
     () => (editorNote ? buildContentKey(editorNote.folderId, editorNote.title, editorNote.bodyMarkdown) : null),
     [editorNote]
   );
-  const canPersistEditor = Boolean(editorNote?.folderId && editorNote.title.trim().length > 0);
+  const canPersistEditor = Boolean(editorNote?.folderId);
   const explorerCollapsed = folderPaneCollapsed && notePaneCollapsed;
   const canCreateDraft = selectedFolderId !== null;
   const canReorderNotes = Boolean(selectedFolderId && search.trim().length === 0);
-  const canUseMediaActions = Boolean(editorNote?.folderId ?? selectedFolderId);
+
+  useEffect(() => {
+    const routeSelectionKey = JSON.stringify({
+      folderId: routeFolderId,
+      noteId: routeNoteId
+    });
+    if (previousRouteSelectionRef.current === routeSelectionKey) {
+      return;
+    }
+
+    previousRouteSelectionRef.current = routeSelectionKey;
+    syncingRouteRef.current = true;
+    setSelectedFolderId(routeFolderId);
+    setSelectedNoteId(routeNoteId);
+  }, [routeFolderId, routeNoteId]);
+
+  useEffect(() => {
+    if (syncingRouteRef.current) {
+      if (selectedFolderId === routeFolderId && selectedNoteId === routeNoteId) {
+        syncingRouteRef.current = false;
+      }
+      return;
+    }
+
+    const nextPath = buildNotesPath({
+      folderId: selectedFolderId,
+      noteId: selectedNoteId
+    });
+    const currentPath = buildNotesPath({
+      folderId: routeFolderId,
+      noteId: routeNoteId
+    });
+    if (nextPath === currentPath) {
+      return;
+    }
+
+    navigate(nextPath);
+  }, [navigate, routeFolderId, routeNoteId, selectedFolderId, selectedNoteId]);
 
   useEffect(() => {
     if (!auth.user) {
@@ -147,6 +198,11 @@ export function NotesPage() {
       return;
     }
 
+    if (skipNextNoteLoadRef.current === selectedNoteId) {
+      skipNextNoteLoadRef.current = null;
+      return;
+    }
+
     const loadId = ++noteLoadRef.current;
     setLoadingEditor(true);
     setError(null);
@@ -158,6 +214,9 @@ export function NotesPage() {
         }
 
         editorSessionRef.current += 1;
+        if (routeFolderId && routeFolderId !== note.folderId) {
+          setSelectedFolderId(note.folderId);
+        }
         setEditorNote(mapNoteDetail(note));
         setLastSyncedContentKey(buildContentKey(note.folderId, note.title, note.bodyMarkdown));
       })
@@ -172,7 +231,7 @@ export function NotesPage() {
           setLoadingEditor(false);
         }
       });
-  }, [auth.user, selectedNoteId]);
+  }, [auth.user, routeFolderId, selectedNoteId]);
 
   useEffect(() => {
     if (!auth.user || !editorNote || !currentContentKey || !canPersistEditor || currentContentKey === lastSyncedContentKey) {
@@ -190,9 +249,65 @@ export function NotesPage() {
       title: editorNote.title.trim(),
       bodyMarkdown: editorNote.bodyMarkdown
     };
-    clearAutosaveTimer();
-    autosaveTimerRef.current = window.setTimeout(() => {
-      void persistEditorPayload(payload, sessionId);
+    const refreshFoldersAfterSave = !payload.noteId;
+    autosaveTimerRef.current = window.setTimeout(async () => {
+      autosaveTimerRef.current = null;
+      saveInFlightRef.current = true;
+      setSaving(true);
+      setError(null);
+
+      try {
+        const persisted = payload.noteId
+          ? await updateNote(payload.noteId, {
+              folderId: payload.folderId,
+              title: payload.title,
+              bodyMarkdown: payload.bodyMarkdown
+            })
+          : await createNote({
+              folderId: payload.folderId,
+              title: payload.title,
+              bodyMarkdown: payload.bodyMarkdown
+            });
+
+        if (sessionId === editorSessionRef.current) {
+          setLastSyncedContentKey(buildContentKey(payload.folderId, payload.title, payload.bodyMarkdown));
+          skipNextNoteLoadRef.current = persisted.id;
+          startTransition(() => {
+            setSelectedNoteId(persisted.id);
+            setEditorNote((current) => {
+              if (!current) {
+                return current;
+              }
+              const sameRecord = current.noteId ? current.noteId === persisted.id : sessionId === editorSessionRef.current;
+              if (!sameRecord) {
+                return current;
+              }
+
+              return {
+                ...current,
+                noteId: persisted.id,
+                attachments: persisted.attachments,
+                createdAt: persisted.createdAt,
+                updatedAt: persisted.updatedAt,
+                isDraft: false
+              };
+            });
+          });
+        }
+
+        if (refreshFoldersAfterSave) {
+          await Promise.all([refreshNotes(), refreshFolders()]);
+        } else {
+          await refreshNotes();
+        }
+      } catch (saveError) {
+        if (sessionId === editorSessionRef.current) {
+          setError(String(saveError));
+        }
+      } finally {
+        saveInFlightRef.current = false;
+        setSaving(false);
+      }
     }, AUTOSAVE_DELAY_MS);
 
     return () => clearAutosaveTimer();
@@ -405,7 +520,6 @@ export function NotesPage() {
 
     return persisted?.id ?? null;
   }
-
   async function handleUpdateNotebookIcon(folderId: string, icon: FolderNode["icon"]) {
     if (!auth.user) {
       return;
@@ -433,6 +547,18 @@ export function NotesPage() {
   function closeCreateNotebookDialog() {
     setCreateNotebookOpen(false);
     setNewNotebookName("");
+  }
+
+  function openRenameNotebookDialog(folder: FolderNode) {
+    setRenameNotebookId(folder.id);
+    setRenameNotebookName(folder.name);
+    setRenameNotebookOpen(true);
+  }
+
+  function closeRenameNotebookDialog() {
+    setRenameNotebookOpen(false);
+    setRenameNotebookId(null);
+    setRenameNotebookName("");
   }
 
   async function handleCreateNotebook() {
@@ -481,7 +607,6 @@ export function NotesPage() {
     const previousFolders = folders;
     const previousMutations = new Map(buildFolderMutations(previousFolders).map((mutation) => [mutation.id, mutation]));
     const nextMutations = buildFolderMutations(nextFolders);
-    const nextFolderById = new Map(nextFolders.map((folder) => [folder.id, folder]));
     const changedFolders = nextMutations.filter((mutation) => {
       const previous = previousMutations.get(mutation.id);
       return !previous || previous.parentId !== mutation.parentId || previous.sortOrder !== mutation.sortOrder;
@@ -491,18 +616,20 @@ export function NotesPage() {
     setFolders(nextFolders);
 
     try {
-      for (const mutation of changedFolders) {
-        const folder = nextFolderById.get(mutation.id);
-        if (!folder) {
-          continue;
-        }
+      await Promise.all(
+        changedFolders.map((mutation) => {
+          const folder = nextFolders.find((entry) => entry.id === mutation.id);
+          if (!folder) {
+            return Promise.resolve();
+          }
 
-        await updateFolder(mutation.id, {
-          name: folder.name,
-          parentId: mutation.parentId,
-          sortOrder: mutation.sortOrder
-        });
-      }
+          return updateFolder(mutation.id, {
+            name: folder.name,
+            parentId: mutation.parentId,
+            sortOrder: mutation.sortOrder
+          });
+        })
+      );
       await refreshFolders();
     } catch (moveError) {
       setFolders(previousFolders);
@@ -539,23 +666,96 @@ export function NotesPage() {
   }
 
   function handleCreateDraft() {
-    if (!canCreateDraft) {
+    if (!auth.user || !canCreateDraft || !selectedFolderId || saveInFlightRef.current) {
       return;
     }
 
-    editorSessionRef.current += 1;
-    noteLoadRef.current += 1;
+    clearAutosaveTimer();
     setError(null);
-    setSelectedNoteId(null);
-    setEditorNote(createDraft(selectedFolderId));
-    setLastSyncedContentKey(null);
-    setEditorPane("markdown");
     setFolderPaneCollapsed(false);
     setNotePaneCollapsed(false);
     setMobileNotesOpen(false);
+    setEditorPane("markdown");
+
+    const nextSessionId = editorSessionRef.current + 1;
+    const previousEditor = editorNote;
+    const previousContentKey = currentContentKey;
+    const shouldPersistPreviousEditor = Boolean(previousEditor && previousContentKey && canPersistEditor && previousContentKey !== lastSyncedContentKey);
+
+    editorSessionRef.current = nextSessionId;
+    noteLoadRef.current += 1;
+    setSelectedNoteId(null);
+    setEditorNote(createDraft(selectedFolderId));
+    setLastSyncedContentKey(null);
+
+    saveInFlightRef.current = true;
+    setSaving(true);
+
+    void (async () => {
+      try {
+        if (previousEditor && shouldPersistPreviousEditor) {
+          const refreshFoldersAfterSave = !previousEditor.noteId;
+
+          if (previousEditor.noteId) {
+            await updateNote(previousEditor.noteId, {
+              folderId: previousEditor.folderId as string,
+              title: previousEditor.title.trim(),
+              bodyMarkdown: previousEditor.bodyMarkdown
+            });
+          } else {
+            await createNote({
+              folderId: previousEditor.folderId as string,
+              title: previousEditor.title.trim(),
+              bodyMarkdown: previousEditor.bodyMarkdown
+            });
+          }
+
+          if (refreshFoldersAfterSave) {
+            await Promise.all([refreshNotes(), refreshFolders()]);
+          } else {
+            await refreshNotes();
+          }
+        }
+
+        const created = await createNote({
+          folderId: selectedFolderId,
+          title: "",
+          bodyMarkdown: ""
+        });
+
+        if (nextSessionId === editorSessionRef.current) {
+          setLastSyncedContentKey(buildContentKey(created.folderId, created.title, created.bodyMarkdown));
+          skipNextNoteLoadRef.current = created.id;
+          startTransition(() => {
+            setSelectedNoteId(created.id);
+            setEditorNote((current) => {
+              if (!current || current.noteId || current.folderId !== created.folderId) {
+                return current;
+              }
+
+              return {
+                ...current,
+                noteId: created.id,
+                attachments: created.attachments,
+                createdAt: created.createdAt,
+                updatedAt: created.updatedAt,
+                isDraft: false
+              };
+            });
+          });
+        }
+
+        await Promise.all([refreshNotes(), refreshFolders()]);
+      } catch (noteError) {
+        setError(String(noteError));
+      } finally {
+        saveInFlightRef.current = false;
+        setSaving(false);
+      }
+    })();
   }
 
-  function handleSelectFolder(folderId: string | null) {
+function handleSelectFolder(folderId: string | null) {
     setSelectedFolderId(folderId);
     setFolderPaneCollapsed(false);
     setNotePaneCollapsed(false);
@@ -589,6 +789,8 @@ export function NotesPage() {
         setSelectedNoteId(noteId);
         setEditorNote(mapNoteDetail(movedNote));
         setLastSyncedContentKey(buildContentKey(movedNote.folderId, movedNote.title, movedNote.bodyMarkdown));
+      } else {
+        setSelectedNoteId(null);
       }
 
       await Promise.all([
@@ -610,13 +812,16 @@ export function NotesPage() {
     setDraggedNoteDeleteCandidate(null);
     setPendingNoteDelete({
       id: editorNote.noteId,
-      title: editorNote.title || "Untitled note"
+      title: editorNote.title.trim() || "Untitled note"
     });
   }
 
   function handleRequestDeleteNote(note: PendingNoteDelete) {
     setDraggedNoteDeleteCandidate(null);
-    setPendingNoteDelete(note);
+    setPendingNoteDelete({
+      id: note.id,
+      title: note.title.trim() || "Untitled note"
+    });
   }
 
   async function handleDeleteNote() {
@@ -649,6 +854,32 @@ export function NotesPage() {
     }
   }
 
+  async function handleRenameNotebook() {
+    if (!auth.user || !renameNotebookId || !renameNotebookName.trim()) {
+      return;
+    }
+
+    const folder = folders.find((entry) => entry.id === renameNotebookId);
+    if (!folder) {
+      closeRenameNotebookDialog();
+      return;
+    }
+
+    setError(null);
+
+    try {
+      await updateFolder(renameNotebookId, {
+        name: renameNotebookName.trim(),
+        icon: folder.icon,
+        parentId: folder.parentId
+      });
+      closeRenameNotebookDialog();
+      await refreshFolders();
+    } catch (folderError) {
+      setError(String(folderError));
+    }
+  }
+
   function handleRequestDeleteNotebook(folder: FolderNode) {
     setPendingFolderDelete(folder);
   }
@@ -672,35 +903,22 @@ export function NotesPage() {
     }
   }
 
-  async function handleUploadSelectedFile(file: File | null, insertBehavior: MediaInsertBehavior) {
-    if (!auth.user || !file) {
-      return false;
-    }
-
-    const noteId = await ensurePersistedNoteForMedia();
-    if (!noteId) {
-      return false;
+  async function handleAttachmentUpload(files: FileList | null) {
+    if (!auth.user || !editorNote?.noteId || !files?.[0]) {
+      return;
     }
 
     setUploadingAttachment(true);
     setError(null);
 
     try {
-      const uploaded = await uploadAttachment(noteId, file);
-      const refreshed = await getNote(noteId);
-      setEditorNote((current) => {
-        const baseBodyMarkdown = current?.noteId === noteId ? current.bodyMarkdown : refreshed.bodyMarkdown;
-        return {
-          ...mapNoteDetail(refreshed),
-          bodyMarkdown: applyUploadedAttachmentMarkup(baseBodyMarkdown, uploaded, insertBehavior)
-        };
-      });
+      await uploadAttachment(editorNote.noteId, files[0]);
+      const refreshed = await getNote(editorNote.noteId);
+      setEditorNote(mapNoteDetail(refreshed));
       setLastSyncedContentKey(buildContentKey(refreshed.folderId, refreshed.title, refreshed.bodyMarkdown));
       await refreshNotes();
-      return true;
     } catch (uploadError) {
       setError(String(uploadError));
-      return false;
     } finally {
       setUploadingAttachment(false);
     }
@@ -744,7 +962,7 @@ export function NotesPage() {
 
       return {
         ...current,
-        bodyMarkdown: appendMarkdownSnippet(current.bodyMarkdown, snippet)
+        bodyMarkdown: `${current.bodyMarkdown}${current.bodyMarkdown.endsWith("\n") || current.bodyMarkdown.length === 0 ? "" : "\n"}${snippet}`
       };
     });
   }
@@ -824,6 +1042,7 @@ export function NotesPage() {
                     onCreateNotebook={openCreateNotebookDialog}
                     onMoveNotebook={(move) => void handleMoveNotebook(move)}
                     onMoveNote={(noteId, folderId) => void handleMoveNoteToNotebook(noteId, folderId)}
+                    onRenameNotebook={openRenameNotebookDialog}
                     onRequestDeleteNote={handleRequestDeleteNote}
                     onRequestDeleteNotebook={handleRequestDeleteNotebook}
                     onUpdateNotebookIcon={(folderId, icon) => handleUpdateNotebookIcon(folderId, icon)}
@@ -894,17 +1113,13 @@ export function NotesPage() {
         <EditorPanel
           editorNote={editorNote}
           editorPane={editorPane}
-          canUseMediaActions={canUseMediaActions}
-          mediaActionDisabledReason="Select a notebook to add media."
           onEditorPaneChange={setEditorPane}
           onTitleChange={(title) => setEditorNote((current) => (current ? { ...current, title } : current))}
           onBodyChange={(bodyMarkdown) => setEditorNote((current) => (current ? { ...current, bodyMarkdown } : current))}
           onDeleteRequest={handleRequestDeleteCurrentNote}
-          onUploadSelectedFile={(file, insertBehavior) => handleUploadSelectedFile(file, insertBehavior)}
+          onUpload={(files) => void handleAttachmentUpload(files)}
           onInsertLink={(attachment) => appendToBody(`[${attachment.name}](${attachment.url})`)}
           onInsertImage={(attachment) => appendToBody(`![${attachment.name}](${attachment.url})`)}
-          onInsertAudio={(attachment) => appendToBody(`[${attachment.name}](${attachment.url})`)}
-          onInsertVideo={(attachment) => appendToBody(`[${attachment.name}](${attachment.url})`)}
           onDeleteAttachment={(attachmentId) => void handleDeleteAttachment(attachmentId)}
           onDownloadAttachment={(attachment) => void handleDownloadAttachment(attachment)}
           statusText={editorStatus}
@@ -919,17 +1134,13 @@ export function NotesPage() {
         <EditorPanel
           editorNote={editorNote}
           editorPane={editorPane}
-          canUseMediaActions={canUseMediaActions}
-          mediaActionDisabledReason="Select a notebook to add media."
           onEditorPaneChange={setEditorPane}
           onTitleChange={(title) => setEditorNote((current) => (current ? { ...current, title } : current))}
           onBodyChange={(bodyMarkdown) => setEditorNote((current) => (current ? { ...current, bodyMarkdown } : current))}
           onDeleteRequest={handleRequestDeleteCurrentNote}
-          onUploadSelectedFile={(file, insertBehavior) => handleUploadSelectedFile(file, insertBehavior)}
+          onUpload={(files) => void handleAttachmentUpload(files)}
           onInsertLink={(attachment) => appendToBody(`[${attachment.name}](${attachment.url})`)}
           onInsertImage={(attachment) => appendToBody(`![${attachment.name}](${attachment.url})`)}
-          onInsertAudio={(attachment) => appendToBody(`[${attachment.name}](${attachment.url})`)}
-          onInsertVideo={(attachment) => appendToBody(`[${attachment.name}](${attachment.url})`)}
           onDeleteAttachment={(attachmentId) => void handleDeleteAttachment(attachmentId)}
           onDownloadAttachment={(attachment) => void handleDownloadAttachment(attachment)}
           statusText={editorStatus}
@@ -948,6 +1159,7 @@ export function NotesPage() {
           onCreateNotebook={openCreateNotebookDialog}
           onMoveNotebook={(move) => void handleMoveNotebook(move)}
           onMoveNote={(noteId, folderId) => void handleMoveNoteToNotebook(noteId, folderId)}
+          onRenameNotebook={openRenameNotebookDialog}
           onRequestDeleteNote={handleRequestDeleteNote}
           onRequestDeleteNotebook={handleRequestDeleteNotebook}
           onUpdateNotebookIcon={(folderId, icon) => handleUpdateNotebookIcon(folderId, icon)}
@@ -987,6 +1199,17 @@ export function NotesPage() {
         onClose={closeCreateNotebookDialog}
         onConfirm={() => void handleCreateNotebook()}
       />
+      <TextPromptDialog
+        open={renameNotebookOpen}
+        title="Rename notebook"
+        description="Double-click a notebook in the tree to change its name."
+        value={renameNotebookName}
+        placeholder="Notebook name"
+        confirmLabel="Rename notebook"
+        onChange={setRenameNotebookName}
+        onClose={closeRenameNotebookDialog}
+        onConfirm={() => void handleRenameNotebook()}
+      />
 
       <ConfirmationDialog
         open={pendingNoteDelete !== null}
@@ -1014,17 +1237,13 @@ export function NotesPage() {
 function EditorPanel(props: {
   editorNote: EditorState | null;
   editorPane: EditorPane;
-  canUseMediaActions: boolean;
-  mediaActionDisabledReason: string;
   onEditorPaneChange(value: EditorPane): void;
   onTitleChange(title: string): void;
   onBodyChange(bodyMarkdown: string): void;
   onDeleteRequest(): void;
-  onUploadSelectedFile(file: File | null, insertBehavior: MediaInsertBehavior): Promise<boolean>;
+  onUpload(files: FileList | null): void;
   onInsertLink(attachment: AttachmentRef): void;
   onInsertImage(attachment: AttachmentRef): void;
-  onInsertAudio(attachment: AttachmentRef): void;
-  onInsertVideo(attachment: AttachmentRef): void;
   onDeleteAttachment(attachmentId: string): void;
   onDownloadAttachment(attachment: AttachmentRef): void;
   statusText: string;
@@ -1033,222 +1252,6 @@ function EditorPanel(props: {
   uploadingAttachment: boolean;
   error: string | null;
 }) {
-  const imageInputRef = useRef<HTMLInputElement | null>(null);
-  const audioInputRef = useRef<HTMLInputElement | null>(null);
-  const videoInputRef = useRef<HTMLInputElement | null>(null);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const mediaStreamRef = useRef<MediaStream | null>(null);
-  const recordedChunksRef = useRef<Blob[]>([]);
-  const discardRecordingRef = useRef(false);
-  const [recorderState, setRecorderState] = useState<{
-    phase: "closed" | "starting" | "recording" | "processing" | "recorded" | "error";
-    blob: Blob | null;
-    error: string | null;
-    previewUrl: string | null;
-  }>({
-    phase: "closed",
-    blob: null,
-    error: null,
-    previewUrl: null
-  });
-  const [savingRecording, setSavingRecording] = useState(false);
-  const mediaActionsDisabled = props.loading || props.uploadingAttachment || savingRecording || !props.canUseMediaActions;
-
-  useEffect(() => {
-    return () => {
-      discardRecordingRef.current = true;
-      stopRecorder();
-      clearRecorderClip();
-    };
-  }, []);
-
-  function clearRecorderClip() {
-    setRecorderState((current) => {
-      if (current.previewUrl) {
-        URL.revokeObjectURL(current.previewUrl);
-      }
-
-      return {
-        phase: "closed",
-        blob: null,
-        error: null,
-        previewUrl: null
-      };
-    });
-  }
-
-  function stopRecorderStream() {
-    mediaStreamRef.current?.getTracks().forEach((track) => track.stop());
-    mediaStreamRef.current = null;
-  }
-
-  function stopRecorder() {
-    const recorder = mediaRecorderRef.current;
-    mediaRecorderRef.current = null;
-
-    if (recorder && recorder.state !== "inactive") {
-      recorder.stop();
-    }
-
-    stopRecorderStream();
-  }
-
-  function openFilePicker(inputRef: { current: HTMLInputElement | null }) {
-    inputRef.current?.click();
-  }
-
-  async function handleInputSelection(input: HTMLInputElement, insertBehavior: MediaInsertBehavior) {
-    const [file] = Array.from(input.files ?? []);
-    input.value = "";
-    if (!file) {
-      return;
-    }
-
-    await props.onUploadSelectedFile(file, insertBehavior);
-  }
-
-  async function handleStartRecording() {
-    if (mediaActionsDisabled) {
-      return;
-    }
-
-    if (!navigator.mediaDevices?.getUserMedia || typeof window.MediaRecorder === "undefined") {
-      setRecorderState({
-        phase: "error",
-        blob: null,
-        error: "Voice recording is not supported in this browser.",
-        previewUrl: null
-      });
-      return;
-    }
-
-    discardRecordingRef.current = false;
-    clearRecorderClip();
-    setRecorderState({
-      phase: "starting",
-      blob: null,
-      error: null,
-      previewUrl: null
-    });
-
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mimeType = pickSupportedAudioRecorderMimeType();
-      const recorder = mimeType ? new window.MediaRecorder(stream, { mimeType }) : new window.MediaRecorder(stream);
-
-      mediaStreamRef.current = stream;
-      mediaRecorderRef.current = recorder;
-      recordedChunksRef.current = [];
-
-      recorder.addEventListener("dataavailable", (event) => {
-        if (event.data && event.data.size > 0) {
-          recordedChunksRef.current.push(event.data);
-        }
-      });
-
-      recorder.addEventListener("stop", () => {
-        const clip = recordedChunksRef.current.length
-          ? new Blob(recordedChunksRef.current, { type: recorder.mimeType || mimeType || "audio/webm" })
-          : null;
-
-        recordedChunksRef.current = [];
-        stopRecorderStream();
-        mediaRecorderRef.current = null;
-
-        if (discardRecordingRef.current || !clip) {
-          discardRecordingRef.current = false;
-          clearRecorderClip();
-          return;
-        }
-
-        const previewUrl = URL.createObjectURL(clip);
-        setRecorderState((current) => {
-          if (current.previewUrl) {
-            URL.revokeObjectURL(current.previewUrl);
-          }
-
-          return {
-            phase: "recorded",
-            blob: clip,
-            error: null,
-            previewUrl
-          };
-        });
-      });
-
-      recorder.start();
-      setRecorderState({
-        phase: "recording",
-        blob: null,
-        error: null,
-        previewUrl: null
-      });
-    } catch (error) {
-      stopRecorderStream();
-      mediaRecorderRef.current = null;
-      setRecorderState({
-        phase: "error",
-        blob: null,
-        error: formatRecorderError(error),
-        previewUrl: null
-      });
-    }
-  }
-
-  function handleStopRecording() {
-    const recorder = mediaRecorderRef.current;
-    if (!recorder || recorder.state !== "recording") {
-      return;
-    }
-
-    setRecorderState((current) => ({
-      ...current,
-      phase: "processing"
-    }));
-    recorder.stop();
-  }
-
-  function handleDiscardRecording() {
-    const recorder = mediaRecorderRef.current;
-    if (recorder && recorder.state === "recording") {
-      discardRecordingRef.current = true;
-      setRecorderState((current) => ({
-        ...current,
-        phase: "processing"
-      }));
-      recorder.stop();
-      return;
-    }
-
-    discardRecordingRef.current = false;
-    clearRecorderClip();
-  }
-
-  async function handleSaveRecording() {
-    if (!recorderState.blob) {
-      return;
-    }
-
-    setSavingRecording(true);
-    const fileName = `voice-note-${new Date().toISOString().replace(/[^\d]/g, "").slice(0, 14)}${extensionForMimeType(recorderState.blob.type)}`;
-
-    try {
-      const uploaded = await props.onUploadSelectedFile(
-        new File([recorderState.blob], fileName, {
-          type: recorderState.blob.type || "audio/webm"
-        }),
-        "link"
-      );
-
-      if (uploaded) {
-        handleDiscardRecording();
-      }
-    } finally {
-      setSavingRecording(false);
-    }
-  }
-
   return (
     <section className="bb-editor-panel bb-editor-panel--workspace lg:flex-1">
       <div className="bb-editor-header">
@@ -1266,38 +1269,6 @@ function EditorPanel(props: {
         </div>
       </div>
 
-      <input
-        ref={imageInputRef}
-        type="file"
-        accept="image/*"
-        className="hidden"
-        data-testid="media-input-image"
-        onChange={(event) => void handleInputSelection(event.currentTarget, "image")}
-      />
-      <input
-        ref={audioInputRef}
-        type="file"
-        accept="audio/*"
-        className="hidden"
-        data-testid="media-input-audio"
-        onChange={(event) => void handleInputSelection(event.currentTarget, "link")}
-      />
-      <input
-        ref={videoInputRef}
-        type="file"
-        accept="video/*"
-        className="hidden"
-        data-testid="media-input-video"
-        onChange={(event) => void handleInputSelection(event.currentTarget, "link")}
-      />
-      <input
-        ref={fileInputRef}
-        type="file"
-        className="hidden"
-        data-testid="media-input-file"
-        onChange={(event) => void handleInputSelection(event.currentTarget, "none")}
-      />
-
       {props.error ? (
         <p className="bb-error-banner text-sm">{props.error}</p>
       ) : null}
@@ -1310,280 +1281,71 @@ function EditorPanel(props: {
           </span>
         </div>
       ) : !props.editorNote ? (
-        <div className="bb-editor-panel__content">
-          <div className="bb-editor-body-header">
-            <div className="bb-editor-body-actions">
-              <span className="bb-field__label bb-field__label--mode">{props.editorPane === "markdown" ? "Notes" : "Preview"}</span>
-              <div className="bb-editor-media-toolbar" data-testid="editor-media-toolbar">
-                <MediaToolbarButton
-                  label="Add image"
-                  icon={<ImageSquare size={17} />}
-                  disabled={mediaActionsDisabled}
-                  disabledTitle={props.mediaActionDisabledReason}
-                  onClick={() => openFilePicker(imageInputRef)}
-                />
-                <MediaToolbarButton
-                  label="Add audio"
-                  icon={<MusicNotesSimple size={17} />}
-                  disabled={mediaActionsDisabled}
-                  disabledTitle={props.mediaActionDisabledReason}
-                  onClick={() => openFilePicker(audioInputRef)}
-                />
-                <MediaToolbarButton
-                  label="Add video"
-                  icon={<VideoCamera size={17} />}
-                  disabled={mediaActionsDisabled}
-                  disabledTitle={props.mediaActionDisabledReason}
-                  onClick={() => openFilePicker(videoInputRef)}
-                />
-                <MediaToolbarButton
-                  label="Record voice"
-                  icon={<Microphone size={17} />}
-                  disabled={mediaActionsDisabled || recorderState.phase === "starting" || recorderState.phase === "processing"}
-                  disabledTitle={props.mediaActionDisabledReason}
-                  active={recorderState.phase === "recording" || recorderState.phase === "recorded"}
-                  onClick={() => void handleStartRecording()}
-                />
-                <MediaToolbarButton
-                  label="Upload file"
-                  icon={<FileArrowUp size={17} />}
-                  disabled={mediaActionsDisabled}
-                  disabledTitle={props.mediaActionDisabledReason}
-                  onClick={() => openFilePicker(fileInputRef)}
-                />
-              </div>
-            </div>
-            <div className="bb-editor-mode">
-              <ModeButton
-                active={props.editorPane === "markdown"}
-                disabled={!props.editorNote}
-                label="Markdown"
-                icon={<PencilSimple size={17} />}
-                onClick={() => props.onEditorPaneChange("markdown")}
-              />
-              <ModeButton
-                active={props.editorPane === "preview"}
-                disabled={!props.editorNote}
-                label="Preview"
-                icon={<Eye size={17} />}
-                onClick={() => props.onEditorPaneChange("preview")}
-              />
-            </div>
-          </div>
-
-          {recorderState.phase !== "closed" ? (
-            <div className="bb-panel-note">
-              <div className="bb-recorder-panel">
-                <div className="bb-recorder-panel__copy">
-                  <p className="text-sm font-medium tracking-tight text-[color:var(--ink)]">
-                    {recorderState.phase === "recording" ? "Recording voice note" : null}
-                    {recorderState.phase === "starting" ? "Preparing microphone" : null}
-                    {recorderState.phase === "processing" ? "Processing recording" : null}
-                    {recorderState.phase === "recorded" ? "Voice note ready" : null}
-                    {recorderState.phase === "error" ? "Voice recorder unavailable" : null}
-                  </p>
-                  <p className="text-sm text-[color:var(--ink-soft)]">
-                    {recorderState.phase === "recording" ? "Stop when you're ready to review or attach the clip." : null}
-                    {recorderState.phase === "starting" ? "Requesting microphone access." : null}
-                    {recorderState.phase === "processing" ? "Finishing the recorded clip." : null}
-                    {recorderState.phase === "recorded" ? "Preview the clip, then save it as an attachment." : null}
-                    {recorderState.phase === "error" ? recorderState.error : null}
-                  </p>
-                </div>
-                {recorderState.previewUrl ? (
-                  <audio controls preload="metadata" src={recorderState.previewUrl} className="bb-recorder-panel__preview" />
-                ) : null}
-                <div className="flex flex-wrap gap-2">
-                  {recorderState.phase === "recording" ? (
-                    <button type="button" onClick={handleStopRecording} className={buttonSecondary}>
-                      Stop
-                    </button>
-                  ) : null}
-                  {recorderState.phase === "recorded" ? (
-                    <button
-                      type="button"
-                      onClick={() => void handleSaveRecording()}
-                      disabled={savingRecording || props.uploadingAttachment}
-                      className={buttonPrimary}
-                    >
-                      Save
-                    </button>
-                  ) : null}
-                  {recorderState.phase === "error" ? (
-                    <button type="button" onClick={() => void handleStartRecording()} className={buttonSecondary}>
-                      Try again
-                    </button>
-                  ) : null}
-                  {recorderState.phase !== "starting" && recorderState.phase !== "processing" ? (
-                    <button type="button" onClick={handleDiscardRecording} className={buttonSecondary}>
-                      {recorderState.phase === "recorded" ? "Discard" : "Dismiss"}
-                    </button>
-                  ) : null}
-                </div>
-              </div>
-            </div>
-          ) : null}
-
-          <div className="bb-empty-state bb-empty-state--center px-6 py-8">
-            <div className="space-y-2">
-              <p className="text-sm font-medium tracking-tight text-[color:var(--ink)]">No note selected</p>
-              <p className="text-sm text-[color:var(--ink-soft)]">
-                {props.canUseMediaActions ? "Choose a media action or start a new draft." : "Select a notebook to add media or start a new draft."}
-              </p>
-            </div>
+        <div className="bb-empty-state bb-empty-state--center px-6 py-8">
+          <div className="space-y-2">
+            <p className="text-sm font-medium tracking-tight text-[color:var(--ink)]">No note selected</p>
+            <p className="text-sm text-[color:var(--ink-soft)]">Choose a note or start a new draft.</p>
           </div>
         </div>
       ) : (
-        <div className="bb-editor-panel__content">
+      <div className="bb-editor-panel__content">
+        <label className="bb-field">
+          <span className="bb-field__label">Title</span>
+          <input
+            value={props.editorNote?.title ?? ""}
+            onChange={(event) => props.onTitleChange(event.target.value)}
+            placeholder="Note title"
+            disabled={!props.editorNote}
+            className="bb-input text-lg font-medium tracking-tight"
+          />
+        </label>
+
+        <div className="bb-editor-body-header">
+          <span className="bb-field__label bb-field__label--mode">{props.editorPane === "markdown" ? "Notes" : "Preview"}</span>
+          <div className="bb-editor-mode">
+            <ModeButton
+              active={props.editorPane === "markdown"}
+              label="Markdown"
+              icon={<PencilSimple size={17} />}
+              onClick={() => props.onEditorPaneChange("markdown")}
+            />
+            <ModeButton
+              active={props.editorPane === "preview"}
+              label="Preview"
+              icon={<Eye size={17} />}
+              onClick={() => props.onEditorPaneChange("preview")}
+            />
+          </div>
+        </div>
+
+        {props.editorPane === "markdown" ? (
           <label className="bb-field">
-            <span className="bb-field__label">Title</span>
-            <input
-              value={props.editorNote.title}
-              onChange={(event) => props.onTitleChange(event.target.value)}
-              placeholder="Note title"
+            <textarea
+              value={props.editorNote?.bodyMarkdown ?? ""}
+              onChange={(event) => props.onBodyChange(event.target.value)}
+              placeholder="Write in Markdown"
               disabled={!props.editorNote}
-              className="bb-input text-lg font-medium tracking-tight"
+              className="bb-textarea bb-note-content min-h-[30rem] text-sm leading-7"
             />
           </label>
-
-          <div className="bb-editor-body-header">
-            <div className="bb-editor-body-actions">
-              <span className="bb-field__label bb-field__label--mode">{props.editorPane === "markdown" ? "Notes" : "Preview"}</span>
-              <div className="bb-editor-media-toolbar" data-testid="editor-media-toolbar">
-                <MediaToolbarButton
-                  label="Add image"
-                  icon={<ImageSquare size={17} />}
-                  disabled={mediaActionsDisabled}
-                  disabledTitle={props.mediaActionDisabledReason}
-                  onClick={() => openFilePicker(imageInputRef)}
-                />
-                <MediaToolbarButton
-                  label="Add audio"
-                  icon={<MusicNotesSimple size={17} />}
-                  disabled={mediaActionsDisabled}
-                  disabledTitle={props.mediaActionDisabledReason}
-                  onClick={() => openFilePicker(audioInputRef)}
-                />
-                <MediaToolbarButton
-                  label="Add video"
-                  icon={<VideoCamera size={17} />}
-                  disabled={mediaActionsDisabled}
-                  disabledTitle={props.mediaActionDisabledReason}
-                  onClick={() => openFilePicker(videoInputRef)}
-                />
-                <MediaToolbarButton
-                  label="Record voice"
-                  icon={<Microphone size={17} />}
-                  disabled={mediaActionsDisabled || recorderState.phase === "starting" || recorderState.phase === "processing"}
-                  disabledTitle={props.mediaActionDisabledReason}
-                  active={recorderState.phase === "recording" || recorderState.phase === "recorded"}
-                  onClick={() => void handleStartRecording()}
-                />
-                <MediaToolbarButton
-                  label="Upload file"
-                  icon={<FileArrowUp size={17} />}
-                  disabled={mediaActionsDisabled}
-                  disabledTitle={props.mediaActionDisabledReason}
-                  onClick={() => openFilePicker(fileInputRef)}
-                />
-              </div>
-            </div>
-            <div className="bb-editor-mode">
-              <ModeButton
-                active={props.editorPane === "markdown"}
-                label="Markdown"
-                icon={<PencilSimple size={17} />}
-                onClick={() => props.onEditorPaneChange("markdown")}
-              />
-              <ModeButton
-                active={props.editorPane === "preview"}
-                label="Preview"
-                icon={<Eye size={17} />}
-                onClick={() => props.onEditorPaneChange("preview")}
-              />
-            </div>
+        ) : (
+          <div className="bb-pane-card min-h-[30rem]">
+            <MarkdownPreview bodyMarkdown={props.editorNote.bodyMarkdown} />
           </div>
+        )}
 
-          {recorderState.phase !== "closed" ? (
-            <div className="bb-panel-note">
-              <div className="bb-recorder-panel">
-                <div className="bb-recorder-panel__copy">
-                  <p className="text-sm font-medium tracking-tight text-[color:var(--ink)]">
-                    {recorderState.phase === "recording" ? "Recording voice note" : null}
-                    {recorderState.phase === "starting" ? "Preparing microphone" : null}
-                    {recorderState.phase === "processing" ? "Processing recording" : null}
-                    {recorderState.phase === "recorded" ? "Voice note ready" : null}
-                    {recorderState.phase === "error" ? "Voice recorder unavailable" : null}
-                  </p>
-                  <p className="text-sm text-[color:var(--ink-soft)]">
-                    {recorderState.phase === "recording" ? "Stop when you're ready to review or attach the clip." : null}
-                    {recorderState.phase === "starting" ? "Requesting microphone access." : null}
-                    {recorderState.phase === "processing" ? "Finishing the recorded clip." : null}
-                    {recorderState.phase === "recorded" ? "Preview the clip, then save it as an attachment." : null}
-                    {recorderState.phase === "error" ? recorderState.error : null}
-                  </p>
-                </div>
-                {recorderState.previewUrl ? (
-                  <audio controls preload="metadata" src={recorderState.previewUrl} className="bb-recorder-panel__preview" />
-                ) : null}
-                <div className="flex flex-wrap gap-2">
-                  {recorderState.phase === "recording" ? (
-                    <button type="button" onClick={handleStopRecording} className={buttonSecondary}>
-                      Stop
-                    </button>
-                  ) : null}
-                  {recorderState.phase === "recorded" ? (
-                    <button
-                      type="button"
-                      onClick={() => void handleSaveRecording()}
-                      disabled={savingRecording || props.uploadingAttachment}
-                      className={buttonPrimary}
-                    >
-                      Save
-                    </button>
-                  ) : null}
-                  {recorderState.phase === "error" ? (
-                    <button type="button" onClick={() => void handleStartRecording()} className={buttonSecondary}>
-                      Try again
-                    </button>
-                  ) : null}
-                  {recorderState.phase !== "starting" && recorderState.phase !== "processing" ? (
-                    <button type="button" onClick={handleDiscardRecording} className={buttonSecondary}>
-                      {recorderState.phase === "recorded" ? "Discard" : "Dismiss"}
-                    </button>
-                  ) : null}
-                </div>
-              </div>
-            </div>
-          ) : null}
+        <AttachmentList
+          attachments={props.editorNote?.attachments ?? []}
+          uploading={props.uploadingAttachment}
+          disabled={!props.editorNote?.noteId}
+          onUpload={props.onUpload}
+          onInsertLink={props.onInsertLink}
+          onInsertImage={props.onInsertImage}
+          onDelete={props.onDeleteAttachment}
+          onDownload={props.onDownloadAttachment}
+        />
 
-          {props.editorPane === "markdown" ? (
-            <label className="bb-field">
-              <textarea
-                value={props.editorNote.bodyMarkdown}
-                onChange={(event) => props.onBodyChange(event.target.value)}
-                placeholder="Write in Markdown"
-                disabled={!props.editorNote}
-                className="bb-textarea bb-note-content min-h-[30rem] text-sm leading-7"
-              />
-            </label>
-          ) : (
-            <div className="bb-pane-card min-h-[30rem]">
-              <MarkdownPreview bodyMarkdown={props.editorNote.bodyMarkdown} attachments={props.editorNote.attachments} />
-            </div>
-          )}
-
-          <AttachmentList
-            attachments={props.editorNote.attachments}
-            disabled={!props.editorNote.noteId || props.uploadingAttachment}
-            onInsertLink={props.onInsertLink}
-            onInsertImage={props.onInsertImage}
-            onInsertAudio={props.onInsertAudio}
-            onInsertVideo={props.onInsertVideo}
-            onDelete={props.onDeleteAttachment}
-            onDownload={props.onDownloadAttachment}
-          />
-        </div>
+      </div>
       )}
 
       <div className="bb-editor-footer">
@@ -1675,7 +1437,6 @@ function MobileDrawer(props: {
 
 function ModeButton(props: {
   active: boolean;
-  disabled?: boolean;
   label: string;
   icon: ReactNode;
   onClick(): void;
@@ -1684,32 +1445,9 @@ function ModeButton(props: {
     <button
       type="button"
       onClick={props.onClick}
-      disabled={props.disabled}
       aria-label={props.label}
       title={props.label}
       className={`bb-editor-mode__button ${props.active ? "is-active" : ""}`}
-    >
-      {props.icon}
-    </button>
-  );
-}
-
-function MediaToolbarButton(props: {
-  active?: boolean;
-  disabled?: boolean;
-  disabledTitle?: string;
-  icon: ReactNode;
-  label: string;
-  onClick(): void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={props.onClick}
-      disabled={props.disabled}
-      aria-label={props.label}
-      title={props.disabled ? props.disabledTitle ?? props.label : props.label}
-      className={`bb-icon-button bb-icon-button--accent ${props.active ? "bb-icon-button--is-active" : ""}`}
     >
       {props.icon}
     </button>
@@ -1750,62 +1488,6 @@ function buildContentKey(folderId: string | null, title: string, bodyMarkdown: s
   });
 }
 
-function appendMarkdownSnippet(bodyMarkdown: string, snippet: string) {
-  return `${bodyMarkdown}${bodyMarkdown.endsWith("\n") || bodyMarkdown.length === 0 ? "" : "\n"}${snippet}`;
-}
-
-function applyUploadedAttachmentMarkup(bodyMarkdown: string, attachment: AttachmentRef, insertBehavior: MediaInsertBehavior) {
-  if (insertBehavior === "image") {
-    return appendMarkdownSnippet(bodyMarkdown, `![${attachment.name}](${attachment.url})`);
-  }
-
-  if (insertBehavior === "link") {
-    return appendMarkdownSnippet(bodyMarkdown, `[${attachment.name}](${attachment.url})`);
-  }
-
-  return bodyMarkdown;
-}
-
-function pickSupportedAudioRecorderMimeType() {
-  if (typeof window.MediaRecorder === "undefined" || typeof window.MediaRecorder.isTypeSupported !== "function") {
-    return null;
-  }
-
-  const candidates = [
-    "audio/webm;codecs=opus",
-    "audio/webm",
-    "audio/ogg;codecs=opus",
-    "audio/ogg",
-    "audio/mp4"
-  ];
-
-  return candidates.find((candidate) => window.MediaRecorder.isTypeSupported(candidate)) ?? null;
-}
-
-function extensionForMimeType(mimeType: string) {
-  if (mimeType.includes("ogg")) {
-    return ".ogg";
-  }
-
-  if (mimeType.includes("mp4")) {
-    return ".mp4";
-  }
-
-  return ".webm";
-}
-
-function formatRecorderError(error: unknown) {
-  if (error instanceof DOMException && error.name === "NotAllowedError") {
-    return "Microphone access was denied.";
-  }
-
-  if (error instanceof DOMException && error.name === "NotFoundError") {
-    return "No microphone was found on this device.";
-  }
-
-  return "Voice recording could not be started.";
-}
-
 function getEditorStatus(props: {
   editorNote: EditorState | null;
   foldersCount: number;
@@ -1830,10 +1512,6 @@ function getEditorStatus(props: {
 
   if (!props.editorNote.folderId) {
     return "Select a notebook to save";
-  }
-
-  if (!props.editorNote.title.trim()) {
-    return "Add a title to save";
   }
 
   if (props.editorNote.updatedAt) {
