@@ -1161,34 +1161,17 @@ button:disabled {
 .bb-route-error__copy {
   display: grid;
   align-content: center;
-  gap: 1rem;
+  gap: 1.15rem;
   min-width: 0;
   padding: clamp(0.4rem, 1vw, 0.8rem);
 }
 
-.bb-route-error__eyebrow {
-  margin: 0;
-  color: var(--accent-strong);
-  font-size: 0.8rem;
-  font-weight: 700;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-}
-
 .bb-route-error__title {
   margin: 0;
-  max-width: 12ch;
+  max-width: 11ch;
   font-size: clamp(2.7rem, 6vw, 4.8rem);
   line-height: 0.95;
   letter-spacing: -0.06em;
-}
-
-.bb-route-error__description {
-  margin: 0;
-  max-width: 58ch;
-  color: var(--ink-soft);
-  font-size: 1.02rem;
-  line-height: 1.72;
 }
 
 .bb-route-error__actions {
@@ -1291,33 +1274,6 @@ button:disabled {
   background: color-mix(in srgb, var(--accent) 18%, transparent);
   filter: blur(40px);
   opacity: 0.7;
-}
-
-.bb-route-error__meta {
-  display: inline-flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.7rem;
-  width: fit-content;
-  min-width: 0;
-  padding: 0.7rem 0.95rem;
-  border: 1px solid color-mix(in srgb, var(--line) 86%, transparent);
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--surface-muted) 90%, transparent);
-}
-
-.bb-route-error__meta-label {
-  color: var(--ink-soft);
-  font-size: 0.78rem;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
-
-.bb-route-error__meta code {
-  min-width: 0;
-  overflow-wrap: anywhere;
-  color: var(--ink);
 }
 
 .bb-empty-state--center {

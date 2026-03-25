@@ -1,5 +1,5 @@
 import { ArrowLeft, CircleNotch, HouseSimple, SignIn, WarningCircle } from "@phosphor-icons/react";
-import { Link, isRouteErrorResponse, useLocation, useNavigate, useRouteError } from "react-router-dom";
+import { Link, isRouteErrorResponse, useNavigate, useRouteError } from "react-router-dom";
 import { useAuth } from "../auth/AuthProvider";
 import { PageNav } from "../components/PageNav";
 import { buttonPrimary, buttonSecondary } from "../components/buttonStyles";
@@ -7,16 +7,11 @@ import { buttonPrimary, buttonSecondary } from "../components/buttonStyles";
 export function RouteErrorPage() {
   const auth = useAuth();
   const navigate = useNavigate();
-  const location = useLocation();
   const error = useRouteError();
   const routeError = isRouteErrorResponse(error) ? error : null;
   const statusCode = routeError?.status ?? 500;
   const notFound = statusCode === 404;
-  const eyebrow = notFound ? "Page not found" : "Route error";
   const title = notFound ? "That page slipped out of this notebook." : "BBNote hit a route snag.";
-  const description = notFound
-    ? "The link may be old, incomplete, or pointing somewhere that was never filed."
-    : "The app couldn't open this route cleanly, but your notes are still close by.";
   const detail = routeError
     ? routeError.statusText
     : error instanceof Error
@@ -57,9 +52,7 @@ export function RouteErrorPage() {
         <section className="bb-route-error" data-testid="route-error-page">
           <div className="bb-route-error__hero">
             <div className="bb-route-error__copy">
-              <p className="bb-route-error__eyebrow">{eyebrow}</p>
               <h1 className="bb-route-error__title">{title}</h1>
-              <p className="bb-route-error__description">{description}</p>
               <div className="bb-route-error__actions">
                 {auth.user ? (
                   <Link to="/" className={buttonPrimary}>
@@ -94,11 +87,6 @@ export function RouteErrorPage() {
               </div>
               <div className="bb-route-error__halo" />
             </div>
-          </div>
-
-          <div className="bb-route-error__meta">
-            <span className="bb-route-error__meta-label">Path</span>
-            <code>{location.pathname}</code>
           </div>
 
           {!notFound ? (

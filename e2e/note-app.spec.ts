@@ -150,10 +150,13 @@ test("shows a branded 404 page instead of the router default error screen", asyn
 
   await expect(page.getByTestId("route-error-page")).toBeVisible();
   await expect(page.getByRole("heading", { name: /that page slipped out of this notebook/i })).toBeVisible();
-  await expect(page.getByText("/missing/notebook/path")).toBeVisible();
   await expect(page.getByRole("button", { name: /^sign in$/i })).toBeVisible();
   await expect(page.getByRole("link", { name: /^back to home$/i })).toBeVisible();
   await expect(page.getByRole("button", { name: /^go back$/i })).toBeVisible();
+  await expect(page.getByText(/^page not found$/i)).toHaveCount(0);
+  await expect(page.getByText("The link may be old, incomplete, or pointing somewhere that was never filed.")).toHaveCount(0);
+  await expect(page.getByText("/missing/notebook/path")).toHaveCount(0);
+  await expect(page.getByText(/^path$/i)).toHaveCount(0);
   await expect(page.getByText("Unexpected Application Error!")).toHaveCount(0);
   await expect(page.getByText(/^404 Not Found$/i)).toHaveCount(0);
 });
