@@ -1,6 +1,7 @@
 import { ArrowLeft, CircleNotch, HouseSimple, SignIn, WarningCircle } from "@phosphor-icons/react";
 import { Link, isRouteErrorResponse, useNavigate, useRouteError } from "react-router-dom";
 import { useAuth } from "../auth/AuthProvider";
+import { BrandMark } from "../components/BrandMark";
 import { PageNav } from "../components/PageNav";
 import { buttonPrimary, buttonSecondary } from "../components/buttonStyles";
 
@@ -12,6 +13,7 @@ export function RouteErrorPage() {
   const statusCode = routeError?.status ?? 500;
   const notFound = statusCode === 404;
   const title = notFound ? "That page slipped out of this notebook." : "BBNote hit a route snag.";
+  const showHomeAction = auth.status !== "loading";
   const detail = routeError
     ? routeError.statusText
     : error instanceof Error
@@ -30,10 +32,7 @@ export function RouteErrorPage() {
         ) : (
           <header className="bb-topbar">
             <div className="bb-topbar__nav bb-topbar__nav--brand-only">
-              <Link to="/" className="bb-brand-mark" aria-label="BBNote home">
-                <span className="bb-brand-mark__pill">bb</span>
-                <span className="bb-brand-mark__title">BBNote</span>
-              </Link>
+              <BrandMark />
             </div>
             {auth.status === "loading" ? (
               <div className="bb-status-pill">
@@ -54,15 +53,10 @@ export function RouteErrorPage() {
             <div className="bb-route-error__copy">
               <h1 className="bb-route-error__title">{title}</h1>
               <div className="bb-route-error__actions">
-                {auth.user ? (
+                {showHomeAction && (
                   <Link to="/" className={buttonPrimary}>
                     <HouseSimple size={18} />
-                    Open notes
-                  </Link>
-                ) : auth.status === "loading" ? null : (
-                  <Link to="/" className={buttonPrimary}>
-                    <HouseSimple size={18} />
-                    Back to home
+                    {auth.user ? "Open notes" : "Back to home"}
                   </Link>
                 )}
                 <button type="button" onClick={() => navigate(-1)} className={buttonSecondary}>

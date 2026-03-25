@@ -1,6 +1,6 @@
-import { Link } from "react-router-dom";
 import type { AuthSession } from "../api/types";
 import type { UserTheme } from "../api/types";
+import { BrandMark } from "./BrandMark";
 import { UserMenu } from "./UserMenu";
 
 export function PageNav(props: {
@@ -11,10 +11,7 @@ export function PageNav(props: {
   return (
     <header className="bb-topbar">
       <div className="bb-topbar__nav bb-topbar__nav--brand-only">
-        <Link to="/" className="bb-brand-mark" aria-label="BBNote home">
-          <span className="bb-brand-mark__pill">bb</span>
-          <span className="bb-brand-mark__title">BBNote</span>
-        </Link>
+        <BrandMark />
       </div>
       <UserMenu
         name={props.user?.name ?? null}
