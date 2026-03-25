@@ -411,7 +411,7 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
   const targetNoteDropZone = page.getByTestId(buildNoteTestId("before", noteTitle));
   await expect(followUpNoteCard).toBeVisible();
   await targetNoteDropZone.scrollIntoViewIfNeeded();
-  await followUpNoteCard.dragTo(targetNoteDropZone);
+  await dragToDropZone(page, followUpNoteCard, targetNoteDropZone);
   await expect
     .poll(async () => {
       const items = await page
@@ -582,6 +582,44 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
   await expect(deleteNotebookDialog).toBeVisible();
   await deleteNotebookDialog.getByRole("button", { name: /^delete notebook$/i }).click();
   await expect(page.getByTestId(buildNotebookTestId("drag", archiveNotebookName))).toHaveCount(0);
+});
+
+test("reorders notes by dropping onto note cards and persists the order", async ({ page }) => {
+  await page.setViewportSize({ width: 1900, height: 1000 });
+  const suffix = Date.now().toString();
+  const notebookName = `Card reorder ${suffix}`;
+  const firstNoteTitle = `Alpha ${suffix}`;
+  const secondNoteTitle = `Beta ${suffix}`;
+
+  await login(page);
+  await createNotebookWithDialog(page, notebookName);
+  await notebookRow(page, notebookName).click();
+
+  await createNoteWithContent(page, firstNoteTitle, "First note body.");
+  await createNoteWithContent(page, secondNoteTitle, "Second note body.");
+  await expectNoteOrderInLane(page, [firstNoteTitle, secondNoteTitle]);
+
+  await dragNoteCardToNoteCard(
+    page.getByTestId(buildNoteTestId("drag", secondNoteTitle)),
+    page.getByTestId(buildNoteTestId("drag", firstNoteTitle)),
+    "top"
+  );
+  await expectNoteOrderInLane(page, [secondNoteTitle, firstNoteTitle]);
+
+  await page.reload();
+  await notebookRow(page, notebookName).click();
+  await expectNoteOrderInLane(page, [secondNoteTitle, firstNoteTitle]);
+
+  await dragNoteCardToNoteCard(
+    page.getByTestId(buildNoteTestId("drag", secondNoteTitle)),
+    page.getByTestId(buildNoteTestId("drag", firstNoteTitle)),
+    "bottom"
+  );
+  await expectNoteOrderInLane(page, [firstNoteTitle, secondNoteTitle]);
+
+  await page.reload();
+  await notebookRow(page, notebookName).click();
+  await expectNoteOrderInLane(page, [firstNoteTitle, secondNoteTitle]);
 });
 
 test("persists empty notes immediately so repeated new-note clicks create multiple blank notes", async ({ page }) => {
@@ -766,6 +804,38 @@ async function createNotebookWithDialog(page: import("@playwright/test").Page, n
   await expect(dialog).toHaveCount(0);
 }
 
+async function createNoteWithContent(page: import("@playwright/test").Page, title: string, body: string) {
+  const newNoteButton = page.getByRole("button", { name: /^new note$/i }).first();
+  await expect(newNoteButton).toBeEnabled();
+  await newNoteButton.click();
+  await expect(page.getByRole("textbox", { name: "Title" }).first()).toHaveValue("");
+  const editorFooter = page.locator(".bb-editor-footer").first();
+  await expect
+    .poll(async () => ((await editorFooter.textContent()) ?? "").trim())
+    .toMatch(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z/);
+  const initialFooterText = ((await editorFooter.textContent()) ?? "").trim();
+  await page.getByRole("textbox", { name: "Title" }).first().fill(title);
+  await page.getByPlaceholder("Write in Markdown").first().fill(body);
+  await expect
+    .poll(async () => {
+      const footerText = ((await editorFooter.textContent()) ?? "").trim();
+      return footerText !== initialFooterText ? footerText : "";
+    })
+    .toMatch(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z/);
+  await expect(page.getByTestId(buildNoteTestId("drag", title))).toBeVisible();
+}
+
+async function expectNoteOrderInLane(page: import("@playwright/test").Page, titles: string[]) {
+  await expect
+    .poll(async () => {
+      const items = await page
+        .locator('[data-testid^="note-drag-"] .bb-note-card__title')
+        .evaluateAll((elements) => elements.map((element) => element.textContent?.trim() ?? ""));
+      return items.slice(0, titles.length);
+    })
+    .toEqual(titles);
+}
+
 async function createTempFile(name: string, contents: string) {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), "bbnote-playwright-"));
   const filePath = path.join(directory, name);
@@ -813,6 +883,27 @@ async function dragToDropZone(
   const dataTransfer = await startDrag(page, source);
   await expect(target).toBeAttached();
   await dropOnTarget(source, target, dataTransfer);
+}
+
+async function dragNoteCardToNoteCard(
+  source: import("@playwright/test").Locator,
+  target: import("@playwright/test").Locator,
+  position: "top" | "bottom"
+) {
+  await expect(source).toBeVisible();
+  await expect(target).toBeVisible();
+  await target.scrollIntoViewIfNeeded();
+  const box = await target.boundingBox();
+  if (!box) {
+    throw new Error("Expected a note card drop target to be visible.");
+  }
+
+  await source.dragTo(target, {
+    targetPosition: {
+      x: Math.max(16, Math.min(box.width / 2, 28)),
+      y: position === "top" ? Math.max(6, Math.min(box.height / 2, 12)) : Math.max(6, box.height - 6)
+    }
+  });
 }
 
 async function startDrag(page: import("@playwright/test").Page, source: import("@playwright/test").Locator) {

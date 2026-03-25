@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { createEvent, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { NoteSummary } from "../api/types";
 import { NoteListPane } from "./NoteListPane";
 
@@ -52,7 +52,7 @@ describe("NoteListPane", () => {
     expect(screen.getByTestId("notes-delete-target")).toHaveClass("bb-pane-card__header-center-action--lane");
   });
 
-  it("reorders a note when dropped directly onto another note card", () => {
+  it("reorders a note before another card when dropped near the top of the target", () => {
     const handleMoveNote = vi.fn();
     const dataTransfer = createDataTransfer();
 
@@ -72,14 +72,67 @@ describe("NoteListPane", () => {
       onMoveNote: handleMoveNote
     });
 
+    const targetCard = screen.getByTestId(buildNoteTestId("drag", "Roadmap follow-up"));
+    mockElementRect(targetCard, {
+      top: 100,
+      height: 100
+    });
+
+    fireEvent.dragStart(screen.getByTestId(buildNoteTestId("drag", "Quarterly review")), { dataTransfer });
+    const dragOverEvent = createEvent.dragOver(targetCard, { dataTransfer });
+    Object.defineProperty(dragOverEvent, "clientY", {
+      configurable: true,
+      value: 110
+    });
+    fireEvent(targetCard, dragOverEvent);
+    fireEvent.drop(targetCard, { dataTransfer });
+
+    expect(handleMoveNote).toHaveBeenCalledWith({
+      draggedId: "note-1",
+      targetId: "note-2",
+      position: "before"
+    });
+  });
+
+  it("reorders a note after another card when dropped near the bottom of the target", () => {
+    const handleMoveNote = vi.fn();
+    const dataTransfer = createDataTransfer();
+
+    renderNoteListPane({
+      notes: [
+        buildNote({
+          id: "note-1",
+          title: "Quarterly review",
+          sortOrder: 0
+        }),
+        buildNote({
+          id: "note-2",
+          title: "Roadmap follow-up",
+          sortOrder: 1
+        })
+      ],
+      onMoveNote: handleMoveNote
+    });
+
+    const targetCard = screen.getByTestId(buildNoteTestId("drag", "Quarterly review"));
+    mockElementRect(targetCard, {
+      top: 100,
+      height: 100
+    });
+
     fireEvent.dragStart(screen.getByTestId(buildNoteTestId("drag", "Roadmap follow-up")), { dataTransfer });
-    fireEvent.dragOver(screen.getByTestId(buildNoteTestId("drag", "Quarterly review")), { dataTransfer });
-    fireEvent.drop(screen.getByTestId(buildNoteTestId("drag", "Quarterly review")), { dataTransfer });
+    const dragOverEvent = createEvent.dragOver(targetCard, { dataTransfer });
+    Object.defineProperty(dragOverEvent, "clientY", {
+      configurable: true,
+      value: 190
+    });
+    fireEvent(targetCard, dragOverEvent);
+    fireEvent.drop(targetCard, { dataTransfer });
 
     expect(handleMoveNote).toHaveBeenCalledWith({
       draggedId: "note-2",
       targetId: "note-1",
-      position: "before"
+      position: "after"
     });
   });
 
@@ -277,6 +330,24 @@ function buildNote(overrides?: Partial<NoteSummary>): NoteSummary {
     attachmentCount: 0,
     ...overrides
   };
+}
+
+function mockElementRect(element: HTMLElement, rect: { top: number; height: number }) {
+  const mockRect = {
+    x: 0,
+    y: rect.top,
+    top: rect.top,
+    left: 0,
+    width: 240,
+    height: rect.height,
+    right: 240,
+    bottom: rect.top + rect.height,
+    toJSON: () => ({})
+  } as DOMRect;
+  Object.defineProperty(element, "getBoundingClientRect", {
+    configurable: true,
+    value: vi.fn(() => mockRect)
+  });
 }
 
 function createDataTransfer(): DataTransfer {
