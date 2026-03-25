@@ -13,9 +13,7 @@ export function PageNav(props: {
       <div className="bb-topbar__nav bb-topbar__nav--brand-only">
         <Link to="/" className="bb-brand-mark" aria-label="BBNote home">
           <span className="bb-brand-mark__pill">bb</span>
-          <span className="bb-brand-mark__copy">
-            <span className="bb-brand-mark__title">BBNote</span>
-          </span>
+          <span className="bb-brand-mark__title">BBNote</span>
         </Link>
       </div>
       <UserMenu

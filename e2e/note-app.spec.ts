@@ -152,6 +152,41 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
   const topbarBox = await page.locator(".bb-topbar").boundingBox();
   const viewport = page.viewportSize();
   expect(topbarBox?.width ?? 0).toBeGreaterThan(((viewport?.width ?? 0) * 0.95));
+  await expect
+    .poll(async () => page.locator(".bb-topbar").evaluate((element) => getComputedStyle(element).backgroundColor))
+    .toBe("rgba(0, 0, 0, 0)");
+  await expect
+    .poll(async () => page.locator(".bb-topbar").evaluate((element) => getComputedStyle(element).borderTopWidth))
+    .toBe("0px");
+  await expect
+    .poll(async () => page.locator(".bb-topbar").evaluate((element) => getComputedStyle(element).boxShadow))
+    .toBe("none");
+  await expect
+    .poll(async () => {
+      return page.evaluate(() => {
+        const pill = document.querySelector(".bb-brand-mark__pill")?.getBoundingClientRect();
+        const title = document.querySelector(".bb-brand-mark__title")?.getBoundingClientRect();
+        if (!pill || !title) {
+          return Number.POSITIVE_INFINITY;
+        }
+
+        return Math.abs(title.y + title.height / 2 - (pill.y + pill.height / 2));
+      });
+    })
+    .toBeLessThan(6);
+  await expect
+    .poll(async () => {
+      return page.evaluate(() => {
+        const pill = document.querySelector(".bb-brand-mark__pill")?.getBoundingClientRect();
+        const title = document.querySelector(".bb-brand-mark__title")?.getBoundingClientRect();
+        if (!pill || !title) {
+          return Number.POSITIVE_INFINITY;
+        }
+
+        return title.x - (pill.x + pill.width);
+      });
+    })
+    .toBeLessThan(18);
   await expect(page.getByRole("navigation", { name: /primary navigation/i })).toHaveCount(0);
   await expect(page.getByText("Markdown workspace")).toHaveCount(0);
   await expect(page.getByRole("link", { name: /bbnote home/i })).toHaveAttribute("href", "/");
