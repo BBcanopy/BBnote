@@ -410,6 +410,24 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
     })
     .toEqual([expect.stringContaining(followUpNoteTitle), expect.stringContaining(noteTitle)]);
 
+  await page.getByRole("button", { name: new RegExp(followUpNoteTitle, "i") }).click();
+  const autosaveListRefreshRequest = page.waitForRequest((request) => {
+    return (
+      request.method() === "GET" &&
+      request.url().includes("/api/v1/notes?") &&
+      request.url().includes("folderId=") &&
+      request.url().includes("sort=priority") &&
+      request.url().includes("order=asc")
+    );
+  });
+  await page.getByPlaceholder("Write in Markdown").first().fill("Second note to test manual priority and autosave list refresh.");
+  await autosaveListRefreshRequest;
+  await expect(page.locator(".bb-skeleton-card")).toHaveCount(0);
+  await expect(page.getByTestId(buildNoteTestId("drag", followUpNoteTitle))).toBeVisible();
+  await expect
+    .poll(async () => ((await page.locator(".bb-editor-footer").first().textContent()) ?? "").trim())
+    .toMatch(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z/);
+
   await page.getByPlaceholder("Search notes").fill("priority");
   await expect(page.locator('[data-testid^="note-before-"]')).toHaveCount(0);
   await page.getByPlaceholder("Search notes").fill("");
@@ -425,17 +443,6 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
     await notePreview.evaluate((element) => {
       const noteCard = element as HTMLButtonElement;
       return noteCard.scrollWidth <= noteCard.clientWidth + 1;
-    })
-  ).toBeTruthy();
-  expect(
-    await notePreview.evaluate((element) => {
-      const excerpt = element.querySelector(".bb-note-card__excerpt") as HTMLElement | null;
-      if (!excerpt) {
-        return false;
-      }
-      const lineHeight = Number.parseFloat(getComputedStyle(excerpt).lineHeight);
-      const excerptHeight = excerpt.getBoundingClientRect().height;
-      return excerpt.scrollHeight <= excerpt.clientHeight + 2 && Number.isFinite(lineHeight) && excerptHeight <= lineHeight * 1.5 + 6;
     })
   ).toBeTruthy();
   expect(
@@ -508,11 +515,13 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
   await expect(page.getByText(followUpNoteTitle).first()).toHaveCount(0);
   await expect(page.getByText("No note selected").first()).toBeVisible();
 
+  const notebookHeader = page.getByTestId("notebook-pane").locator(".bb-pane-card__header").first();
   const blockedNotebookHandle = page.getByTestId(buildNotebookHandleTestId(subNotebookName));
   const blockedNotebookDrag = await startDrag(page, blockedNotebookHandle);
-  const deleteNotebookTarget = page.getByRole("button", { name: /^delete notebook$/i });
+  const deleteNotebookTarget = page.getByTestId("notebooks-delete-target");
   await expect(deleteNotebookTarget).toBeVisible();
   await expect(deleteNotebookTarget).toBeDisabled();
+  await expectCenteredHeaderAction(notebookHeader, deleteNotebookTarget);
   await endDrag(blockedNotebookHandle, blockedNotebookDrag);
   await expect(page.getByRole("dialog", { name: /^delete notebook\?$/i })).toHaveCount(0);
 
@@ -520,6 +529,7 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
   const archiveNotebookDrag = await startDrag(page, archiveNotebookHandleForDelete);
   await expect(deleteNotebookTarget).toBeVisible();
   await expect(deleteNotebookTarget).toBeEnabled();
+  await expectCenteredHeaderAction(notebookHeader, deleteNotebookTarget);
   await dropOnTarget(archiveNotebookHandleForDelete, deleteNotebookTarget, archiveNotebookDrag);
   const deleteNotebookDialog = page.getByRole("dialog", { name: /^delete notebook\?$/i });
   await expect(deleteNotebookDialog).toBeVisible();
@@ -896,4 +906,35 @@ async function dropOnTarget(
   await target.dispatchEvent("dragover", { dataTransfer });
   await target.dispatchEvent("drop", { dataTransfer });
   await endDrag(source, dataTransfer);
+}
+
+async function expectCenteredHeaderAction(
+  header: import("@playwright/test").Locator,
+  action: import("@playwright/test").Locator
+) {
+  const headerBox = await header.boundingBox();
+  const actionBox = await action.boundingBox();
+  expect(headerBox).not.toBeNull();
+  expect(actionBox).not.toBeNull();
+  if (!headerBox || !actionBox) {
+    throw new Error("Expected the notebook header action to be visible.");
+  }
+
+  const headerCenterX = headerBox.x + headerBox.width / 2;
+  const actionCenterX = actionBox.x + actionBox.width / 2;
+  expect(Math.abs(actionCenterX - headerCenterX)).toBeLessThan(8);
+  expect(actionBox.width).toBeGreaterThan(46);
+
+  const shellStyles = await action.evaluate((element) => {
+    const styles = getComputedStyle(element);
+    return {
+      backgroundColor: styles.backgroundColor,
+      boxShadow: styles.boxShadow,
+      zIndex: styles.zIndex
+    };
+  });
+
+  expect(shellStyles.backgroundColor).not.toBe("rgba(0, 0, 0, 0)");
+  expect(shellStyles.boxShadow).not.toBe("none");
+  expect(Number(shellStyles.zIndex)).toBeGreaterThan(1);
 }

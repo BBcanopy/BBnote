@@ -251,12 +251,16 @@ export function NotesPage() {
   async function refreshNotes(options?: {
     folderId?: string | null;
     search?: string;
+    showLoading?: boolean;
   }) {
     const nextFolderId = options?.folderId === undefined ? selectedFolderId : options.folderId;
     const nextSearch = options?.search === undefined ? deferredSearch : options.search;
+    const shouldShowLoading = options?.showLoading !== false;
 
     try {
-      setLoadingNotes(true);
+      if (shouldShowLoading) {
+        setLoadingNotes(true);
+      }
       const payload = await listNotes({
         folderId: nextFolderId ?? undefined,
         q: nextSearch || undefined,
@@ -267,7 +271,9 @@ export function NotesPage() {
     } catch (notesError) {
       setError(String(notesError));
     } finally {
-      setLoadingNotes(false);
+      if (shouldShowLoading) {
+        setLoadingNotes(false);
+      }
     }
   }
 
@@ -335,9 +341,9 @@ export function NotesPage() {
       }
 
       if (refreshFoldersAfterSave) {
-        await Promise.all([refreshNotes(), refreshFolders()]);
+        await Promise.all([refreshNotes({ showLoading: false }), refreshFolders()]);
       } else {
-        await refreshNotes();
+        await refreshNotes({ showLoading: false });
       }
 
       return persisted;

@@ -375,8 +375,8 @@ export function FolderTree(props: {
 
   return (
     <section className="bb-pane-card bb-pane-card--tree" ref={containerRef}>
-      <div className="bb-pane-card__header justify-end">
-        <div data-testid="notebooks-actions" className="flex items-center gap-1.5">
+      <div className="bb-pane-card__header bb-pane-card__header--overlay">
+        <div data-testid="notebooks-actions" className="bb-pane-card__header-actions bb-pane-card__header-actions--end">
           <button
             type="button"
             aria-label="Expand all notebooks"
@@ -406,38 +406,6 @@ export function FolderTree(props: {
           >
             <FolderSimplePlus size={17} />
           </button>
-          {draggedFolder ? (
-            <button
-              type="button"
-              aria-label="Delete notebook"
-              title={canDeleteDraggedFolder ? "Drop the dragged notebook here to delete it" : "Only empty notebooks can be deleted"}
-              disabled={!canDeleteDraggedFolder}
-              onDragOver={(event) => {
-                const payload = getDragPayload(event.dataTransfer);
-                if ((payload?.kind !== "folder" && !draggedFolderId) || !canDeleteDraggedFolder) {
-                  return;
-                }
-                event.preventDefault();
-                setTrashActive(true);
-              }}
-              onDragLeave={() => setTrashActive(false)}
-              onDrop={(event) => {
-                const payload = getDragPayload(event.dataTransfer);
-                const isFolderDrag = payload?.kind === "folder" || draggedFolderId !== null;
-                const folderToDelete = draggedFolder;
-                clearDragState();
-                if (!isFolderDrag || !canDeleteDraggedFolder || !folderToDelete) {
-                  return;
-                }
-
-                event.preventDefault();
-                props.onRequestDeleteNotebook(folderToDelete);
-              }}
-              className={`bb-icon-button bb-icon-button--bare bb-folder-trash-target ${trashActive ? "is-active" : ""}`}
-            >
-              <Trash size={16} />
-            </button>
-          ) : null}
           {props.onCollapse ? (
             <button
               type="button"
@@ -449,6 +417,39 @@ export function FolderTree(props: {
             </button>
           ) : null}
         </div>
+        {draggedFolder ? (
+          <button
+            type="button"
+            data-testid="notebooks-delete-target"
+            aria-label="Delete notebook"
+            title={canDeleteDraggedFolder ? "Drop the dragged notebook here to delete it" : "Only empty notebooks can be deleted"}
+            disabled={!canDeleteDraggedFolder}
+            onDragOver={(event) => {
+              const payload = getDragPayload(event.dataTransfer);
+              if ((payload?.kind !== "folder" && !draggedFolderId) || !canDeleteDraggedFolder) {
+                return;
+              }
+              event.preventDefault();
+              setTrashActive(true);
+            }}
+            onDragLeave={() => setTrashActive(false)}
+            onDrop={(event) => {
+              const payload = getDragPayload(event.dataTransfer);
+              const isFolderDrag = payload?.kind === "folder" || draggedFolderId !== null;
+              const folderToDelete = draggedFolder;
+              clearDragState();
+              if (!isFolderDrag || !canDeleteDraggedFolder || !folderToDelete) {
+                return;
+              }
+
+              event.preventDefault();
+              props.onRequestDeleteNotebook(folderToDelete);
+            }}
+            className={`bb-pane-card__header-center-action bb-folder-trash-target ${trashActive ? "is-active" : ""}`}
+          >
+            <Trash size={16} />
+          </button>
+        ) : null}
       </div>
 
       <div className="space-y-1">
