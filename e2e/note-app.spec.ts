@@ -357,6 +357,7 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
   await expect(page.getByRole("button", { name: /open notes pane/i })).toHaveCount(0);
   await expect(page.locator(".bb-note-card__title")).toHaveCount(1);
   await expect(page.locator(".bb-note-card__title").first()).toHaveText("Untitled note");
+  await expect(page.locator('[data-testid^="note-drag-"] .bb-note-icon')).toHaveCount(0);
 
   await page.getByRole("textbox", { name: "Title" }).first().fill(noteTitle);
   const bodyTextarea = page.getByPlaceholder("Write in Markdown").first();
@@ -405,6 +406,7 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
     .toMatch(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z/);
 
   await expect.poll(async () => page.locator('[data-testid^="note-drag-"]').count()).toBe(2);
+  await expect(page.locator('[data-testid^="note-drag-"] .bb-note-icon')).toHaveCount(0);
   const followUpNoteCard = page.locator('[data-testid^="note-drag-"]').filter({ hasText: followUpNoteTitle }).first();
   const targetNoteCard = page.getByTestId(buildNoteTestId("drag", noteTitle));
   await expect(followUpNoteCard).toBeVisible();

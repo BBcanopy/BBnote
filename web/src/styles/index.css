@@ -1467,18 +1467,6 @@ button:disabled {
   border: 1px solid color-mix(in srgb, var(--accent) 18%, var(--line));
 }
 
-.bb-note-card.is-active .bb-note-icon {
-  background: rgba(255, 255, 255, 0.14);
-  color: #f5fffe;
-  border-color: rgba(255, 255, 255, 0.18);
-}
-
-.bb-note-card .bb-note-icon {
-  width: 1.72rem;
-  height: 1.72rem;
-  border-radius: 0.72rem;
-}
-
 .bb-tree-icon-shell {
   position: relative;
   display: inline-grid;

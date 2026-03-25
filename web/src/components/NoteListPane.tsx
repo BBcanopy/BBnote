@@ -1,4 +1,4 @@
-import { CaretLeft, MagnifyingGlass, NotePencil, Plus, Trash } from "@phosphor-icons/react";
+import { CaretLeft, MagnifyingGlass, Plus, Trash } from "@phosphor-icons/react";
 import { useEffect, useMemo, useState, type DragEvent } from "react";
 import type { NoteSummary } from "../api/types";
 import { getDragPayload, setDragPayload } from "../utils/dragPayload";
@@ -311,9 +311,6 @@ function renderNote(
             {previewExcerpt || "Empty note"}
           </p>
         </div>
-        <span className="bb-note-icon mt-0.5 shrink-0">
-          <NotePencil size={16} />
-        </span>
       </div>
     </div>
   );

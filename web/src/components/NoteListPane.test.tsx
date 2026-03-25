@@ -10,6 +10,12 @@ describe("NoteListPane", () => {
     expect(screen.getByRole("button", { name: "Collapse notes pane" })).toHaveClass("bb-icon-button--bare");
   });
 
+  it("does not render the extra note icon inside note cards", () => {
+    renderNoteListPane();
+
+    expect(screen.getByTestId(buildNoteTestId("drag", "Quarterly review")).querySelector(".bb-note-icon")).toBeNull();
+  });
+
   it("shows a temporary delete target during note drag and requests confirmation on drop", () => {
     const handleRequestDeleteNote = vi.fn();
     const dataTransfer = createDataTransfer();
