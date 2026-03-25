@@ -170,6 +170,10 @@ export class NoteDb {
 
   search(query: SearchQuery): NoteRecord[] {
     const folderClause = query.folderId ? "and notes.folder_id = @folderId" : "";
+    const ftsQuery = buildFtsQuery(query.query);
+    if (!ftsQuery) {
+      return [];
+    }
     return this.connection
       .prepare<SearchQuery, NoteRecord>(
         `
@@ -196,7 +200,10 @@ export class NoteDb {
           limit @limit offset @offset
         `
       )
-      .all(query) as NoteRecord[];
+      .all({
+        ...query,
+        query: ftsQuery
+      }) as NoteRecord[];
   }
 
   replaceFts(record: { noteId: string; ownerId: string; folderId: string; title: string; body: string }) {
@@ -288,4 +295,13 @@ export class NoteDb {
 
     transaction(orderedNoteIds);
   }
+}
+
+function buildFtsQuery(query: string) {
+  return query
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((token) => `"${token.replace(/"/g, "\"\"")}"`)
+    .join(" AND ");
 }

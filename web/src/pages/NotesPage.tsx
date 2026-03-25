@@ -121,6 +121,7 @@ export function NotesPage() {
   const saveInFlightRef = useRef(false);
   const autosaveTimerRef = useRef<number | null>(null);
   const editorSessionRef = useRef(0);
+  const notesRefreshRef = useRef(0);
   const noteLoadRef = useRef(0);
   const skipNextNoteLoadRef = useRef<string | null>(null);
   const syncingRouteRef = useRef(false);
@@ -128,6 +129,8 @@ export function NotesPage() {
     folderId: routeFolderId,
     noteId: routeNoteId
   }));
+  const selectedFolderIdRef = useRef(selectedFolderId);
+  const deferredSearchRef = useRef(deferredSearch);
 
   const selectedFolder = useMemo(
     () => folders.find((folder) => folder.id === selectedFolderId) ?? null,
@@ -143,6 +146,14 @@ export function NotesPage() {
   const canReorderNotes = Boolean(selectedFolderId && search.trim().length === 0);
   const canUseMediaActions = Boolean(editorNote?.folderId ?? selectedFolderId);
 
+  selectedFolderIdRef.current = selectedFolderId;
+  deferredSearchRef.current = deferredSearch;
+
+  function updateSelectedFolderId(folderId: string | null) {
+    selectedFolderIdRef.current = folderId;
+    setSelectedFolderId(folderId);
+  }
+
   useEffect(() => {
     const routeSelectionKey = JSON.stringify({
       folderId: routeFolderId,
@@ -154,7 +165,7 @@ export function NotesPage() {
 
     previousRouteSelectionRef.current = routeSelectionKey;
     syncingRouteRef.current = true;
-    setSelectedFolderId(routeFolderId);
+    updateSelectedFolderId(routeFolderId);
     setSelectedNoteId(routeNoteId);
   }, [routeFolderId, routeNoteId]);
 
@@ -197,6 +208,8 @@ export function NotesPage() {
 
   useEffect(() => {
     if (!auth.user || !selectedNoteId) {
+      noteLoadRef.current += 1;
+      setLoadingEditor(false);
       return;
     }
 
@@ -217,7 +230,7 @@ export function NotesPage() {
 
         editorSessionRef.current += 1;
         if (routeFolderId && routeFolderId !== note.folderId) {
-          setSelectedFolderId(note.folderId);
+          updateSelectedFolderId(note.folderId);
         }
         setEditorNote(mapNoteDetail(note));
         setLastSyncedContentKey(buildContentKey(note.folderId, note.title, note.bodyMarkdown));
@@ -307,7 +320,7 @@ export function NotesPage() {
       setFolders(nextFolders);
 
       if (selectedFolderId && !nextFolders.some((folder) => folder.id === selectedFolderId)) {
-        setSelectedFolderId(null);
+        updateSelectedFolderId(null);
         setFolderPaneCollapsed(false);
       }
 
@@ -324,8 +337,9 @@ export function NotesPage() {
     search?: string;
     showLoading?: boolean;
   }) {
-    const nextFolderId = options?.folderId === undefined ? selectedFolderId : options.folderId;
-    const nextSearch = options?.search === undefined ? deferredSearch : options.search;
+    const requestId = ++notesRefreshRef.current;
+    const nextFolderId = options?.folderId === undefined ? selectedFolderIdRef.current : options.folderId;
+    const nextSearch = options?.search === undefined ? deferredSearchRef.current : options.search;
     const shouldShowLoading = options?.showLoading !== false;
 
     try {
@@ -338,11 +352,17 @@ export function NotesPage() {
         sort: nextFolderId && !nextSearch ? "priority" : undefined,
         order: nextFolderId && !nextSearch ? "asc" : undefined
       });
+      if (requestId !== notesRefreshRef.current) {
+        return;
+      }
       setNotes(payload.items);
     } catch (notesError) {
+      if (requestId !== notesRefreshRef.current) {
+        return;
+      }
       setError(String(notesError));
     } finally {
-      if (shouldShowLoading) {
+      if (shouldShowLoading && requestId === notesRefreshRef.current) {
         setLoadingNotes(false);
       }
     }
@@ -525,7 +545,7 @@ export function NotesPage() {
       });
       closeCreateNotebookDialog();
       await refreshFolders();
-      setSelectedFolderId(created.id);
+      updateSelectedFolderId(created.id);
       setFolderPaneCollapsed(false);
       setNotePaneCollapsed(false);
       setMobileFoldersOpen(false);
@@ -705,7 +725,7 @@ export function NotesPage() {
   }
 
   function handleSelectFolder(folderId: string | null) {
-    setSelectedFolderId(folderId);
+    updateSelectedFolderId(folderId);
     setFolderPaneCollapsed(false);
     setNotePaneCollapsed(false);
     setMobileFoldersOpen(false);
@@ -728,7 +748,7 @@ export function NotesPage() {
     try {
       const movedNote = await moveNote(noteId, { folderId });
       setSearch("");
-      setSelectedFolderId(folderId);
+      updateSelectedFolderId(folderId);
       setFolderPaneCollapsed(false);
       setNotePaneCollapsed(false);
       setMobileFoldersOpen(false);
@@ -843,7 +863,7 @@ export function NotesPage() {
     try {
       await deleteFolder(pendingFolderDelete.id);
       if (selectedFolderId === pendingFolderDelete.id) {
-        setSelectedFolderId(null);
+        updateSelectedFolderId(null);
       }
       setPendingFolderDelete(null);
       await Promise.all([refreshFolders(), refreshNotes({ folderId: null })]);

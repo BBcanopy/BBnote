@@ -26,11 +26,12 @@ export class NoteService {
   async listNotes(options: ListOptions): Promise<PaginatedNotes> {
     const limit = Math.min(Math.max(options.limit ?? 20, 1), 100);
     const offset = decodeCursor(options.cursor);
-    const records = options.q
+    const searchQuery = options.q?.trim();
+    const records = searchQuery
       ? this.noteDb.search({
           ownerId: options.ownerId,
           folderId: options.folderId,
-          query: options.q,
+          query: searchQuery,
           limit: limit + 1,
           offset
         })

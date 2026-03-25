@@ -374,14 +374,21 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
 
   await page.getByRole("button", { name: new RegExp(followUpNoteTitle, "i") }).click();
   const followUpBody = page.getByPlaceholder("Write in Markdown").first();
+  const followUpEditorFooter = page.locator(".bb-editor-footer").first();
   await expect(page.getByRole("textbox", { name: "Title" }).first()).toHaveValue(followUpNoteTitle);
   await expect(followUpBody).toHaveValue("Second note to test manual priority.");
-  const autosaveUpdateResponse = page.waitForResponse((response) => {
-    const request = response.request();
-    return request.method() === "PUT" && /\/api\/v1\/notes\/[^/]+$/.test(new URL(response.url()).pathname) && response.ok();
-  });
-  await followUpBody.fill("Second note to test manual priority and autosave list refresh.");
-  await autosaveUpdateResponse;
+  const previousFollowUpFooterText = ((await followUpEditorFooter.textContent()) ?? "").trim();
+  await followUpBody.click();
+  await followUpBody.press("Control+A");
+  await followUpBody.press("Delete");
+  await followUpBody.pressSequentially("Second note to test manual priority and autosave list refresh.");
+  await expect(followUpBody).toHaveValue("Second note to test manual priority and autosave list refresh.");
+  await expect
+    .poll(async () => {
+      const footerText = ((await followUpEditorFooter.textContent()) ?? "").trim();
+      return footerText !== previousFollowUpFooterText ? footerText : "";
+    })
+    .toMatch(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z/);
   await expect(page.locator(".bb-skeleton-card")).toHaveCount(0);
   await expect(page.getByTestId(buildNoteTestId("drag", followUpNoteTitle))).toBeVisible();
   await expect
@@ -465,7 +472,9 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
   await expect(deleteNoteDialog).toBeVisible();
   await deleteNoteDialog.getByRole("button", { name: /^cancel$/i }).click();
   await expect(deleteNoteDialog).toHaveCount(0);
-  await expect(page.getByText(followUpNoteTitle).first()).toBeVisible();
+  await notebookRow(page, archiveNotebookName).click();
+  await expect(notebookRowContainer(page, archiveNotebookName)).toHaveClass(/is-active/);
+  await expect(followUpNoteDrag).toBeVisible();
 
   const cancelDeleteDrag = await startDrag(page, followUpNoteDrag);
   const deleteNoteTarget = page.getByTestId("notes-delete-target");
@@ -483,7 +492,9 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
   await expect(deleteNoteDialogFromNotesLane).toBeVisible();
   await deleteNoteDialogFromNotesLane.getByRole("button", { name: /^cancel$/i }).click();
   await expect(deleteNoteDialogFromNotesLane).toHaveCount(0);
-  await expect(page.getByText(followUpNoteTitle).first()).toBeVisible();
+  await notebookRow(page, archiveNotebookName).click();
+  await expect(notebookRowContainer(page, archiveNotebookName)).toHaveClass(/is-active/);
+  await expect(followUpNoteDrag).toBeVisible();
 
   const confirmDeleteDrag = await startDrag(page, followUpNoteDrag);
   await expect(deleteNoteTarget).toBeVisible();
@@ -759,9 +770,13 @@ async function dropOnTarget(
   target: import("@playwright/test").Locator,
   dataTransfer: Awaited<ReturnType<import("@playwright/test").Page["evaluateHandle"]>>
 ) {
-  await target.dispatchEvent("dragenter", { dataTransfer });
-  await target.dispatchEvent("dragover", { dataTransfer });
-  await target.dispatchEvent("drop", { dataTransfer });
+  const targetHandle = await target.elementHandle();
+  if (!targetHandle) {
+    throw new Error("Expected a drop target to be available.");
+  }
+
+  await targetHandle.dispatchEvent("dragover", { dataTransfer });
+  await targetHandle.dispatchEvent("drop", { dataTransfer });
   await endDrag(source, dataTransfer);
 }
 

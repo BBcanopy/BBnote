@@ -33,6 +33,8 @@ describe("noteController integration", () => {
   });
 
   it("requires notebooks for persisted notes and rewrites markdown paths when title or notebook changes", async () => {
+    const hyphenatedSearchTerm = "budget-20260325-ffffffffffffffffffffffffffffffff";
+
     const listResponse = await app.inject({
       method: "GET",
       url: "/api/v1/folders",
@@ -95,7 +97,7 @@ describe("noteController integration", () => {
       payload: {
         folderId: nestedNotebook.id,
         title: "Meeting outline",
-        bodyMarkdown: "# Budget\n\nPlan the Q2 launch."
+        bodyMarkdown: `# Budget\n\nPlan the Q2 launch around ${hyphenatedSearchTerm}.`
       }
     });
     expect(createResponse.statusCode).toBe(201);
@@ -108,7 +110,7 @@ describe("noteController integration", () => {
     expect(firstRow?.filePath).toContain("Roadmaps");
     expect(firstRow?.filePath).toContain("Meeting-outline");
     expect(firstRow?.filePath).toContain(created.id);
-    await expect(fs.readFile(firstRow!.filePath, "utf8")).resolves.toContain("Plan the Q2 launch.");
+    await expect(fs.readFile(firstRow!.filePath, "utf8")).resolves.toContain(hyphenatedSearchTerm);
 
     const searchResponse = await app.inject({
       method: "GET",
@@ -117,6 +119,14 @@ describe("noteController integration", () => {
     });
     expect(searchResponse.statusCode).toBe(200);
     expect(searchResponse.json().items).toHaveLength(1);
+
+    const hyphenSearchResponse = await app.inject({
+      method: "GET",
+      url: `/api/v1/notes?q=${encodeURIComponent(hyphenatedSearchTerm)}&folderId=${nestedNotebook.id}`,
+      headers: authHeaders(token)
+    });
+    expect(hyphenSearchResponse.statusCode).toBe(200);
+    expect(hyphenSearchResponse.json().items).toHaveLength(1);
 
     const secondCreateResponse = await app.inject({
       method: "POST",
