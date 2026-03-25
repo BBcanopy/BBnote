@@ -87,7 +87,7 @@ describe("FolderTree", () => {
       title: "Quarterly review"
     });
   });
-  it("hides notebook action buttons while the centered delete target is shown", () => {
+  it("hides notebook action buttons while the full-width delete target is shown", () => {
     renderFolderTree({
       draggedNote: {
         id: "note-1",
@@ -97,6 +97,7 @@ describe("FolderTree", () => {
 
     expect(screen.queryByTestId("notebooks-actions")).not.toBeInTheDocument();
     expect(screen.getByTestId("notebooks-delete-target")).toHaveClass("bb-pane-card__header-center-action");
+    expect(screen.getByTestId("notebooks-delete-target")).toHaveClass("bb-pane-card__header-center-action--lane");
   });
 });
 

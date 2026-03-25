@@ -849,8 +849,12 @@ async function expectCenteredHeaderAction(
 
   const headerCenterX = headerBox.x + headerBox.width / 2;
   const actionCenterX = actionBox.x + actionBox.width / 2;
+  const headerRightX = headerBox.x + headerBox.width;
+  const actionRightX = actionBox.x + actionBox.width;
   expect(Math.abs(actionCenterX - headerCenterX)).toBeLessThan(8);
-  expect(actionBox.width).toBeGreaterThan(46);
+  expect(Math.abs(actionBox.x - headerBox.x)).toBeLessThan(8);
+  expect(Math.abs(actionRightX - headerRightX)).toBeLessThan(8);
+  expect(actionBox.width).toBeGreaterThan(headerBox.width - 8);
 
   const shellStyles = await action.evaluate((element) => {
     const styles = getComputedStyle(element);

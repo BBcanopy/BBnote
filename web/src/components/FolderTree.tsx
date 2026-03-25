@@ -461,7 +461,7 @@ export function FolderTree(props: {
               event.preventDefault();
               props.onRequestDeleteNotebook(folderToDelete);
             }}
-            className={`bb-pane-card__header-center-action ${draggedFolder ? "bb-folder-trash-target" : "bb-note-trash-target"} ${trashActive ? "is-active" : ""}`}
+            className={`bb-pane-card__header-center-action bb-pane-card__header-center-action--lane ${draggedFolder ? "bb-folder-trash-target" : "bb-note-trash-target"} ${trashActive ? "is-active" : ""}`}
           >
             <Trash size={16} />
           </button>

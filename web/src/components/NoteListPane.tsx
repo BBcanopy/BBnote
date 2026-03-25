@@ -177,7 +177,7 @@ export function NoteListPane(props: {
                 title: noteToDelete.title
               });
             }}
-            className={`bb-pane-card__header-center-action bb-note-trash-target ${deleteTargetActive ? "is-active" : ""}`}
+            className={`bb-pane-card__header-center-action bb-pane-card__header-center-action--lane bb-note-trash-target ${deleteTargetActive ? "is-active" : ""}`}
           >
             <Trash size={16} />
           </button>

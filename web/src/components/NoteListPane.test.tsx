@@ -34,7 +34,7 @@ describe("NoteListPane", () => {
     });
   });
 
-  it("centers the delete target and hides the other note actions during drag", () => {
+  it("stretches the delete target across the lane header and hides the other note actions during drag", () => {
     const dataTransfer = createDataTransfer();
 
     renderNoteListPane();
@@ -43,6 +43,7 @@ describe("NoteListPane", () => {
 
     expect(screen.queryByTestId("notes-actions")).not.toBeInTheDocument();
     expect(screen.getByTestId("notes-delete-target")).toHaveClass("bb-pane-card__header-center-action");
+    expect(screen.getByTestId("notes-delete-target")).toHaveClass("bb-pane-card__header-center-action--lane");
   });
 
   it("reorders a note when dropped directly onto another note card", () => {
