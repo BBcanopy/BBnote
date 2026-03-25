@@ -1,5 +1,5 @@
-import { CaretLeft, DotsSixVertical, MagnifyingGlass, NotePencil, Plus } from "@phosphor-icons/react";
-import { useEffect, useState, type DragEvent } from "react";
+import { CaretLeft, DotsSixVertical, MagnifyingGlass, NotePencil, Plus, Trash } from "@phosphor-icons/react";
+import { useEffect, useMemo, useState, type DragEvent } from "react";
 import type { NoteSummary } from "../api/types";
 import { getDragPayload, setDragPayload } from "../utils/dragPayload";
 import type { NoteMoveInstruction, NoteMovePosition } from "../utils/noteOrder";
@@ -18,6 +18,7 @@ export function NoteListPane(props: {
   selectedNoteId: string | null;
   onSelectNote(noteId: string): void;
   onCreateNote(): void;
+  onRequestDeleteNote(note: Pick<NoteSummary, "id" | "title">): void;
   onCollapse?(): void;
   loading: boolean;
   notebookName: string | null;
@@ -28,8 +29,13 @@ export function NoteListPane(props: {
 }) {
   const [draggedNoteId, setDraggedNoteId] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<NoteDropTarget | null>(null);
+  const [deleteTargetActive, setDeleteTargetActive] = useState(false);
   const canDragNotes = props.enableCrossNotebookMove || props.canReorder;
   const dragging = canDragNotes && draggedNoteId !== null;
+  const draggedNote = useMemo(
+    () => props.notes.find((note) => note.id === draggedNoteId) ?? null,
+    [draggedNoteId, props.notes]
+  );
 
   useEffect(() => {
     if (!props.canReorder) {
@@ -40,6 +46,7 @@ export function NoteListPane(props: {
   function clearDragState() {
     setDraggedNoteId(null);
     setDropTarget(null);
+    setDeleteTargetActive(false);
   }
 
   function handleDragStart(event: DragEvent<HTMLDivElement>, note: NoteSummary) {
@@ -92,16 +99,55 @@ export function NoteListPane(props: {
             title={props.canCreateNote ? "New note" : "Select a notebook to create a note"}
             onClick={props.onCreateNote}
             disabled={!props.canCreateNote}
-            className="bb-icon-button bb-icon-button--accent"
+            className="bb-icon-button bb-icon-button--bare bb-icon-button--accent"
           >
             <Plus size={17} />
           </button>
+          {draggedNote ? (
+            <button
+              type="button"
+              data-testid="notes-delete-target"
+              aria-label="Delete note"
+              title={`Drop ${draggedNote.title} here to delete it`}
+              onDragOver={(event) => {
+                const payload = getDragPayload(event.dataTransfer);
+                const draggedId = payload?.kind === "note" ? payload.id : draggedNoteId;
+                if (!draggedId) {
+                  return;
+                }
+
+                event.preventDefault();
+                setDeleteTargetActive(true);
+                setDropTarget(null);
+              }}
+              onDragLeave={() => setDeleteTargetActive(false)}
+              onDrop={(event) => {
+                const payload = getDragPayload(event.dataTransfer);
+                const draggedId = payload?.kind === "note" ? payload.id : draggedNoteId;
+                const noteToDelete = props.notes.find((note) => note.id === draggedId) ?? draggedNote;
+                clearDragState();
+
+                if (!draggedId || !noteToDelete) {
+                  return;
+                }
+
+                event.preventDefault();
+                props.onRequestDeleteNote({
+                  id: noteToDelete.id,
+                  title: noteToDelete.title
+                });
+              }}
+              className={`bb-icon-button bb-icon-button--bare bb-icon-button--danger bb-note-trash-target ${deleteTargetActive ? "is-active" : ""}`}
+            >
+              <Trash size={16} />
+            </button>
+          ) : null}
           {props.onCollapse ? (
             <button
               type="button"
               aria-label="Collapse notes pane"
               onClick={props.onCollapse}
-              className="bb-icon-button"
+              className="bb-icon-button bb-icon-button--bare"
             >
               <CaretLeft size={16} />
             </button>

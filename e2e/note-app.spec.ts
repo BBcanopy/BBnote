@@ -230,6 +230,14 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
       return labels.join("|");
     })
     .toBe("New note|Collapse notes pane");
+  await expect
+    .poll(async () => {
+      const widths = await page.getByTestId("notes-actions").locator("button").evaluateAll((buttons) =>
+        buttons.map((button) => getComputedStyle(button).borderTopWidth)
+      );
+      return widths.join("|");
+    })
+    .toBe("0px|0px");
 
   await page.getByRole("button", { name: /collapse notebooks pane/i }).click();
   const collapsedNotebookRail = page.getByRole("button", { name: /open notebooks pane/i });
@@ -501,19 +509,31 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
   await expect(page.getByText(followUpNoteTitle).first()).toBeVisible();
   await expect(page.locator('[data-testid^="note-drag-"]').filter({ hasText: noteTitle })).toHaveCount(0);
 
-  await page.getByRole("button", { name: new RegExp(followUpNoteTitle, "i") }).click();
-  await expect(page.getByRole("button", { name: /collapse notebooks pane/i })).toBeVisible();
-  const editorDeleteButton = page.locator(".bb-editor-header").getByRole("button", { name: /^delete note$/i });
-  await editorDeleteButton.click();
+  await expect(page.getByTestId("notes-delete-target")).toHaveCount(0);
+  const followUpNoteDrag = page.getByTestId(buildNoteTestId("drag", followUpNoteTitle));
+  const cancelDeleteDrag = await startDrag(page, followUpNoteDrag);
+  const deleteNoteTarget = page.getByTestId("notes-delete-target");
+  await expect(deleteNoteTarget).toBeVisible();
+  await expect
+    .poll(async () => {
+      const labels = await page.getByTestId("notes-actions").locator("button").evaluateAll((buttons) =>
+        buttons.map((button) => button.getAttribute("aria-label") ?? button.textContent?.trim() ?? "")
+      );
+      return labels.join("|");
+    })
+    .toBe("New note|Delete note|Collapse notes pane");
+  await dropOnTarget(followUpNoteDrag, deleteNoteTarget, cancelDeleteDrag);
   const deleteNoteDialog = page.getByRole("dialog", { name: /^delete note\?$/i });
   await expect(deleteNoteDialog).toBeVisible();
   await deleteNoteDialog.getByRole("button", { name: /^cancel$/i }).click();
   await expect(deleteNoteDialog).toHaveCount(0);
   await expect(page.getByText(followUpNoteTitle).first()).toBeVisible();
-  await editorDeleteButton.click();
+
+  const confirmDeleteDrag = await startDrag(page, followUpNoteDrag);
+  await expect(deleteNoteTarget).toBeVisible();
+  await dropOnTarget(followUpNoteDrag, deleteNoteTarget, confirmDeleteDrag);
   await page.getByRole("dialog", { name: /^delete note\?$/i }).getByRole("button", { name: /^delete note$/i }).click();
   await expect(page.getByText(followUpNoteTitle).first()).toHaveCount(0);
-  await expect(page.getByText("No note selected").first()).toBeVisible();
 
   const notebookHeader = page.getByTestId("notebook-pane").locator(".bb-pane-card__header").first();
   const blockedNotebookHandle = page.getByTestId(buildNotebookHandleTestId(subNotebookName));

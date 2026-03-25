@@ -76,6 +76,11 @@ interface PaneResizeState {
   startWidth: number;
 }
 
+interface PendingNoteDelete {
+  id: string;
+  title: string;
+}
+
 export function NotesPage() {
   const auth = useAuth();
   const [folders, setFolders] = useState<FolderNode[]>([]);
@@ -99,7 +104,7 @@ export function NotesPage() {
   const [saving, setSaving] = useState(false);
   const [uploadingAttachment, setUploadingAttachment] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [deleteNoteOpen, setDeleteNoteOpen] = useState(false);
+  const [pendingNoteDelete, setPendingNoteDelete] = useState<PendingNoteDelete | null>(null);
   const [pendingFolderDelete, setPendingFolderDelete] = useState<FolderNode | null>(null);
   const [lastSyncedContentKey, setLastSyncedContentKey] = useState<string | null>(null);
   const deferredSearch = useDeferredValue(search);
@@ -601,26 +606,42 @@ export function NotesPage() {
     if (!editorNote?.noteId) {
       return;
     }
-    setDeleteNoteOpen(true);
+    setPendingNoteDelete({
+      id: editorNote.noteId,
+      title: editorNote.title || "Untitled note"
+    });
   }
 
-  async function handleDeleteCurrentNote() {
-    if (!auth.user || !editorNote?.noteId) {
+  function handleRequestDeleteNote(note: PendingNoteDelete) {
+    setPendingNoteDelete(note);
+  }
+
+  async function handleDeleteNote() {
+    if (!auth.user || !pendingNoteDelete) {
       return;
     }
 
+    const noteId = pendingNoteDelete.id;
+    const deletingSelectedNote = selectedNoteId === noteId || editorNote?.noteId === noteId;
+    const previousNotes = notes;
     setError(null);
+    setNotes((current) => current.filter((note) => note.id !== noteId));
 
     try {
-      await deleteNote(editorNote.noteId);
+      await deleteNote(noteId);
       editorSessionRef.current += 1;
       noteLoadRef.current += 1;
-      setDeleteNoteOpen(false);
-      setEditorNote(null);
-      setSelectedNoteId(null);
-      setLastSyncedContentKey(null);
+      setPendingNoteDelete(null);
+
+      if (deletingSelectedNote) {
+        setEditorNote(null);
+        setSelectedNoteId(null);
+        setLastSyncedContentKey(null);
+      }
+
       await Promise.all([refreshNotes(), refreshFolders()]);
     } catch (deleteError) {
+      setNotes(previousNotes);
       setError(String(deleteError));
     }
   }
@@ -837,6 +858,7 @@ export function NotesPage() {
                     selectedNoteId={selectedNoteId}
                     onSelectNote={handleSelectNote}
                     onCreateNote={handleCreateDraft}
+                    onRequestDeleteNote={handleRequestDeleteNote}
                     onCollapse={() => setNotePaneCollapsed(true)}
                     loading={loadingNotes}
                     notebookName={selectedFolder?.name ?? null}
@@ -935,6 +957,7 @@ export function NotesPage() {
           selectedNoteId={selectedNoteId}
           onSelectNote={handleSelectNote}
           onCreateNote={handleCreateDraft}
+          onRequestDeleteNote={handleRequestDeleteNote}
           loading={loadingNotes}
           notebookName={selectedFolder?.name ?? null}
           canCreateNote={canCreateDraft}
@@ -957,13 +980,13 @@ export function NotesPage() {
       />
 
       <ConfirmationDialog
-        open={deleteNoteOpen}
+        open={pendingNoteDelete !== null}
         title="Delete note?"
-        description="This note will be removed permanently."
+        description={pendingNoteDelete ? `${pendingNoteDelete.title} will be removed permanently.` : undefined}
         confirmLabel="Delete note"
         tone="danger"
-        onClose={() => setDeleteNoteOpen(false)}
-        onConfirm={() => void handleDeleteCurrentNote()}
+        onClose={() => setPendingNoteDelete(null)}
+        onConfirm={() => void handleDeleteNote()}
       />
 
       <ConfirmationDialog
