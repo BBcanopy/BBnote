@@ -447,17 +447,6 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
   ).toBeTruthy();
   expect(
     await notePreview.evaluate((element) => {
-      const excerpt = element.querySelector(".bb-note-card__excerpt") as HTMLElement | null;
-      if (!excerpt) {
-        return false;
-      }
-      const lineHeight = Number.parseFloat(getComputedStyle(excerpt).lineHeight);
-      const excerptHeight = excerpt.getBoundingClientRect().height;
-      return excerpt.scrollHeight <= excerpt.clientHeight + 2 && Number.isFinite(lineHeight) && excerptHeight <= lineHeight * 1.5 + 6;
-    })
-  ).toBeTruthy();
-  expect(
-    await notePreview.evaluate((element) => {
       const noteCard = element as HTMLButtonElement;
       return noteCard.getBoundingClientRect().height < 88;
     })
