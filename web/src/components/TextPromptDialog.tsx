@@ -14,7 +14,12 @@ export function TextPromptDialog(props: {
   const titleId = useId();
   const descriptionId = useId();
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const onCloseRef = useRef(props.onClose);
   const canConfirm = props.value.trim().length > 0;
+
+  useEffect(() => {
+    onCloseRef.current = props.onClose;
+  }, [props.onClose]);
 
   useEffect(() => {
     if (!props.open) {
@@ -29,7 +34,7 @@ export function TextPromptDialog(props: {
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
         event.preventDefault();
-        props.onClose();
+        onCloseRef.current();
       }
     }
 
@@ -38,7 +43,7 @@ export function TextPromptDialog(props: {
       window.clearTimeout(timer);
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [props.open, props.onClose]);
+  }, [props.open]);
 
   if (!props.open) {
     return null;

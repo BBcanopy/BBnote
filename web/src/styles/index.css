@@ -642,6 +642,12 @@ button:disabled {
   color: var(--accent-strong);
 }
 
+.bb-icon-button--is-active {
+  border-color: color-mix(in srgb, var(--accent) 34%, var(--line));
+  background: color-mix(in srgb, var(--accent-soft) 75%, var(--surface-strong));
+  color: var(--accent-strong);
+}
+
 .bb-icon-button--danger:hover {
   border-color: color-mix(in srgb, var(--danger) 35%, var(--line));
   color: var(--danger);
@@ -1500,6 +1506,22 @@ button:disabled {
   flex-wrap: wrap;
 }
 
+.bb-editor-body-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.bb-editor-media-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+  max-width: 100%;
+}
+
 .bb-editor-mode {
   display: inline-flex;
   align-items: center;
@@ -1537,6 +1559,20 @@ button:disabled {
   background: color-mix(in srgb, var(--accent-soft) 80%, var(--surface-strong));
   color: var(--accent-strong);
   box-shadow: none;
+}
+
+.bb-recorder-panel {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.bb-recorder-panel__copy {
+  display: grid;
+  gap: 0.3rem;
+}
+
+.bb-recorder-panel__preview {
+  width: min(100%, 26rem);
 }
 
 .bb-panel-note {
@@ -1850,6 +1886,21 @@ button:disabled {
 
 .bb-markdown__empty {
   color: color-mix(in srgb, var(--ink-soft) 84%, transparent);
+}
+
+.bb-markdown__media {
+  display: grid;
+  gap: 0.55rem;
+  margin: 0;
+}
+
+.bb-markdown__media-player {
+  width: min(100%, 100%);
+}
+
+.bb-markdown__media-caption {
+  color: var(--ink-soft);
+  font-size: 0.9rem;
 }
 
 .bb-link-button {
