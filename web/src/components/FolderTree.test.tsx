@@ -3,7 +3,7 @@ import type { FolderNode } from "../api/types";
 import { FolderTree } from "./FolderTree";
 
 describe("FolderTree", () => {
-  it("moves a notebook into another notebook from the drag handle", () => {
+  it("moves a notebook into another notebook from the notebook row", () => {
     const handleMoveNotebook = vi.fn();
     const dataTransfer = createDataTransfer();
 
@@ -11,7 +11,7 @@ describe("FolderTree", () => {
       onMoveNotebook: handleMoveNotebook
     });
 
-    fireEvent.dragStart(screen.getByTestId(buildNotebookHandleTestId("Archive")), { dataTransfer });
+    fireEvent.dragStart(screen.getByRole("button", { name: /archive 0/i }), { dataTransfer });
     fireEvent.dragOver(screen.getByTestId(buildNotebookTestId("drag", "Projects")), { dataTransfer });
     fireEvent.drop(screen.getByTestId(buildNotebookTestId("drag", "Projects")), { dataTransfer });
 
@@ -22,7 +22,7 @@ describe("FolderTree", () => {
     });
   });
 
-  it("reorders a notebook before a sibling from the drag handle", () => {
+  it("reorders a notebook before a sibling from the notebook row", () => {
     const handleMoveNotebook = vi.fn();
     const dataTransfer = createDataTransfer();
 
@@ -30,7 +30,7 @@ describe("FolderTree", () => {
       onMoveNotebook: handleMoveNotebook
     });
 
-    fireEvent.dragStart(screen.getByTestId(buildNotebookHandleTestId("Archive")), { dataTransfer });
+    fireEvent.dragStart(screen.getByRole("button", { name: /archive 0/i }), { dataTransfer });
     fireEvent.dragOver(screen.getByTestId(buildNotebookTestId("before", "Roadmaps")), { dataTransfer });
     fireEvent.drop(screen.getByTestId(buildNotebookTestId("before", "Roadmaps")), { dataTransfer });
 
@@ -86,6 +86,17 @@ describe("FolderTree", () => {
       id: "note-1",
       title: "Quarterly review"
     });
+  });
+  it("hides notebook action buttons while the centered delete target is shown", () => {
+    renderFolderTree({
+      draggedNote: {
+        id: "note-1",
+        title: "Quarterly review"
+      }
+    });
+
+    expect(screen.queryByTestId("notebooks-actions")).not.toBeInTheDocument();
+    expect(screen.getByTestId("notebooks-delete-target")).toHaveClass("bb-pane-card__header-center-action");
   });
 });
 
@@ -178,8 +189,4 @@ function createDataTransfer(): DataTransfer {
 
 function buildNotebookTestId(kind: "drag" | "before" | "after", name: string) {
   return `notebook-${kind}-${encodeURIComponent(name)}`;
-}
-
-function buildNotebookHandleTestId(name: string) {
-  return `notebook-handle-${encodeURIComponent(name)}`;
 }

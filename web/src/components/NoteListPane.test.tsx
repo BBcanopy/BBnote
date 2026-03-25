@@ -34,6 +34,17 @@ describe("NoteListPane", () => {
     });
   });
 
+  it("centers the delete target and hides the other note actions during drag", () => {
+    const dataTransfer = createDataTransfer();
+
+    renderNoteListPane();
+
+    fireEvent.dragStart(screen.getByTestId(buildNoteTestId("drag", "Quarterly review")), { dataTransfer });
+
+    expect(screen.queryByTestId("notes-actions")).not.toBeInTheDocument();
+    expect(screen.getByTestId("notes-delete-target")).toHaveClass("bb-pane-card__header-center-action");
+  });
+
   it("shows untitled note placeholder text for blank titles", () => {
     renderNoteListPane({
       notes: [

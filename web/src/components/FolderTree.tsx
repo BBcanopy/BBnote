@@ -1,4 +1,4 @@
-import { ArrowsInSimple, ArrowsOutSimple, CaretDown, CaretLeft, DotsSixVertical, FolderSimplePlus, Trash } from "@phosphor-icons/react";
+import { ArrowsInSimple, ArrowsOutSimple, CaretDown, CaretLeft, FolderSimplePlus, Trash } from "@phosphor-icons/react";
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent } from "react";
 import type { FolderIconId, FolderNode, NoteSummary } from "../api/types";
 import { FolderIconGlyph, folderIconOptions } from "./folderIcons";
@@ -327,27 +327,14 @@ export function FolderTree(props: {
                 ) : null}
               </div>
 
-              {props.enableFolderDragAndDrop !== false ? (
-                <button
-                  type="button"
-                  draggable
-                  data-testid={buildNotebookHandleTestId(folder.name)}
-                  aria-label={`Drag notebook ${folder.name}`}
-                  title={`Drag notebook ${folder.name}`}
-                  onClick={(event) => event.preventDefault()}
-                  onDragStart={(event) => handleFolderDragStart(event, folder.id)}
-                  onDragEnd={clearDragState}
-                  className="bb-tree-drag-handle"
-                >
-                  <DotsSixVertical size={14} />
-                </button>
-              ) : null}
-
               <button
                 type="button"
                 onClick={() => props.onSelectFolder(folder.id)}
                 onDoubleClick={() => props.onRenameNotebook(folder)}
-                className="bb-tree-row__content"
+                draggable={props.enableFolderDragAndDrop !== false}
+                onDragStart={(event) => handleFolderDragStart(event, folder.id)}
+                onDragEnd={clearDragState}
+                className={`bb-tree-row__content ${props.enableFolderDragAndDrop !== false ? "bb-tree-row__content--draggable" : ""}`}
               >
                 <span className="bb-tree-row__label">{folder.name}</span>
                 <span className="bb-count-pill shrink-0">{folder.noteCount}</span>
@@ -381,47 +368,49 @@ export function FolderTree(props: {
   return (
     <section className="bb-pane-card bb-pane-card--tree" ref={containerRef}>
       <div className="bb-pane-card__header bb-pane-card__header--overlay">
-        <div data-testid="notebooks-actions" className="bb-pane-card__header-actions bb-pane-card__header-actions--end">
-          <button
-            type="button"
-            aria-label="Expand all notebooks"
-            title="Expand all notebooks"
-            onClick={expandAllFolders}
-            disabled={parentFolderIds.size === 0 || allParentsExpanded}
-            className="bb-icon-button bb-icon-button--bare"
-          >
-            <ArrowsOutSimple size={16} />
-          </button>
-          <button
-            type="button"
-            aria-label="Collapse all notebooks"
-            title="Collapse all notebooks"
-            onClick={collapseAllFolders}
-            disabled={parentFolderIds.size === 0 || !anyParentExpanded}
-            className="bb-icon-button bb-icon-button--bare"
-          >
-            <ArrowsInSimple size={16} />
-          </button>
-          <button
-            type="button"
-            aria-label="New notebook"
-            title="New notebook"
-            onClick={props.onCreateNotebook}
-            className="bb-icon-button bb-icon-button--bare bb-icon-button--accent"
-          >
-            <FolderSimplePlus size={17} />
-          </button>
-          {props.onCollapse ? (
+        {showDeleteTarget ? null : (
+          <div data-testid="notebooks-actions" className="bb-pane-card__header-actions bb-pane-card__header-actions--end">
             <button
               type="button"
-              aria-label="Collapse notebooks pane"
-              onClick={props.onCollapse}
+              aria-label="Expand all notebooks"
+              title="Expand all notebooks"
+              onClick={expandAllFolders}
+              disabled={parentFolderIds.size === 0 || allParentsExpanded}
               className="bb-icon-button bb-icon-button--bare"
             >
-              <CaretLeft size={16} />
+              <ArrowsOutSimple size={16} />
             </button>
-          ) : null}
-        </div>
+            <button
+              type="button"
+              aria-label="Collapse all notebooks"
+              title="Collapse all notebooks"
+              onClick={collapseAllFolders}
+              disabled={parentFolderIds.size === 0 || !anyParentExpanded}
+              className="bb-icon-button bb-icon-button--bare"
+            >
+              <ArrowsInSimple size={16} />
+            </button>
+            <button
+              type="button"
+              aria-label="New notebook"
+              title="New notebook"
+              onClick={props.onCreateNotebook}
+              className="bb-icon-button bb-icon-button--bare bb-icon-button--accent"
+            >
+              <FolderSimplePlus size={17} />
+            </button>
+            {props.onCollapse ? (
+              <button
+                type="button"
+                aria-label="Collapse notebooks pane"
+                onClick={props.onCollapse}
+                className="bb-icon-button bb-icon-button--bare"
+              >
+                <CaretLeft size={16} />
+              </button>
+            ) : null}
+          </div>
+        )}
         {showDeleteTarget ? (
           <button
             type="button"
@@ -529,6 +518,3 @@ function buildNotebookTestId(kind: "drag" | "before" | "after", name: string) {
   return `notebook-${kind}-${encodeURIComponent(name)}`;
 }
 
-function buildNotebookHandleTestId(name: string) {
-  return `notebook-handle-${encodeURIComponent(name)}`;
-}

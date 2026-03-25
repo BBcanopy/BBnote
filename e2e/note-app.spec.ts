@@ -301,11 +301,11 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
   await page.getByRole("button", { name: new RegExp(`choose icon for ${archiveNotebookName}`, "i") }).click();
 
   const archiveNotebookRow = page.getByTestId(buildNotebookTestId("drag", archiveNotebookName));
-  const archiveNotebookHandle = page.getByTestId(buildNotebookHandleTestId(archiveNotebookName));
+  const archiveNotebookDragRow = notebookRow(page, archiveNotebookName);
   await expect(archiveNotebookRow).toBeVisible();
   await dragToDropZone(
     page,
-    archiveNotebookHandle,
+    archiveNotebookDragRow,
     page.getByTestId(buildNotebookTestId("before", notebookName))
   );
   await expect
@@ -317,7 +317,7 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
     })
     .toBeTruthy();
 
-  await archiveNotebookHandle.dragTo(
+  await archiveNotebookDragRow.dragTo(
     page.getByTestId(buildNotebookTestId("drag", notebookName))
   );
 
@@ -335,6 +335,24 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
   await page.getByRole("textbox", { name: "Title" }).first().fill(noteTitle);
   const bodyTextarea = page.getByPlaceholder("Write in Markdown").first();
   expect(await bodyTextarea.evaluate((element) => getComputedStyle(element).fontFamily)).toContain("Open Sans");
+  await expect(page.getByText("Uploaded files will appear here.")).toHaveCount(0);
+  await expect
+    .poll(async () => {
+      const toolbar = page.getByTestId("editor-media-toolbar").first();
+      const widths = await toolbar.locator("button").evaluateAll((buttons) => buttons.map((button) => getComputedStyle(button).borderTopWidth));
+      return widths.join("|");
+    })
+    .toBe("0px|0px|0px|0px|0px");
+  await expect
+    .poll(async () => {
+      const textareaBox = await bodyTextarea.boundingBox();
+      const footerBox = await page.locator(".bb-editor-footer").first().boundingBox();
+      if (!textareaBox || !footerBox) {
+        return Number.POSITIVE_INFINITY;
+      }
+      return footerBox.y - (textareaBox.y + textareaBox.height);
+    })
+    .toBeLessThan(56);
   await bodyTextarea.fill(`# Budget\n\nalpha launch ${searchTerm}`);
   await expect(page.getByText(/^Saved /)).toHaveCount(0);
   await expect(page.locator(".bb-editor-header .bb-editor-mode")).toHaveCount(0);
@@ -361,11 +379,11 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
     .toMatch(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z/);
 
   await expect.poll(async () => page.locator('[data-testid^="note-drag-"]').count()).toBe(2);
-  const followUpNoteDragHandle = page.locator('[data-testid^="note-drag-"]').filter({ hasText: followUpNoteTitle }).first();
-  await expect(followUpNoteDragHandle).toBeVisible();
+  const followUpNoteCard = page.locator('[data-testid^="note-drag-"]').filter({ hasText: followUpNoteTitle }).first();
+  await expect(followUpNoteCard).toBeVisible();
   await dragToDropZone(
     page,
-    followUpNoteDragHandle,
+    followUpNoteCard,
     page.getByTestId(buildNoteTestId("before", noteTitle))
   );
   await expect
@@ -458,6 +476,7 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
 
   const uploadFile = await createTempFile("budget.txt", "budget attachment");
   await page.locator('input[type="file"]').first().setInputFiles(uploadFile);
+  await expect(page.getByText("Linked files and embeds").first()).toBeVisible();
   await expect(page.getByText("budget.txt").first()).toBeVisible();
 
   await page.getByRole("button", { name: /^link$/i }).click();
@@ -474,6 +493,7 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
   await expect(page.locator('[data-testid^="note-drag-"]').filter({ hasText: noteTitle })).toHaveCount(0);
 
   const notebookHeader = page.getByTestId("notebook-pane").locator(".bb-pane-card__header").first();
+  const notesHeader = page.getByTestId("notes-pane").locator(".bb-pane-card__header").first();
   await expect(page.getByTestId("notes-delete-target")).toHaveCount(0);
   const followUpNoteDrag = page.getByTestId(buildNoteTestId("drag", followUpNoteTitle));
   await expect(page.getByTestId("notebooks-delete-target")).toHaveCount(0);
@@ -481,8 +501,9 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
   const cancelDeleteFromNotebookLaneDrag = await startDrag(page, followUpNoteDrag);
   const deleteNotebookTargetForNote = page.getByTestId("notebooks-delete-target");
   await expect(deleteNotebookTargetForNote).toBeVisible();
+  await expect(page.getByTestId("notebooks-actions")).toHaveCount(0);
   await expect(deleteNotebookTargetForNote).toHaveAttribute("aria-label", "Delete note");
-  await expectCenteredHeaderAction(notebookHeader, deleteNotebookTargetForNote);
+  const notebookDeleteStyles = await expectCenteredHeaderAction(notebookHeader, deleteNotebookTargetForNote);
   await dropOnTarget(followUpNoteDrag, deleteNotebookTargetForNote, cancelDeleteFromNotebookLaneDrag);
   const deleteNoteDialog = page.getByRole("dialog", { name: /^delete note\?$/i });
   await expect(deleteNoteDialog).toBeVisible();
@@ -495,14 +516,10 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
   const cancelDeleteDrag = await startDrag(page, followUpNoteDrag);
   const deleteNoteTarget = page.getByTestId("notes-delete-target");
   await expect(deleteNoteTarget).toBeVisible();
-  await expect
-    .poll(async () => {
-      const labels = await page.getByTestId("notes-actions").locator("button").evaluateAll((buttons) =>
-        buttons.map((button) => button.getAttribute("aria-label") ?? button.textContent?.trim() ?? "")
-      );
-      return labels.join("|");
-    })
-    .toBe("New note|Delete note|Collapse notes pane");
+  await expect(page.getByTestId("notes-actions")).toHaveCount(0);
+  const noteDeleteStyles = await expectCenteredHeaderAction(notesHeader, deleteNoteTarget);
+  expect(noteDeleteStyles.backgroundColor).toBe(notebookDeleteStyles.backgroundColor);
+  expect(noteDeleteStyles.color).toBe(notebookDeleteStyles.color);
   await dropOnTarget(followUpNoteDrag, deleteNoteTarget, cancelDeleteDrag);
   const deleteNoteDialogFromNotesLane = page.getByRole("dialog", { name: /^delete note\?$/i });
   await expect(deleteNoteDialogFromNotesLane).toBeVisible();
@@ -518,21 +535,22 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
   await page.getByRole("dialog", { name: /^delete note\?$/i }).getByRole("button", { name: /^delete note$/i }).click();
   await expect(page.getByText(followUpNoteTitle).first()).toHaveCount(0);
 
-  const blockedNotebookHandle = page.getByTestId(buildNotebookHandleTestId(renamedSubNotebookName));
-  const blockedNotebookDrag = await startDrag(page, blockedNotebookHandle);
+  const blockedNotebookDragSource = notebookRow(page, renamedSubNotebookName);
+  const blockedNotebookDrag = await startDrag(page, blockedNotebookDragSource);
   const deleteNotebookTarget = page.getByTestId("notebooks-delete-target");
   await expect(deleteNotebookTarget).toBeVisible();
+  await expect(page.getByTestId("notebooks-actions")).toHaveCount(0);
   await expect(deleteNotebookTarget).toBeDisabled();
   await expectCenteredHeaderAction(notebookHeader, deleteNotebookTarget);
-  await endDrag(blockedNotebookHandle, blockedNotebookDrag);
+  await endDrag(blockedNotebookDragSource, blockedNotebookDrag);
   await expect(page.getByRole("dialog", { name: /^delete notebook\?$/i })).toHaveCount(0);
 
-  const archiveNotebookDeleteHandle = page.getByTestId(buildNotebookHandleTestId(archiveNotebookName));
-  const archiveNotebookDrag = await startDrag(page, archiveNotebookDeleteHandle);
+  const archiveNotebookDeleteSource = notebookRow(page, archiveNotebookName);
+  const archiveNotebookDrag = await startDrag(page, archiveNotebookDeleteSource);
   await expect(deleteNotebookTarget).toBeVisible();
   await expect(deleteNotebookTarget).toBeEnabled();
   await expectCenteredHeaderAction(notebookHeader, deleteNotebookTarget);
-  await dropOnTarget(archiveNotebookDeleteHandle, deleteNotebookTarget, archiveNotebookDrag);
+  await dropOnTarget(archiveNotebookDeleteSource, deleteNotebookTarget, archiveNotebookDrag);
   const deleteNotebookDialog = page.getByRole("dialog", { name: /^delete notebook\?$/i });
   await expect(deleteNotebookDialog).toBeVisible();
   await deleteNotebookDialog.getByRole("button", { name: /^delete notebook$/i }).click();
@@ -694,10 +712,6 @@ function buildNotebookTestId(kind: "drag" | "before" | "after", name: string) {
   return `notebook-${kind}-${encodeURIComponent(name)}`;
 }
 
-function buildNotebookHandleTestId(name: string) {
-  return `notebook-handle-${encodeURIComponent(name)}`;
-}
-
 function buildNoteTestId(kind: "drag" | "before" | "after", title: string) {
   return `note-${kind}-${encodeURIComponent(title)}`;
 }
@@ -825,4 +839,5 @@ async function expectCenteredHeaderAction(
   expect(shellStyles.backgroundColor).not.toBe("rgba(0, 0, 0, 0)");
   expect(shellStyles.boxShadow).not.toBe("none");
   expect(Number(shellStyles.zIndex)).toBeGreaterThan(1);
+  return shellStyles;
 }

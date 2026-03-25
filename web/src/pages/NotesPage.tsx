@@ -1267,6 +1267,7 @@ function EditorPanel(props: {
   });
   const [savingRecording, setSavingRecording] = useState(false);
   const mediaActionsDisabled = props.loading || props.uploadingAttachment || savingRecording || !props.canUseMediaActions;
+  const hasAttachments = (props.editorNote?.attachments.length ?? 0) > 0;
 
   useEffect(() => {
     return () => {
@@ -1516,14 +1517,16 @@ function EditorPanel(props: {
       ) : null}
 
       {props.loading ? (
-        <div className="bb-empty-state bb-empty-state--center text-sm">
-          <span className="inline-flex items-center gap-2">
-            <CircleNotch size={18} className="animate-spin text-[color:var(--accent-strong)]" />
-            Loading note
-          </span>
+        <div className="bb-editor-panel__content bb-editor-panel__content--empty">
+          <div className="bb-empty-state bb-empty-state--center text-sm">
+            <span className="inline-flex items-center gap-2">
+              <CircleNotch size={18} className="animate-spin text-[color:var(--accent-strong)]" />
+              Loading note
+            </span>
+          </div>
         </div>
       ) : !props.editorNote ? (
-        <div className="bb-editor-panel__content">
+        <div className="bb-editor-panel__content bb-editor-panel__content--empty">
           <div className="bb-editor-body-header">
             <div className="bb-editor-body-actions">
               <span className="bb-field__label bb-field__label--mode">{props.editorPane === "markdown" ? "Notes" : "Preview"}</span>
@@ -1647,7 +1650,7 @@ function EditorPanel(props: {
           </div>
         </div>
       ) : (
-        <div className="bb-editor-panel__content">
+        <div className="bb-editor-panel__content bb-editor-panel__content--editor">
           <label className="bb-field">
             <span className="bb-field__label">Title</span>
             <input
@@ -1770,32 +1773,36 @@ function EditorPanel(props: {
             </div>
           ) : null}
 
-          {props.editorPane === "markdown" ? (
-            <label className="bb-field">
-              <textarea
-                value={props.editorNote.bodyMarkdown}
-                onChange={(event) => props.onBodyChange(event.target.value)}
-                placeholder="Write in Markdown"
-                disabled={!props.editorNote}
-                className="bb-textarea bb-note-content min-h-[30rem] text-sm leading-7"
-              />
-            </label>
-          ) : (
-            <div className="bb-pane-card min-h-[30rem]">
-              <MarkdownPreview bodyMarkdown={props.editorNote.bodyMarkdown} attachments={props.editorNote.attachments} />
-            </div>
-          )}
+          <div className={`bb-editor-stack ${hasAttachments ? "" : "bb-editor-stack--fill"}`}>
+            {props.editorPane === "markdown" ? (
+              <label className={`bb-field ${hasAttachments ? "" : "bb-field--stretch"}`}>
+                <textarea
+                  value={props.editorNote.bodyMarkdown}
+                  onChange={(event) => props.onBodyChange(event.target.value)}
+                  placeholder="Write in Markdown"
+                  disabled={!props.editorNote}
+                  className="bb-textarea bb-editor-surface bb-note-content text-sm leading-7"
+                />
+              </label>
+            ) : (
+              <div className={`bb-pane-card bb-editor-preview ${hasAttachments ? "" : "bb-editor-preview--grow"}`}>
+                <MarkdownPreview bodyMarkdown={props.editorNote.bodyMarkdown} attachments={props.editorNote.attachments} />
+              </div>
+            )}
 
-          <AttachmentList
-            attachments={props.editorNote.attachments}
-            disabled={!props.editorNote.noteId || props.uploadingAttachment}
-            onInsertLink={props.onInsertLink}
-            onInsertImage={props.onInsertImage}
-            onInsertAudio={props.onInsertAudio}
-            onInsertVideo={props.onInsertVideo}
-            onDelete={props.onDeleteAttachment}
-            onDownload={props.onDownloadAttachment}
-          />
+            {hasAttachments ? (
+              <AttachmentList
+                attachments={props.editorNote.attachments}
+                disabled={!props.editorNote.noteId || props.uploadingAttachment}
+                onInsertLink={props.onInsertLink}
+                onInsertImage={props.onInsertImage}
+                onInsertAudio={props.onInsertAudio}
+                onInsertVideo={props.onInsertVideo}
+                onDelete={props.onDeleteAttachment}
+                onDownload={props.onDownloadAttachment}
+              />
+            ) : null}
+          </div>
         </div>
       )}
 
@@ -1922,7 +1929,7 @@ function MediaToolbarButton(props: {
       disabled={props.disabled}
       aria-label={props.label}
       title={props.disabled ? props.disabledTitle ?? props.label : props.label}
-      className={`bb-icon-button bb-icon-button--accent ${props.active ? "bb-icon-button--is-active" : ""}`}
+      className={`bb-icon-button bb-icon-button--toolbar bb-icon-button--accent ${props.active ? "bb-icon-button--is-active" : ""}`}
     >
       {props.icon}
     </button>

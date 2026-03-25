@@ -1,4 +1,4 @@
-import { CaretLeft, DotsSixVertical, MagnifyingGlass, NotePencil, Plus, Trash } from "@phosphor-icons/react";
+import { CaretLeft, MagnifyingGlass, NotePencil, Plus, Trash } from "@phosphor-icons/react";
 import { useEffect, useMemo, useState, type DragEvent } from "react";
 import type { NoteSummary } from "../api/types";
 import { getDragPayload, setDragPayload } from "../utils/dragPayload";
@@ -59,7 +59,7 @@ export function NoteListPane(props: {
     props.onDraggedNoteChange(null);
   }
 
-  function handleDragStart(event: DragEvent<HTMLDivElement>, note: NoteSummary) {
+  function handleDragStart(event: DragEvent<HTMLElement>, note: NoteSummary) {
     if (!canDragNotes) {
       return;
     }
@@ -106,68 +106,69 @@ export function NoteListPane(props: {
 
   return (
     <section className="bb-pane-card bb-pane-card--notes">
-      <div className="bb-pane-card__header justify-end">
-        <div data-testid="notes-actions" className="flex items-center gap-2">
+      <div className={`bb-pane-card__header ${draggedNote ? "bb-pane-card__header--overlay" : "justify-end"}`}>
+        {draggedNote ? (
           <button
             type="button"
-            aria-label="New note"
-            title={props.canCreateNote ? "New note" : "Select a notebook to create a note"}
-            onClick={props.onCreateNote}
-            disabled={!props.canCreateNote}
-            className="bb-icon-button bb-icon-button--bare bb-icon-button--accent"
+            data-testid="notes-delete-target"
+            aria-label="Delete note"
+            title={`Drop ${getDisplayNoteTitle(draggedNote.title)} here to delete it`}
+            onDragOver={(event) => {
+              const payload = getDragPayload(event.dataTransfer);
+              const draggedId = payload?.kind === "note" ? payload.id : draggedNoteId;
+              if (!draggedId) {
+                return;
+              }
+
+              event.preventDefault();
+              setDeleteTargetActive(true);
+              setDropTarget(null);
+            }}
+            onDragLeave={() => setDeleteTargetActive(false)}
+            onDrop={(event) => {
+              const payload = getDragPayload(event.dataTransfer);
+              const draggedId = payload?.kind === "note" ? payload.id : draggedNoteId;
+              const noteToDelete = props.notes.find((note) => note.id === draggedId) ?? draggedNote;
+              clearDragState();
+
+              if (!draggedId || !noteToDelete) {
+                return;
+              }
+
+              event.preventDefault();
+              props.onRequestDeleteNote({
+                id: noteToDelete.id,
+                title: noteToDelete.title
+              });
+            }}
+            className={`bb-pane-card__header-center-action bb-note-trash-target ${deleteTargetActive ? "is-active" : ""}`}
           >
-            <Plus size={17} />
+            <Trash size={16} />
           </button>
-          {draggedNote ? (
+        ) : (
+          <div data-testid="notes-actions" className="bb-pane-card__header-actions bb-pane-card__header-actions--end">
             <button
               type="button"
-              data-testid="notes-delete-target"
-              aria-label="Delete note"
-              title={`Drop ${getDisplayNoteTitle(draggedNote.title)} here to delete it`}
-              onDragOver={(event) => {
-                const payload = getDragPayload(event.dataTransfer);
-                const draggedId = payload?.kind === "note" ? payload.id : draggedNoteId;
-                if (!draggedId) {
-                  return;
-                }
-
-                event.preventDefault();
-                setDeleteTargetActive(true);
-                setDropTarget(null);
-              }}
-              onDragLeave={() => setDeleteTargetActive(false)}
-              onDrop={(event) => {
-                const payload = getDragPayload(event.dataTransfer);
-                const draggedId = payload?.kind === "note" ? payload.id : draggedNoteId;
-                const noteToDelete = props.notes.find((note) => note.id === draggedId) ?? draggedNote;
-                clearDragState();
-
-                if (!draggedId || !noteToDelete) {
-                  return;
-                }
-
-                event.preventDefault();
-                props.onRequestDeleteNote({
-                  id: noteToDelete.id,
-                  title: noteToDelete.title
-                });
-              }}
-              className={`bb-icon-button bb-icon-button--bare bb-icon-button--danger bb-note-trash-target ${deleteTargetActive ? "is-active" : ""}`}
+              aria-label="New note"
+              title={props.canCreateNote ? "New note" : "Select a notebook to create a note"}
+              onClick={props.onCreateNote}
+              disabled={!props.canCreateNote}
+              className="bb-icon-button bb-icon-button--bare bb-icon-button--accent"
             >
-              <Trash size={16} />
+              <Plus size={17} />
             </button>
-          ) : null}
-          {props.onCollapse ? (
-            <button
-              type="button"
-              aria-label="Collapse notes pane"
-              onClick={props.onCollapse}
-              className="bb-icon-button bb-icon-button--bare"
-            >
-              <CaretLeft size={16} />
-            </button>
-          ) : null}
-        </div>
+            {props.onCollapse ? (
+              <button
+                type="button"
+                aria-label="Collapse notes pane"
+                onClick={props.onCollapse}
+                className="bb-icon-button bb-icon-button--bare"
+              >
+                <CaretLeft size={16} />
+              </button>
+            ) : null}
+          </div>
+        )}
       </div>
       <label className="bb-search-shell bb-search-shell--plain">
         <MagnifyingGlass size={16} className="text-[color:var(--ink-soft)]" />
@@ -233,7 +234,7 @@ function renderNote(
     dropTarget: NoteDropTarget | null;
     onDragEnd(): void;
     onDragOver(event: DragEvent<HTMLElement>, targetId: string, position: NoteMovePosition): void;
-    onDragStart(event: DragEvent<HTMLDivElement>, note: NoteSummary): void;
+    onDragStart(event: DragEvent<HTMLElement>, note: NoteSummary): void;
     onDrop(event: DragEvent<HTMLElement>, targetId: string, position: NoteMovePosition): void;
     onSelectNote(noteId: string): void;
     selectedNoteId: string | null;
@@ -245,8 +246,14 @@ function renderNote(
   const noteCard = (
     <button
       type="button"
+      draggable={helpers.canDragNotes}
+      data-testid={buildNoteTestId("drag", note.title)}
+      onDragStart={(event) => helpers.onDragStart(event, note)}
+      onDragEnd={helpers.onDragEnd}
       onClick={() => helpers.onSelectNote(note.id)}
-      className={`bb-note-card w-full text-left ${selected ? "is-active" : ""}`}
+      className={`bb-note-card ${helpers.canDragNotes ? "bb-note-card--draggable" : ""} w-full text-left ${selected ? "is-active" : ""} ${
+        helpers.canReorder && helpers.dropTarget?.targetId === note.id ? "bb-tree-drop-target" : ""
+      }`}
     >
       <div className="bb-note-card__layout">
         <div className="bb-note-card__copy">
@@ -255,16 +262,9 @@ function renderNote(
             {previewExcerpt || "Empty note"}
           </p>
         </div>
-        <div className="flex shrink-0 items-center gap-1">
-          {helpers.canDragNotes ? (
-            <span className="bb-note-drag-handle" aria-hidden="true">
-              <DotsSixVertical size={16} />
-            </span>
-          ) : null}
-          <span className="bb-note-icon mt-0.5 shrink-0">
-            <NotePencil size={16} />
-          </span>
-        </div>
+        <span className="bb-note-icon mt-0.5 shrink-0">
+          <NotePencil size={16} />
+        </span>
       </div>
     </button>
   );
@@ -286,13 +286,7 @@ function renderNote(
           onDrop={helpers.onDrop}
         />
       ) : null}
-      <div
-        draggable
-        data-testid={buildNoteTestId("drag", note.title)}
-        onDragStart={(event) => helpers.onDragStart(event, note)}
-        onDragEnd={helpers.onDragEnd}
-        className={helpers.canReorder && helpers.dropTarget?.targetId === note.id ? "bb-tree-drop-target min-w-0 rounded-[1.15rem]" : "min-w-0 rounded-[1.15rem]"}
-      >
+      <div className="min-w-0 rounded-[1.15rem]">
         {noteCard}
       </div>
       {helpers.canReorder ? (
