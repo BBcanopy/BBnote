@@ -1,4 +1,4 @@
-import { ArrowsInSimple, ArrowsOutSimple, CaretDown, CaretLeft, FolderSimplePlus, Trash } from "@phosphor-icons/react";
+import { ArrowsInSimple, ArrowsOutSimple, CaretDown, CaretLeft, DotsSixVertical, FolderSimplePlus, Trash } from "@phosphor-icons/react";
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent } from "react";
 import type { FolderIconId, FolderNode } from "../api/types";
 import { FolderIconGlyph, folderIconOptions } from "./folderIcons";
@@ -126,7 +126,7 @@ export function FolderTree(props: {
     setTrashActive(false);
   }
 
-  function handleFolderDragStart(event: DragEvent<HTMLDivElement>, folderId: string) {
+  function handleFolderDragStart(event: DragEvent<HTMLElement>, folderId: string) {
     if (props.enableFolderDragAndDrop === false) {
       return;
     }
@@ -142,6 +142,13 @@ export function FolderTree(props: {
   function handleFolderDragOver(event: DragEvent<HTMLElement>, targetId: string, position: FolderMovePosition) {
     const payload = getDragPayload(event.dataTransfer);
     if (!payload) {
+      if (props.enableFolderDragAndDrop === false || !draggedFolderId || draggedFolderId === targetId) {
+        return;
+      }
+
+      event.preventDefault();
+      setFolderDropTarget({ targetId, position });
+      setNoteDropFolderId(null);
       return;
     }
 
@@ -156,7 +163,8 @@ export function FolderTree(props: {
       return;
     }
 
-    if (props.enableFolderDragAndDrop === false || payload.id === targetId) {
+    const draggedId = payload.id || draggedFolderId;
+    if (props.enableFolderDragAndDrop === false || !draggedId || draggedId === targetId) {
       return;
     }
 
@@ -167,13 +175,14 @@ export function FolderTree(props: {
 
   function handleFolderDrop(event: DragEvent<HTMLElement>, targetId: string, position: FolderMovePosition) {
     const payload = getDragPayload(event.dataTransfer);
+    const draggedId = payload?.kind === "folder" ? payload.id : draggedFolderId;
     clearDragState();
 
-    if (!payload) {
+    if (!payload && !draggedId) {
       return;
     }
 
-    if (payload.kind === "note") {
+    if (payload?.kind === "note") {
       if (!props.acceptDraggedNotes || payload.folderId === targetId) {
         return;
       }
@@ -183,13 +192,13 @@ export function FolderTree(props: {
       return;
     }
 
-    if (props.enableFolderDragAndDrop === false || payload.id === targetId) {
+    if (props.enableFolderDragAndDrop === false || !draggedId || draggedId === targetId) {
       return;
     }
 
     event.preventDefault();
     props.onMoveNotebook({
-      draggedId: payload.id,
+      draggedId,
       targetId,
       position
     });
@@ -256,10 +265,7 @@ export function FolderTree(props: {
 
         <div className={`bb-tree-branch ${activeFolderDrop || activeNoteDrop ? "is-drop-active" : ""}`}>
           <div
-            draggable={props.enableFolderDragAndDrop !== false}
             data-testid={buildNotebookTestId("drag", folder.name)}
-            onDragStart={(event) => handleFolderDragStart(event, folder.id)}
-            onDragEnd={clearDragState}
             onDragOver={(event) => handleFolderDragOver(event, folder.id, "inside")}
             onDrop={(event) => handleFolderDrop(event, folder.id, "inside")}
             className="bb-tree-branch__body"
@@ -316,6 +322,22 @@ export function FolderTree(props: {
                   </div>
                 ) : null}
               </div>
+
+              {props.enableFolderDragAndDrop !== false ? (
+                <button
+                  type="button"
+                  draggable
+                  data-testid={buildNotebookHandleTestId(folder.name)}
+                  aria-label={`Drag notebook ${folder.name}`}
+                  title={`Drag notebook ${folder.name}`}
+                  onClick={(event) => event.preventDefault()}
+                  onDragStart={(event) => handleFolderDragStart(event, folder.id)}
+                  onDragEnd={clearDragState}
+                  className="bb-tree-drag-handle"
+                >
+                  <DotsSixVertical size={14} />
+                </button>
+              ) : null}
 
               <button
                 type="button"
@@ -392,7 +414,7 @@ export function FolderTree(props: {
               disabled={!canDeleteDraggedFolder}
               onDragOver={(event) => {
                 const payload = getDragPayload(event.dataTransfer);
-                if (payload?.kind !== "folder" || !canDeleteDraggedFolder) {
+                if ((payload?.kind !== "folder" && !draggedFolderId) || !canDeleteDraggedFolder) {
                   return;
                 }
                 event.preventDefault();
@@ -401,13 +423,15 @@ export function FolderTree(props: {
               onDragLeave={() => setTrashActive(false)}
               onDrop={(event) => {
                 const payload = getDragPayload(event.dataTransfer);
+                const isFolderDrag = payload?.kind === "folder" || draggedFolderId !== null;
+                const folderToDelete = draggedFolder;
                 clearDragState();
-                if (payload?.kind !== "folder" || !canDeleteDraggedFolder || !draggedFolder) {
+                if (!isFolderDrag || !canDeleteDraggedFolder || !folderToDelete) {
                   return;
                 }
 
                 event.preventDefault();
-                props.onRequestDeleteNotebook(draggedFolder);
+                props.onRequestDeleteNotebook(folderToDelete);
               }}
               className={`bb-icon-button bb-icon-button--bare bb-folder-trash-target ${trashActive ? "is-active" : ""}`}
             >
@@ -475,4 +499,8 @@ function NotebookDropZone(props: {
 
 function buildNotebookTestId(kind: "drag" | "before" | "after", name: string) {
   return `notebook-${kind}-${encodeURIComponent(name)}`;
+}
+
+function buildNotebookHandleTestId(name: string) {
+  return `notebook-handle-${encodeURIComponent(name)}`;
 }

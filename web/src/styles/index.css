@@ -1301,6 +1301,32 @@ button:disabled {
   letter-spacing: -0.02em;
 }
 
+.bb-tree-drag-handle,
+.bb-note-drag-handle {
+  display: inline-grid;
+  place-items: center;
+  width: 1.3rem;
+  height: 1.3rem;
+  padding: 0;
+  border-radius: 0.64rem;
+  color: var(--ink-soft);
+  background: color-mix(in srgb, var(--surface-strong) 80%, transparent);
+  border: 1px solid color-mix(in srgb, var(--line) 82%, transparent);
+}
+
+.bb-tree-drag-handle {
+  flex-shrink: 0;
+  cursor: grab;
+}
+
+.bb-tree-drag-handle:hover {
+  background: color-mix(in srgb, var(--surface-strong) 92%, transparent);
+}
+
+.bb-tree-drag-handle:active {
+  cursor: grabbing;
+}
+
 .bb-tree-node {
   display: grid;
   gap: 0.1rem;
@@ -1323,17 +1349,7 @@ button:disabled {
   border-left: 1px solid color-mix(in srgb, var(--line) 86%, transparent);
 }
 
-.bb-note-drag-handle {
-  display: inline-grid;
-  place-items: center;
-  width: 1.3rem;
-  height: 1.3rem;
-  border-radius: 0.64rem;
-  color: var(--ink-soft);
-  background: color-mix(in srgb, var(--surface-strong) 80%, transparent);
-  border: 1px solid color-mix(in srgb, var(--line) 82%, transparent);
-}
-
+.bb-tree-row.is-active .bb-tree-drag-handle,
 .bb-note-card.is-active .bb-note-drag-handle {
   color: #f5fffe;
   background: rgba(255, 255, 255, 0.12);

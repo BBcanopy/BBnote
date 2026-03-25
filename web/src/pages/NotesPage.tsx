@@ -469,6 +469,7 @@ export function NotesPage() {
     const previousFolders = folders;
     const previousMutations = new Map(buildFolderMutations(previousFolders).map((mutation) => [mutation.id, mutation]));
     const nextMutations = buildFolderMutations(nextFolders);
+    const nextFolderById = new Map(nextFolders.map((folder) => [folder.id, folder]));
     const changedFolders = nextMutations.filter((mutation) => {
       const previous = previousMutations.get(mutation.id);
       return !previous || previous.parentId !== mutation.parentId || previous.sortOrder !== mutation.sortOrder;
@@ -478,20 +479,18 @@ export function NotesPage() {
     setFolders(nextFolders);
 
     try {
-      await Promise.all(
-        changedFolders.map((mutation) => {
-          const folder = nextFolders.find((entry) => entry.id === mutation.id);
-          if (!folder) {
-            return Promise.resolve();
-          }
+      for (const mutation of changedFolders) {
+        const folder = nextFolderById.get(mutation.id);
+        if (!folder) {
+          continue;
+        }
 
-          return updateFolder(mutation.id, {
-            name: folder.name,
-            parentId: mutation.parentId,
-            sortOrder: mutation.sortOrder
-          });
-        })
-      );
+        await updateFolder(mutation.id, {
+          name: folder.name,
+          parentId: mutation.parentId,
+          sortOrder: mutation.sortOrder
+        });
+      }
       await refreshFolders();
     } catch (moveError) {
       setFolders(previousFolders);
