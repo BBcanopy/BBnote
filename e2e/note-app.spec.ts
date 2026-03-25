@@ -957,14 +957,29 @@ async function expectCenteredHeaderAction(
 
   const shellStyles = await action.evaluate((element) => {
     const styles = getComputedStyle(element);
+    const backgroundColor = styles.backgroundColor;
+    const rgbaMatch = backgroundColor.match(/^rgba\((.+)\)$/);
+    const slashAlphaMatch = backgroundColor.match(/\/\s*([0-9.]+)\s*\)$/);
+    const backgroundAlpha = rgbaMatch
+      ? Number.parseFloat(rgbaMatch[1].split(",").at(-1)?.trim() ?? "1")
+      : slashAlphaMatch
+        ? Number.parseFloat(slashAlphaMatch[1])
+        : backgroundColor === "transparent"
+          ? 0
+          : 1;
     return {
-      backgroundColor: styles.backgroundColor,
+      backgroundColor,
+      backgroundAlpha,
+      backdropFilter: styles.backdropFilter,
       boxShadow: styles.boxShadow,
       zIndex: styles.zIndex
     };
   });
 
   expect(shellStyles.backgroundColor).not.toBe("rgba(0, 0, 0, 0)");
+  expect(shellStyles.backgroundAlpha).toBeGreaterThan(0.2);
+  expect(shellStyles.backgroundAlpha).toBeLessThan(0.95);
+  expect(shellStyles.backdropFilter).not.toBe("none");
   expect(shellStyles.boxShadow).not.toBe("none");
   expect(Number(shellStyles.zIndex)).toBeGreaterThan(1);
   return shellStyles;
