@@ -17,6 +17,7 @@ export function FolderTree(props: {
   onCreateNotebook(): void;
   onMoveNotebook(move: FolderMoveInstruction): void;
   onMoveNote(noteId: string, folderId: string): void;
+  onRenameNotebook(folder: FolderNode): void;
   onRequestDeleteNote(note: Pick<NoteSummary, "id" | "title">): void;
   onRequestDeleteNotebook(folder: FolderNode): void;
   onSelectFolder(folderId: string | null): void;
@@ -344,7 +345,8 @@ export function FolderTree(props: {
 
               <button
                 type="button"
-                onClick={() => props.onSelectFolder(selected ? null : folder.id)}
+                onClick={() => props.onSelectFolder(folder.id)}
+                onDoubleClick={() => props.onRenameNotebook(folder)}
                 className="bb-tree-row__content"
               >
                 <span className="bb-tree-row__label">{folder.name}</span>

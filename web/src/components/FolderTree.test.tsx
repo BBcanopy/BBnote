@@ -41,6 +41,21 @@ describe("FolderTree", () => {
     });
   });
 
+  it("requests notebook rename on double click", () => {
+    const handleRenameNotebook = vi.fn();
+
+    renderFolderTree({
+      onRenameNotebook: handleRenameNotebook
+    });
+
+    fireEvent.doubleClick(screen.getByRole("button", { name: /projects 1/i }));
+
+    expect(handleRenameNotebook).toHaveBeenCalledWith(expect.objectContaining({
+      id: "projects",
+      name: "Projects"
+    }));
+  });
+
   it("shows a temporary note delete target in the notebooks header and requests confirmation on drop", () => {
     const handleRequestDeleteNote = vi.fn();
     const dataTransfer = createDataTransfer();
@@ -80,6 +95,7 @@ function renderFolderTree(overrides?: {
     title: string;
   } | null;
   onMoveNotebook?: ReturnType<typeof vi.fn>;
+  onRenameNotebook?: ReturnType<typeof vi.fn>;
   onRequestDeleteNote?: ReturnType<typeof vi.fn>;
 }) {
   render(
@@ -90,10 +106,11 @@ function renderFolderTree(overrides?: {
       onCreateNotebook={vi.fn()}
       onMoveNotebook={overrides?.onMoveNotebook ?? vi.fn()}
       onMoveNote={vi.fn()}
+      onRenameNotebook={overrides?.onRenameNotebook ?? vi.fn()}
       onRequestDeleteNote={overrides?.onRequestDeleteNote ?? vi.fn()}
       onRequestDeleteNotebook={vi.fn()}
       onSelectFolder={vi.fn()}
-      onUpdateNotebookIcon={() => Promise.resolve()}
+      onUpdateNotebookIcon={vi.fn().mockResolvedValue(undefined)}
       acceptDraggedNotes
       enableFolderDragAndDrop
     />
