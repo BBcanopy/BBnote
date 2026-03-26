@@ -1714,6 +1714,35 @@ button:disabled {
   background: color-mix(in srgb, var(--bg-strong) 55%, transparent);
 }
 
+.bb-panel-note {
+  margin-top: 0.15rem;
+}
+
+.bb-recorder-panel {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.bb-recorder-panel__copy {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.bb-recorder-panel__copy p {
+  margin: 0;
+}
+
+.bb-recorder-panel__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+}
+
+.bb-recorder-panel__preview {
+  width: 100%;
+  max-width: 22rem;
+}
+
 .bb-editor-panel {
   align-content: start;
   padding: 1.1rem;

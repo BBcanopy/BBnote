@@ -69,6 +69,7 @@ const KEYBOARD_RESIZE_STEP = 24;
 const MEDIA_PLACEHOLDER_TITLE = "Untitled note";
 
 type MediaInsertBehavior = "image" | "link" | "none";
+type RecorderPhase = "closed" | "starting" | "recording" | "paused" | "processing" | "recorded" | "error";
 
 type PaneResizeTarget = "folders" | "notes";
 
@@ -1255,7 +1256,7 @@ function EditorPanel(props: {
   const recordedChunksRef = useRef<Blob[]>([]);
   const discardRecordingRef = useRef(false);
   const [recorderState, setRecorderState] = useState<{
-    phase: "closed" | "starting" | "recording" | "processing" | "recorded" | "error";
+    phase: RecorderPhase;
     blob: Blob | null;
     error: string | null;
     previewUrl: string | null;
@@ -1412,7 +1413,7 @@ function EditorPanel(props: {
 
   function handleStopRecording() {
     const recorder = mediaRecorderRef.current;
-    if (!recorder || recorder.state !== "recording") {
+    if (!recorder || (recorder.state !== "recording" && recorder.state !== "paused")) {
       return;
     }
 
@@ -1423,9 +1424,35 @@ function EditorPanel(props: {
     recorder.stop();
   }
 
+  function handlePauseRecording() {
+    const recorder = mediaRecorderRef.current;
+    if (!recorder || recorder.state !== "recording" || typeof recorder.pause !== "function") {
+      return;
+    }
+
+    recorder.pause();
+    setRecorderState((current) => ({
+      ...current,
+      phase: "paused"
+    }));
+  }
+
+  function handleResumeRecording() {
+    const recorder = mediaRecorderRef.current;
+    if (!recorder || recorder.state !== "paused" || typeof recorder.resume !== "function") {
+      return;
+    }
+
+    recorder.resume();
+    setRecorderState((current) => ({
+      ...current,
+      phase: "recording"
+    }));
+  }
+
   function handleDiscardRecording() {
     const recorder = mediaRecorderRef.current;
-    if (recorder && recorder.state === "recording") {
+    if (recorder && (recorder.state === "recording" || recorder.state === "paused")) {
       discardRecordingRef.current = true;
       setRecorderState((current) => ({
         ...current,
@@ -1462,6 +1489,70 @@ function EditorPanel(props: {
       setSavingRecording(false);
     }
   }
+
+  const recorderSummaryText = getRecorderSummaryText(recorderState.phase, recorderState.error);
+  const recorderPanel =
+    recorderState.phase !== "closed" ? (
+      <div className="bb-panel-note">
+        <div className="bb-recorder-panel">
+          <div className="bb-recorder-panel__copy">
+            <p className="text-sm font-medium tracking-tight text-[color:var(--ink)]">
+              {getRecorderTitle(recorderState.phase)}
+            </p>
+            {recorderSummaryText ? (
+              <p className="text-sm text-[color:var(--ink-soft)]">
+                {recorderSummaryText}
+              </p>
+            ) : null}
+          </div>
+          {recorderState.previewUrl ? (
+            <audio controls preload="metadata" src={recorderState.previewUrl} className="bb-recorder-panel__preview" />
+          ) : null}
+          <div className="bb-recorder-panel__actions">
+            {recorderState.phase === "recording" || recorderState.phase === "paused" ? (
+              <button type="button" onClick={handleStopRecording} className={buttonSecondary}>
+                Stop
+              </button>
+            ) : null}
+            {recorderState.phase === "recording" ? (
+              <button type="button" onClick={handlePauseRecording} className={buttonSecondary}>
+                Pause
+              </button>
+            ) : null}
+            {recorderState.phase === "paused" ? (
+              <button type="button" onClick={handleResumeRecording} className={buttonSecondary}>
+                Resume
+              </button>
+            ) : null}
+            {recorderState.phase === "recorded" ? (
+              <button
+                type="button"
+                onClick={() => void handleSaveRecording()}
+                disabled={savingRecording || props.uploadingAttachment}
+                className={buttonPrimary}
+              >
+                Save
+              </button>
+            ) : null}
+            {recorderState.phase === "error" ? (
+              <button type="button" onClick={() => void handleStartRecording()} className={buttonSecondary}>
+                Try again
+              </button>
+            ) : null}
+            {recorderState.phase === "recorded" ? (
+              <button type="button" onClick={handleDiscardRecording} className={buttonSecondary}>
+                Discard
+              </button>
+            ) : null}
+            {recorderState.phase === "error" ? (
+              <button type="button" onClick={handleDiscardRecording} className={buttonSecondary}>
+                Close
+              </button>
+            ) : null}
+          </div>
+        </div>
+      </div>
+    ) : null;
 
   return (
     <section className="bb-editor-panel bb-editor-panel--workspace lg:flex-1">
@@ -1557,7 +1648,7 @@ function EditorPanel(props: {
                   icon={<Microphone size={17} />}
                   disabled={mediaActionsDisabled || recorderState.phase === "starting" || recorderState.phase === "processing"}
                   disabledTitle={props.mediaActionDisabledReason}
-                  active={recorderState.phase === "recording" || recorderState.phase === "recorded"}
+                  active={recorderState.phase === "recording" || recorderState.phase === "paused" || recorderState.phase === "recorded"}
                   onClick={() => void handleStartRecording()}
                 />
                 <MediaToolbarButton
@@ -1587,58 +1678,7 @@ function EditorPanel(props: {
             </div>
           </div>
 
-          {recorderState.phase !== "closed" ? (
-            <div className="bb-panel-note">
-              <div className="bb-recorder-panel">
-                <div className="bb-recorder-panel__copy">
-                  <p className="text-sm font-medium tracking-tight text-[color:var(--ink)]">
-                    {recorderState.phase === "recording" ? "Recording voice note" : null}
-                    {recorderState.phase === "starting" ? "Preparing microphone" : null}
-                    {recorderState.phase === "processing" ? "Processing recording" : null}
-                    {recorderState.phase === "recorded" ? "Voice note ready" : null}
-                    {recorderState.phase === "error" ? "Voice recorder unavailable" : null}
-                  </p>
-                  <p className="text-sm text-[color:var(--ink-soft)]">
-                    {recorderState.phase === "recording" ? "Stop when you're ready to review or attach the clip." : null}
-                    {recorderState.phase === "starting" ? "Requesting microphone access." : null}
-                    {recorderState.phase === "processing" ? "Finishing the recorded clip." : null}
-                    {recorderState.phase === "recorded" ? "Preview the clip, then save it as an attachment." : null}
-                    {recorderState.phase === "error" ? recorderState.error : null}
-                  </p>
-                </div>
-                {recorderState.previewUrl ? (
-                  <audio controls preload="metadata" src={recorderState.previewUrl} className="bb-recorder-panel__preview" />
-                ) : null}
-                <div className="flex flex-wrap gap-2">
-                  {recorderState.phase === "recording" ? (
-                    <button type="button" onClick={handleStopRecording} className={buttonSecondary}>
-                      Stop
-                    </button>
-                  ) : null}
-                  {recorderState.phase === "recorded" ? (
-                    <button
-                      type="button"
-                      onClick={() => void handleSaveRecording()}
-                      disabled={savingRecording || props.uploadingAttachment}
-                      className={buttonPrimary}
-                    >
-                      Save
-                    </button>
-                  ) : null}
-                  {recorderState.phase === "error" ? (
-                    <button type="button" onClick={() => void handleStartRecording()} className={buttonSecondary}>
-                      Try again
-                    </button>
-                  ) : null}
-                  {recorderState.phase !== "starting" && recorderState.phase !== "processing" ? (
-                    <button type="button" onClick={handleDiscardRecording} className={buttonSecondary}>
-                      {recorderState.phase === "recorded" ? "Discard" : "Dismiss"}
-                    </button>
-                  ) : null}
-                </div>
-              </div>
-            </div>
-          ) : null}
+          {recorderPanel}
 
           <div className="bb-empty-state bb-empty-state--center px-6 py-8">
             <div className="space-y-2">
@@ -1692,7 +1732,7 @@ function EditorPanel(props: {
                   icon={<Microphone size={17} />}
                   disabled={mediaActionsDisabled || recorderState.phase === "starting" || recorderState.phase === "processing"}
                   disabledTitle={props.mediaActionDisabledReason}
-                  active={recorderState.phase === "recording" || recorderState.phase === "recorded"}
+                  active={recorderState.phase === "recording" || recorderState.phase === "paused" || recorderState.phase === "recorded"}
                   onClick={() => void handleStartRecording()}
                 />
                 <MediaToolbarButton
@@ -1720,58 +1760,7 @@ function EditorPanel(props: {
             </div>
           </div>
 
-          {recorderState.phase !== "closed" ? (
-            <div className="bb-panel-note">
-              <div className="bb-recorder-panel">
-                <div className="bb-recorder-panel__copy">
-                  <p className="text-sm font-medium tracking-tight text-[color:var(--ink)]">
-                    {recorderState.phase === "recording" ? "Recording voice note" : null}
-                    {recorderState.phase === "starting" ? "Preparing microphone" : null}
-                    {recorderState.phase === "processing" ? "Processing recording" : null}
-                    {recorderState.phase === "recorded" ? "Voice note ready" : null}
-                    {recorderState.phase === "error" ? "Voice recorder unavailable" : null}
-                  </p>
-                  <p className="text-sm text-[color:var(--ink-soft)]">
-                    {recorderState.phase === "recording" ? "Stop when you're ready to review or attach the clip." : null}
-                    {recorderState.phase === "starting" ? "Requesting microphone access." : null}
-                    {recorderState.phase === "processing" ? "Finishing the recorded clip." : null}
-                    {recorderState.phase === "recorded" ? "Preview the clip, then save it as an attachment." : null}
-                    {recorderState.phase === "error" ? recorderState.error : null}
-                  </p>
-                </div>
-                {recorderState.previewUrl ? (
-                  <audio controls preload="metadata" src={recorderState.previewUrl} className="bb-recorder-panel__preview" />
-                ) : null}
-                <div className="flex flex-wrap gap-2">
-                  {recorderState.phase === "recording" ? (
-                    <button type="button" onClick={handleStopRecording} className={buttonSecondary}>
-                      Stop
-                    </button>
-                  ) : null}
-                  {recorderState.phase === "recorded" ? (
-                    <button
-                      type="button"
-                      onClick={() => void handleSaveRecording()}
-                      disabled={savingRecording || props.uploadingAttachment}
-                      className={buttonPrimary}
-                    >
-                      Save
-                    </button>
-                  ) : null}
-                  {recorderState.phase === "error" ? (
-                    <button type="button" onClick={() => void handleStartRecording()} className={buttonSecondary}>
-                      Try again
-                    </button>
-                  ) : null}
-                  {recorderState.phase !== "starting" && recorderState.phase !== "processing" ? (
-                    <button type="button" onClick={handleDiscardRecording} className={buttonSecondary}>
-                      {recorderState.phase === "recorded" ? "Discard" : "Dismiss"}
-                    </button>
-                  ) : null}
-                </div>
-              </div>
-            </div>
-          ) : null}
+          {recorderPanel}
 
           <div className={`bb-editor-stack ${hasAttachments ? "" : "bb-editor-stack--fill"}`}>
             {props.editorPane === "markdown" ? (
@@ -2012,6 +2001,58 @@ function extensionForMimeType(mimeType: string) {
   }
 
   return ".webm";
+}
+
+function getRecorderTitle(phase: RecorderPhase) {
+  if (phase === "recording") {
+    return "Recording voice note";
+  }
+
+  if (phase === "paused") {
+    return "Recording paused";
+  }
+
+  if (phase === "starting") {
+    return "Preparing microphone";
+  }
+
+  if (phase === "processing") {
+    return "Processing recording";
+  }
+
+  if (phase === "recorded") {
+    return "Voice note ready";
+  }
+
+  if (phase === "error") {
+    return "Voice recorder unavailable";
+  }
+
+  return "";
+}
+
+function getRecorderSummaryText(phase: RecorderPhase, error: string | null) {
+  if (phase === "recording") {
+    return "Stop when you're ready to review or attach the clip.";
+  }
+
+  if (phase === "paused") {
+    return "Resume when you're ready to keep going.";
+  }
+
+  if (phase === "starting") {
+    return "Requesting microphone access.";
+  }
+
+  if (phase === "processing") {
+    return "Finishing the recorded clip.";
+  }
+
+  if (phase === "error") {
+    return error;
+  }
+
+  return null;
 }
 
 function formatRecorderError(error: unknown) {

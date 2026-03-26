@@ -630,6 +630,47 @@ test("reorders notes by dropping onto note cards and persists the order", async 
   await expectNoteOrderInLane(page, [firstNoteTitle, secondNoteTitle]);
 });
 
+test("shows pause controls and tighter recorder panel spacing for voice notes", async ({ page }) => {
+  await page.setViewportSize({ width: 1900, height: 1000 });
+  await installMockVoiceRecorder(page);
+  const notebookName = `Recorder ${Date.now()}`;
+
+  await login(page);
+  await createNotebookWithDialog(page, notebookName);
+
+  const recordVoiceButton = page.getByRole("button", { name: /^record voice$/i }).first();
+  await expect(recordVoiceButton).toBeEnabled();
+  await recordVoiceButton.click();
+
+  const recorderPanel = page.locator(".bb-recorder-panel").first();
+  await expect(recorderPanel).toBeVisible();
+  await expect(recorderPanel.getByText("Recording voice note")).toBeVisible();
+  await expect(recorderPanel.getByRole("button", { name: /^pause$/i })).toBeVisible();
+  await expect(recorderPanel.getByRole("button", { name: /^dismiss$/i })).toHaveCount(0);
+  await expect
+    .poll(async () =>
+      recorderPanel
+        .locator(".bb-recorder-panel__copy p")
+        .evaluateAll((elements) =>
+          elements.map((element) => `${getComputedStyle(element).marginTop}/${getComputedStyle(element).marginBottom}`).join("|")
+        )
+    )
+    .toBe("0px/0px|0px/0px");
+
+  await recorderPanel.getByRole("button", { name: /^pause$/i }).click();
+  await expect(recorderPanel.getByText("Recording paused")).toBeVisible();
+  await expect(recorderPanel.getByRole("button", { name: /^resume$/i })).toBeVisible();
+
+  await recorderPanel.getByRole("button", { name: /^resume$/i }).click();
+  await expect(recorderPanel.getByRole("button", { name: /^pause$/i })).toBeVisible();
+
+  await recorderPanel.getByRole("button", { name: /^stop$/i }).click();
+  await expect(recorderPanel.getByText("Voice note ready")).toBeVisible();
+  await expect(recorderPanel.getByText("Preview the clip, then save it as an attachment.")).toHaveCount(0);
+  await expect(recorderPanel.getByRole("button", { name: /^save$/i })).toBeVisible();
+  await expect(recorderPanel.getByRole("button", { name: /^discard$/i })).toBeVisible();
+});
+
 test("persists empty notes immediately so repeated new-note clicks create multiple blank notes", async ({ page }) => {
   const notebookName = `Inbox ${Date.now()}`;
 
@@ -810,6 +851,91 @@ async function createNotebookWithDialog(page: import("@playwright/test").Page, n
   await dialog.getByPlaceholder("Notebook name").fill(name);
   await dialog.getByRole("button", { name: /^create notebook$/i }).click();
   await expect(dialog).toHaveCount(0);
+}
+
+async function installMockVoiceRecorder(page: import("@playwright/test").Page) {
+  await page.addInitScript(() => {
+    class MockMediaRecorder {
+      static isTypeSupported() {
+        return true;
+      }
+
+      stream: unknown;
+      mimeType: string;
+      state: "inactive" | "recording" | "paused";
+      listeners: Map<string, Set<(event?: Event | { data?: Blob }) => void>>;
+
+      constructor(stream: unknown, options?: { mimeType?: string }) {
+        this.stream = stream;
+        this.mimeType = options?.mimeType ?? "audio/webm";
+        this.state = "inactive";
+        this.listeners = new Map();
+      }
+
+      addEventListener(type: string, listener: (event?: Event | { data?: Blob }) => void) {
+        const listeners = this.listeners.get(type) ?? new Set();
+        listeners.add(listener);
+        this.listeners.set(type, listeners);
+      }
+
+      removeEventListener(type: string, listener: (event?: Event | { data?: Blob }) => void) {
+        this.listeners.get(type)?.delete(listener);
+      }
+
+      dispatch(type: string, event?: Event | { data?: Blob }) {
+        this.listeners.get(type)?.forEach((listener) => listener(event));
+      }
+
+      start() {
+        this.state = "recording";
+      }
+
+      pause() {
+        if (this.state !== "recording") {
+          return;
+        }
+        this.state = "paused";
+        this.dispatch("pause", new Event("pause"));
+      }
+
+      resume() {
+        if (this.state !== "paused") {
+          return;
+        }
+        this.state = "recording";
+        this.dispatch("resume", new Event("resume"));
+      }
+
+      stop() {
+        if (this.state === "inactive") {
+          return;
+        }
+        this.state = "inactive";
+        const blob = new Blob(["mock-audio"], { type: this.mimeType || "audio/webm" });
+        this.dispatch("dataavailable", { data: blob });
+        this.dispatch("stop", new Event("stop"));
+      }
+    }
+
+    Object.defineProperty(window, "MediaRecorder", {
+      configurable: true,
+      writable: true,
+      value: MockMediaRecorder
+    });
+
+    Object.defineProperty(navigator, "mediaDevices", {
+      configurable: true,
+      value: {
+        getUserMedia: async () => ({
+          getTracks: () => [
+            {
+              stop() {}
+            }
+          ]
+        })
+      }
+    });
+  });
 }
 
 async function createNoteWithContent(page: import("@playwright/test").Page, title: string, body: string) {
