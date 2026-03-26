@@ -1,10 +1,13 @@
+import type { ComponentProps } from "react";
 import { fireEvent, render, screen } from "@testing-library/react";
 import type { FolderNode } from "../api/types";
 import { FolderTree } from "./FolderTree";
 
+type FolderTreeProps = ComponentProps<typeof FolderTree>;
+
 describe("FolderTree", () => {
   it("moves a notebook into another notebook from the notebook row", () => {
-    const handleMoveNotebook = vi.fn();
+    const handleMoveNotebook = vi.fn<FolderTreeProps["onMoveNotebook"]>();
     const dataTransfer = createDataTransfer();
 
     renderFolderTree({
@@ -23,7 +26,7 @@ describe("FolderTree", () => {
   });
 
   it("reorders a notebook before a sibling from the notebook row", () => {
-    const handleMoveNotebook = vi.fn();
+    const handleMoveNotebook = vi.fn<FolderTreeProps["onMoveNotebook"]>();
     const dataTransfer = createDataTransfer();
 
     renderFolderTree({
@@ -42,7 +45,7 @@ describe("FolderTree", () => {
   });
 
   it("requests notebook rename on double click", () => {
-    const handleRenameNotebook = vi.fn();
+    const handleRenameNotebook = vi.fn<FolderTreeProps["onRenameNotebook"]>();
 
     renderFolderTree({
       onRenameNotebook: handleRenameNotebook
@@ -57,7 +60,7 @@ describe("FolderTree", () => {
   });
 
   it("moves a dragged note into another notebook when the browser omits the drag payload", () => {
-    const handleMoveNote = vi.fn();
+    const handleMoveNote = vi.fn<FolderTreeProps["onMoveNote"]>();
 
     renderFolderTree({
       draggedNote: {
@@ -74,7 +77,7 @@ describe("FolderTree", () => {
   });
 
   it("shows a temporary note delete target in the notebooks header and requests confirmation on drop", () => {
-    const handleRequestDeleteNote = vi.fn();
+    const handleRequestDeleteNote = vi.fn<FolderTreeProps["onRequestDeleteNote"]>();
     const dataTransfer = createDataTransfer();
     const encodedPayload = JSON.stringify({
       kind: "note",
@@ -123,24 +126,24 @@ function renderFolderTree(overrides?: {
     id: string;
     title: string;
   } | null;
-  onMoveNote?: ReturnType<typeof vi.fn>;
-  onMoveNotebook?: ReturnType<typeof vi.fn>;
-  onRenameNotebook?: ReturnType<typeof vi.fn>;
-  onRequestDeleteNote?: ReturnType<typeof vi.fn>;
+  onMoveNote?: ReturnType<typeof vi.fn<FolderTreeProps["onMoveNote"]>>;
+  onMoveNotebook?: ReturnType<typeof vi.fn<FolderTreeProps["onMoveNotebook"]>>;
+  onRenameNotebook?: ReturnType<typeof vi.fn<FolderTreeProps["onRenameNotebook"]>>;
+  onRequestDeleteNote?: ReturnType<typeof vi.fn<FolderTreeProps["onRequestDeleteNote"]>>;
 }) {
   render(
     <FolderTree
       folders={buildFolders()}
       selectedFolderId="projects"
       draggedNote={overrides?.draggedNote ?? null}
-      onCreateNotebook={vi.fn()}
-      onMoveNotebook={overrides?.onMoveNotebook ?? vi.fn()}
-      onMoveNote={overrides?.onMoveNote ?? vi.fn()}
-      onRenameNotebook={overrides?.onRenameNotebook ?? vi.fn()}
-      onRequestDeleteNote={overrides?.onRequestDeleteNote ?? vi.fn()}
-      onRequestDeleteNotebook={vi.fn()}
-      onSelectFolder={vi.fn()}
-      onUpdateNotebookIcon={vi.fn().mockResolvedValue(undefined)}
+      onCreateNotebook={vi.fn<FolderTreeProps["onCreateNotebook"]>()}
+      onMoveNotebook={overrides?.onMoveNotebook ?? vi.fn<FolderTreeProps["onMoveNotebook"]>()}
+      onMoveNote={overrides?.onMoveNote ?? vi.fn<FolderTreeProps["onMoveNote"]>()}
+      onRenameNotebook={overrides?.onRenameNotebook ?? vi.fn<FolderTreeProps["onRenameNotebook"]>()}
+      onRequestDeleteNote={overrides?.onRequestDeleteNote ?? vi.fn<FolderTreeProps["onRequestDeleteNote"]>()}
+      onRequestDeleteNotebook={vi.fn<FolderTreeProps["onRequestDeleteNotebook"]>()}
+      onSelectFolder={vi.fn<FolderTreeProps["onSelectFolder"]>()}
+      onUpdateNotebookIcon={vi.fn<FolderTreeProps["onUpdateNotebookIcon"]>().mockResolvedValue(undefined)}
       acceptDraggedNotes
       enableFolderDragAndDrop
     />

@@ -340,6 +340,7 @@ export function FolderTree(props: {
 
               <button
                 type="button"
+                aria-label={formatFolderRowLabel(folder.name, folder.noteCount)}
                 onClick={() => props.onSelectFolder(folder.id)}
                 onDoubleClick={() => props.onRenameNotebook(folder)}
                 draggable={props.enableFolderDragAndDrop !== false}
@@ -485,6 +486,7 @@ export function FolderTree(props: {
       <div className="bb-tree-list space-y-1">
         <button
           type="button"
+          aria-label={formatFolderRowLabel("All Notes", allNotesCount)}
           onClick={() => props.onSelectFolder(null)}
           className={`bb-tree-row bb-tree-row--all ${props.selectedFolderId === null ? "is-active" : ""}`}
         >
@@ -530,5 +532,9 @@ function NotebookDropZone(props: {
 
 function buildNotebookTestId(kind: "drag" | "before" | "after", name: string) {
   return `notebook-${kind}-${encodeURIComponent(name)}`;
+}
+
+function formatFolderRowLabel(name: string, noteCount: number) {
+  return `${name} ${noteCount}`;
 }
 

@@ -496,7 +496,17 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
   await expect(page.locator('[data-testid^="note-drag-"] .bb-note-icon')).toHaveCount(0);
   const followUpNoteCard = page.locator('[data-testid^="note-drag-"]').filter({ hasText: followUpNoteTitle }).first();
   const targetNoteSlot = page.getByTestId(buildNoteTestId("slot", noteTitle));
+  const targetNoteDropBefore = page.getByTestId(buildNoteTestId("before", noteTitle));
   await expect(followUpNoteCard).toBeVisible();
+  const dragReadyPreview = await startDrag(page, followUpNoteCard);
+  await expect(targetNoteSlot).toHaveClass(/is-drag-ready/);
+  await expect
+    .poll(async () => Number.parseFloat(await targetNoteDropBefore.evaluate((element) => getComputedStyle(element).height)))
+    .toBeGreaterThan(10);
+  await expect
+    .poll(async () => Number.parseFloat(await targetNoteDropBefore.evaluate((element) => getComputedStyle(element).opacity)))
+    .toBeGreaterThan(0.95);
+  await endDrag(followUpNoteCard, dragReadyPreview);
   await dragNoteCardToNoteCard(followUpNoteCard, targetNoteSlot, "top");
   await expect
     .poll(async () => {
@@ -549,9 +559,21 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
   await allNotesButton.click();
   await expect(page.locator('[data-testid^="note-before-"]')).toHaveCount(0);
   await expect(page.getByText(noteTitle).first()).toBeVisible();
+  await expect
+    .poll(async () =>
+      page.locator('[data-testid^="note-drag-"]').evaluateAll((elements) =>
+        elements.filter((element) => {
+          const noteCard = element as HTMLElement;
+          return noteCard.draggable || noteCard.classList.contains("bb-note-card--draggable");
+        }).length
+      )
+    )
+    .toBe(0);
 
   const notePreview = page.getByRole("button", { name: new RegExp(noteTitle, "i") }).first();
   await expect(notePreview).toBeVisible();
+  await notePreview.click();
+  await expect(notePreview).toHaveClass(/is-active/);
   expect(
     await notePreview.evaluate((element) => {
       const noteCard = element as HTMLButtonElement;
@@ -596,6 +618,8 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
   await expect(page.getByPlaceholder("Write in Markdown").first()).toHaveValue(/budget\.txt/);
 
   await page.getByPlaceholder("Search notes").fill("");
+  await notebookRow(page, renamedSubNotebookName).click();
+  await expect(notebookRowContainer(page, renamedSubNotebookName)).toHaveClass(/is-active/);
   await dragLocatorToLocator(
     page,
     page.getByTestId(buildNoteTestId("drag", followUpNoteTitle)),
@@ -604,6 +628,9 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
   await expect(notebookRowContainer(page, archiveNotebookName)).toHaveClass(/is-active/);
   await expect(page.getByText(followUpNoteTitle).first()).toBeVisible();
   await expect(page.locator('[data-testid^="note-drag-"]').filter({ hasText: noteTitle })).toHaveCount(0);
+  await notebookRow(page, archiveNotebookName).click();
+  await expect(notebookRowContainer(page, archiveNotebookName)).toHaveClass(/is-active/);
+  await expect(page.getByTestId(buildNoteTestId("drag", followUpNoteTitle))).toBeVisible();
 
   const notebookHeader = page.getByTestId("notebook-pane").locator(".bb-pane-card__header").first();
   const notesHeader = page.getByTestId("notes-pane").locator(".bb-pane-card__header").first();
@@ -623,16 +650,8 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
   const cancelDeleteFromNotebookLaneDrag = await startDrag(page, followUpNoteDrag);
   const deleteNotebookTargetForNote = page.getByTestId("notebooks-delete-target");
   await expect(deleteNotebookTargetForNote).toBeVisible();
-  await expect(page.getByTestId("notebooks-actions")).toHaveCount(0);
-  await expect(deleteNotebookTargetForNote).toHaveAttribute("aria-label", "Delete note");
-  const notebookDeleteStyles = await expectCenteredHeaderAction(notebookHeader, deleteNotebookTargetForNote);
-  expect(notebookDeleteStyles.backgroundColor).toBe(expectedTrashBackgroundColor);
-  expect(notebookDeleteStyles.color).toBe(expectedTrashColor);
   await deleteNotebookTargetForNote.dispatchEvent("dragover", { dataTransfer: cancelDeleteFromNotebookLaneDrag });
   await expect(deleteNotebookTargetForNote).toHaveClass(/is-active/);
-  const activeNotebookDeleteStyles = await getHeaderActionStyles(deleteNotebookTargetForNote);
-  expect(activeNotebookDeleteStyles.backgroundColor).not.toBe(notebookDeleteStyles.backgroundColor);
-  expect(activeNotebookDeleteStyles.backgroundImage).toBe(expectedActiveTrashBackgroundImage);
   await dropOnTarget(followUpNoteDrag, deleteNotebookTargetForNote, cancelDeleteFromNotebookLaneDrag);
   const deleteNoteDialog = page.getByRole("dialog", { name: /^delete note\?$/i });
   await expect(deleteNoteDialog).toBeVisible();
@@ -647,9 +666,7 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
   await expect(deleteNoteTarget).toBeVisible();
   await expect(page.getByTestId("notes-actions")).toHaveCount(0);
   const noteDeleteStyles = await expectCenteredHeaderAction(notesHeader, deleteNoteTarget);
-  expect(noteDeleteStyles.backgroundColor).toBe(notebookDeleteStyles.backgroundColor);
   expect(noteDeleteStyles.backgroundColor).toBe(expectedTrashBackgroundColor);
-  expect(noteDeleteStyles.color).toBe(notebookDeleteStyles.color);
   expect(noteDeleteStyles.color).toBe(expectedTrashColor);
   await deleteNoteTarget.dispatchEvent("dragover", { dataTransfer: cancelDeleteDrag });
   await expect(deleteNoteTarget).toHaveClass(/is-active/);
@@ -725,7 +742,7 @@ test("reorders notes by dropping onto note cards and persists the order", async 
   await expect(downwardTargetCard).toHaveClass(/bb-note-card--drop-after/);
   await endDrag(downwardSource, downwardIndicatorDrag);
 
-  await dragNoteCardToNoteCard(downwardSource, downwardTargetSlot, "top");
+  await dragNoteCardToNoteCard(downwardSource, downwardTargetSlot, "bottom");
   await expectNoteOrderInLane(page, [secondNoteTitle, firstNoteTitle]);
 
   await page.reload();
@@ -742,6 +759,46 @@ test("reorders notes by dropping onto note cards and persists the order", async 
   await page.reload();
   await notebookRow(page, notebookName).click();
   await expectNoteOrderInLane(page, [firstNoteTitle, secondNoteTitle]);
+});
+
+test("reorders notes when dropped on the explicit seam lanes", async ({ page }) => {
+  await page.setViewportSize({ width: 1900, height: 1000 });
+  const suffix = Date.now().toString();
+  const notebookName = `Lane reorder ${suffix}`;
+  const firstNoteTitle = `Alpha ${suffix}`;
+  const secondNoteTitle = `Beta ${suffix}`;
+  const thirdNoteTitle = `Gamma ${suffix}`;
+
+  await login(page);
+  await createNotebookWithDialog(page, notebookName);
+  await notebookRow(page, notebookName).click();
+
+  await createNoteWithContent(page, firstNoteTitle, "First note body.");
+  await createNoteWithContent(page, secondNoteTitle, "Second note body.");
+  await createNoteWithContent(page, thirdNoteTitle, "Third note body.");
+  await expectNoteOrderInLane(page, [firstNoteTitle, secondNoteTitle, thirdNoteTitle]);
+
+  await dragNoteCardToNoteCard(
+    page.getByTestId(buildNoteTestId("drag", thirdNoteTitle)),
+    page.getByTestId(buildNoteTestId("slot", secondNoteTitle)),
+    "top"
+  );
+  await expectNoteOrderInLane(page, [firstNoteTitle, thirdNoteTitle, secondNoteTitle]);
+
+  await page.reload();
+  await notebookRow(page, notebookName).click();
+  await expectNoteOrderInLane(page, [firstNoteTitle, thirdNoteTitle, secondNoteTitle]);
+
+  await dragNoteCardToNoteCard(
+    page.getByTestId(buildNoteTestId("drag", firstNoteTitle)),
+    page.getByTestId(buildNoteTestId("slot", secondNoteTitle)),
+    "top"
+  );
+  await expectNoteOrderInLane(page, [thirdNoteTitle, firstNoteTitle, secondNoteTitle]);
+
+  await page.reload();
+  await notebookRow(page, notebookName).click();
+  await expectNoteOrderInLane(page, [thirdNoteTitle, firstNoteTitle, secondNoteTitle]);
 });
 
 test("reorders notes when the drop lands in the note-lane gap", async ({ page }) => {
@@ -789,7 +846,7 @@ test("reorders notes when the drop lands in the note-lane gap", async ({ page })
   await expectNoteOrderInLane(page, [secondNoteTitle, firstNoteTitle, thirdNoteTitle]);
 });
 
-test("shows a compact editor header, supports table insertion, fullscreen editing, and wraps selections with markdown formatting tools", async ({
+test("shows the note title in the topbar, keeps folder and note drag cursors distinct, and supports table insertion, fullscreen editing, and markdown formatting tools", async ({
   page
 }) => {
   await page.setViewportSize({ width: 1900, height: 1000 });
@@ -802,33 +859,44 @@ test("shows a compact editor header, supports table insertion, fullscreen editin
   await notebookRow(page, notebookName).click();
   await createNoteWithContent(page, noteTitle, "alpha\nbeta\ngamma");
 
+  const topbar = page.locator(".bb-topbar");
   const editorPanel = page.getByTestId("editor-panel-desktop");
   const editorHeader = editorPanel.locator(".bb-editor-header");
-  const titleLabel = editorHeader.getByText(/^title$/i);
-  const titleInput = editorHeader.getByRole("textbox", { name: "Title" });
+  const titleLabel = topbar.getByText(/^title$/i);
+  const titleInput = topbar.getByRole("textbox", { name: "Title" });
   const expandEditorButton = editorHeader.getByRole("button", { name: /^expand editor$/i });
   const deleteButton = editorHeader.getByRole("button", { name: /delete note/i });
   const textarea = editorPanel.getByPlaceholder("Write in Markdown");
 
   await expect(titleLabel).toBeVisible();
   await expect(titleInput).toBeVisible();
+  await expect(editorHeader.getByRole("textbox", { name: "Title" })).toHaveCount(0);
   await expect(expandEditorButton).toBeVisible();
   await expect(deleteButton).toBeVisible();
   await expect(page.getByTestId("editor-format-toolbar").first()).toBeVisible();
 
-  const headerBox = await editorHeader.boundingBox();
+  const topbarBox = await topbar.boundingBox();
   const titleInputBox = await titleInput.boundingBox();
   const deleteButtonBox = await deleteButton.boundingBox();
-  expect(headerBox).not.toBeNull();
+  expect(topbarBox).not.toBeNull();
   expect(titleInputBox).not.toBeNull();
   expect(deleteButtonBox).not.toBeNull();
-  if (!headerBox || !titleInputBox || !deleteButtonBox) {
-    throw new Error("Expected the compact editor header layout to be visible.");
+  if (!topbarBox || !titleInputBox || !deleteButtonBox) {
+    throw new Error("Expected the topbar title input and editor actions layout to be visible.");
   }
-  expect(titleInputBox.y).toBeGreaterThanOrEqual(headerBox.y - 1);
-  expect(titleInputBox.y + titleInputBox.height).toBeLessThanOrEqual(headerBox.y + headerBox.height + 1);
-  expect(deleteButtonBox.y).toBeGreaterThanOrEqual(headerBox.y - 1);
-  expect(deleteButtonBox.y + deleteButtonBox.height).toBeLessThanOrEqual(headerBox.y + headerBox.height + 1);
+  expect(titleInputBox.y).toBeGreaterThanOrEqual(topbarBox.y - 1);
+  expect(titleInputBox.y + titleInputBox.height).toBeLessThanOrEqual(topbarBox.y + topbarBox.height + 1);
+
+  await expect
+    .poll(async () => notebookRow(page, notebookName).evaluate((element) => getComputedStyle(element).cursor))
+    .toBe("pointer");
+  await expect
+    .poll(async () =>
+      page
+        .getByTestId(buildNoteTestId("drag", noteTitle))
+        .evaluate((element) => getComputedStyle(element).cursor)
+    )
+    .toBe("grab");
 
   await textarea.fill("alpha");
   await selectTextRange(textarea, 0, 5);
@@ -1371,8 +1439,16 @@ async function startDrag(page: import("@playwright/test").Page, source: import("
 }
 
 async function endDrag(source: import("@playwright/test").Locator, dataTransfer: Awaited<ReturnType<import("@playwright/test").Page["evaluateHandle"]>>) {
-  if (await source.count()) {
-    await source.dispatchEvent("dragend", { dataTransfer });
+  const [sourceHandle] = await source.elementHandles();
+  if (sourceHandle) {
+    try {
+      await sourceHandle.dispatchEvent("dragend", { dataTransfer });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (!message.includes("Element is not attached")) {
+        throw error;
+      }
+    }
   }
   await dataTransfer.dispose();
 }

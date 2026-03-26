@@ -1,6 +1,9 @@
+import type { ComponentProps } from "react";
 import { createEvent, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { NoteSummary } from "../api/types";
 import { NoteListPane } from "./NoteListPane";
+
+type NoteListPaneProps = ComponentProps<typeof NoteListPane>;
 
 describe("NoteListPane", () => {
   it("renders borderless header icon buttons", () => {
@@ -16,8 +19,21 @@ describe("NoteListPane", () => {
     expect(screen.getByTestId(buildNoteTestId("drag", "Quarterly review")).querySelector(".bb-note-icon")).toBeNull();
   });
 
+  it("disables note dragging when reorder and cross-notebook move are both unavailable", () => {
+    renderNoteListPane({
+      canReorder: false,
+      enableCrossNotebookMove: false
+    });
+
+    const noteCard = screen.getByTestId(buildNoteTestId("drag", "Quarterly review"));
+    expect(noteCard).not.toHaveAttribute("draggable", "true");
+    expect(noteCard).not.toHaveClass("bb-note-card--draggable");
+    expect(document.querySelector('[data-testid^="note-before-"]')).toBeNull();
+    expect(document.querySelector('[data-testid^="note-after-"]')).toBeNull();
+  });
+
   it("shows a temporary delete target during note drag and requests confirmation on drop", () => {
-    const handleRequestDeleteNote = vi.fn();
+    const handleRequestDeleteNote = vi.fn<NoteListPaneProps["onRequestDeleteNote"]>();
     const dataTransfer = createDataTransfer();
 
     renderNoteListPane({
@@ -52,8 +68,148 @@ describe("NoteListPane", () => {
     expect(screen.getByTestId("notes-delete-target")).toHaveClass("bb-pane-card__header-center-action--lane");
   });
 
+  it("shows drag-ready landing slots on other notes while dragging", () => {
+    const dataTransfer = createDataTransfer();
+
+    renderNoteListPane({
+      notes: [
+        buildNote({
+          id: "note-1",
+          title: "Quarterly review",
+          sortOrder: 0
+        }),
+        buildNote({
+          id: "note-2",
+          title: "Roadmap follow-up",
+          sortOrder: 1
+        })
+      ]
+    });
+
+    fireEvent.dragStart(screen.getByTestId(buildNoteTestId("drag", "Quarterly review")), { dataTransfer });
+
+    expect(screen.getByTestId(buildNoteTestId("slot", "Quarterly review"))).not.toHaveClass("is-drag-ready");
+    expect(screen.getByTestId(buildNoteTestId("slot", "Roadmap follow-up"))).toHaveClass("is-drag-ready");
+    expect(screen.getByTestId(buildNoteTestId("before", "Roadmap follow-up"))).toHaveClass("is-visible");
+    expect(screen.getByTestId(buildNoteTestId("after", "Roadmap follow-up"))).toHaveClass("is-visible");
+  });
+
+  it("reorders a note when dropped on the visible after drop zone", () => {
+    const handleMoveNote = vi.fn<NoteListPaneProps["onMoveNote"]>();
+    const dataTransfer = createDataTransfer();
+
+    renderNoteListPane({
+      notes: [
+        buildNote({
+          id: "note-1",
+          title: "Quarterly review",
+          sortOrder: 0
+        }),
+        buildNote({
+          id: "note-2",
+          title: "Roadmap follow-up",
+          sortOrder: 1
+        })
+      ],
+      onMoveNote: handleMoveNote
+    });
+
+    const targetCard = screen.getByTestId(buildNoteTestId("drag", "Roadmap follow-up"));
+    mockElementRect(targetCard, {
+      top: 100,
+      height: 100
+    });
+
+    fireEvent.dragStart(screen.getByTestId(buildNoteTestId("drag", "Quarterly review")), { dataTransfer });
+    const dragOverEvent = createEvent.dragOver(screen.getByTestId(buildNoteTestId("after", "Roadmap follow-up")), { dataTransfer });
+    Object.defineProperty(dragOverEvent, "clientY", {
+      configurable: true,
+      value: 190
+    });
+    fireEvent(screen.getByTestId(buildNoteTestId("after", "Roadmap follow-up")), dragOverEvent);
+    fireEvent.drop(screen.getByTestId(buildNoteTestId("after", "Roadmap follow-up")), { dataTransfer });
+
+    expect(handleMoveNote).toHaveBeenCalledWith({
+      draggedId: "note-1",
+      targetId: "note-2",
+      position: "after"
+    });
+  });
+
+  it("uses the explicit before drop zone position for downward moves", () => {
+    const handleMoveNote = vi.fn<NoteListPaneProps["onMoveNote"]>();
+    const dataTransfer = createDataTransfer();
+
+    renderNoteListPane({
+      notes: [
+        buildNote({
+          id: "note-1",
+          title: "Quarterly review",
+          sortOrder: 0
+        }),
+        buildNote({
+          id: "note-2",
+          title: "Roadmap follow-up",
+          sortOrder: 1
+        }),
+        buildNote({
+          id: "note-3",
+          title: "Budget wrap-up",
+          sortOrder: 2
+        })
+      ],
+      onMoveNote: handleMoveNote
+    });
+
+    fireEvent.dragStart(screen.getByTestId(buildNoteTestId("drag", "Quarterly review")), { dataTransfer });
+    fireEvent.dragOver(screen.getByTestId(buildNoteTestId("before", "Budget wrap-up")), { dataTransfer });
+    fireEvent.drop(screen.getByTestId(buildNoteTestId("before", "Budget wrap-up")), { dataTransfer });
+
+    expect(handleMoveNote).toHaveBeenCalledWith({
+      draggedId: "note-1",
+      targetId: "note-3",
+      position: "before"
+    });
+  });
+
+  it("uses the explicit before drop zone position for upward seam moves", () => {
+    const handleMoveNote = vi.fn<NoteListPaneProps["onMoveNote"]>();
+    const dataTransfer = createDataTransfer();
+
+    renderNoteListPane({
+      notes: [
+        buildNote({
+          id: "note-1",
+          title: "Quarterly review",
+          sortOrder: 0
+        }),
+        buildNote({
+          id: "note-2",
+          title: "Roadmap follow-up",
+          sortOrder: 1
+        }),
+        buildNote({
+          id: "note-3",
+          title: "Budget wrap-up",
+          sortOrder: 2
+        })
+      ],
+      onMoveNote: handleMoveNote
+    });
+
+    fireEvent.dragStart(screen.getByTestId(buildNoteTestId("drag", "Budget wrap-up")), { dataTransfer });
+    fireEvent.dragOver(screen.getByTestId(buildNoteTestId("before", "Roadmap follow-up")), { dataTransfer });
+    fireEvent.drop(screen.getByTestId(buildNoteTestId("before", "Roadmap follow-up")), { dataTransfer });
+
+    expect(handleMoveNote).toHaveBeenCalledWith({
+      draggedId: "note-3",
+      targetId: "note-2",
+      position: "before"
+    });
+  });
+
   it("reorders a note before another card when dropped near the top of the target", () => {
-    const handleMoveNote = vi.fn();
+    const handleMoveNote = vi.fn<NoteListPaneProps["onMoveNote"]>();
     const dataTransfer = createDataTransfer();
 
     renderNoteListPane({
@@ -100,7 +256,7 @@ describe("NoteListPane", () => {
   });
 
   it("reorders a note after another card when dropped near the bottom of the target", () => {
-    const handleMoveNote = vi.fn();
+    const handleMoveNote = vi.fn<NoteListPaneProps["onMoveNote"]>();
     const dataTransfer = createDataTransfer();
 
     renderNoteListPane({
@@ -147,7 +303,7 @@ describe("NoteListPane", () => {
   });
 
   it("reorders an adjacent note when the drop lands on the note slot around another card", () => {
-    const handleMoveNote = vi.fn();
+    const handleMoveNote = vi.fn<NoteListPaneProps["onMoveNote"]>();
     const dataTransfer = createDataTransfer();
 
     renderNoteListPane({
@@ -191,7 +347,7 @@ describe("NoteListPane", () => {
   });
 
   it("normalizes an adjacent card drop so it still changes the order", () => {
-    const handleMoveNote = vi.fn();
+    const handleMoveNote = vi.fn<NoteListPaneProps["onMoveNote"]>();
     const dataTransfer = createDataTransfer();
 
     renderNoteListPane({
@@ -237,7 +393,7 @@ describe("NoteListPane", () => {
   });
 
   it("reorders a note when the drop lands on the note-list gap instead of a card", () => {
-    const handleMoveNote = vi.fn();
+    const handleMoveNote = vi.fn<NoteListPaneProps["onMoveNote"]>();
     const dataTransfer = createDataTransfer();
 
     renderNoteListPane({
@@ -469,27 +625,29 @@ describe("NoteListPane", () => {
 });
 
 function renderNoteListPane(overrides?: {
-  onRequestDeleteNote?: ReturnType<typeof vi.fn>;
+  onRequestDeleteNote?: ReturnType<typeof vi.fn<NoteListPaneProps["onRequestDeleteNote"]>>;
   notes?: NoteSummary[];
-  onMoveNote?: ReturnType<typeof vi.fn>;
+  onMoveNote?: ReturnType<typeof vi.fn<NoteListPaneProps["onMoveNote"]>>;
+  canReorder?: boolean;
+  enableCrossNotebookMove?: boolean;
 }) {
   render(
     <NoteListPane
       notes={overrides?.notes ?? buildNotes()}
       search=""
-      onSearchChange={vi.fn()}
+      onSearchChange={vi.fn<NoteListPaneProps["onSearchChange"]>()}
       selectedNoteId="note-1"
-      onSelectNote={vi.fn()}
-      onCreateNote={vi.fn()}
-      onDraggedNoteChange={vi.fn()}
-      onRequestDeleteNote={overrides?.onRequestDeleteNote ?? vi.fn()}
-      onCollapse={vi.fn()}
+      onSelectNote={vi.fn<NoteListPaneProps["onSelectNote"]>()}
+      onCreateNote={vi.fn<NoteListPaneProps["onCreateNote"]>()}
+      onDraggedNoteChange={vi.fn<NoteListPaneProps["onDraggedNoteChange"]>()}
+      onRequestDeleteNote={overrides?.onRequestDeleteNote ?? vi.fn<NoteListPaneProps["onRequestDeleteNote"]>()}
+      onCollapse={vi.fn<NonNullable<NoteListPaneProps["onCollapse"]>>()}
       loading={false}
       notebookName="Projects"
       canCreateNote
-      canReorder
-      enableCrossNotebookMove
-      onMoveNote={overrides?.onMoveNote ?? vi.fn()}
+      canReorder={overrides?.canReorder ?? true}
+      enableCrossNotebookMove={overrides?.enableCrossNotebookMove ?? true}
+      onMoveNote={overrides?.onMoveNote ?? vi.fn<NoteListPaneProps["onMoveNote"]>()}
     />
   );
 }

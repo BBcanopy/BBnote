@@ -89,13 +89,20 @@ export function NoteListPane(props: {
     return payload?.kind === "note" ? payload.id : draggedNoteIdRef.current ?? draggedNoteId;
   }
 
-  function handleDragOver(event: DragEvent<HTMLElement>, targetId: string, position: NoteMovePosition) {
+  function handleDragOver(
+    event: DragEvent<HTMLElement>,
+    targetId: string,
+    position: NoteMovePosition,
+    options?: {
+      normalize?: boolean;
+    }
+  ) {
     const draggedId = resolveDraggedNoteId(event);
     if (!props.canReorder || !draggedId || draggedId === targetId) {
       return;
     }
 
-    const nextPosition = normalizeNoteCardDropPosition(props.notes, draggedId, targetId, position);
+    const nextPosition = options?.normalize === false ? position : normalizeNoteCardDropPosition(props.notes, draggedId, targetId, position);
 
     event.preventDefault();
     event.stopPropagation();
@@ -127,7 +134,20 @@ export function NoteListPane(props: {
     handleDragOver(event, nextDropTarget.targetId, nextDropTarget.position);
   }
 
-  function handleDrop(event: DragEvent<HTMLElement>, targetId: string, position: NoteMovePosition) {
+  function handleNoteDropZoneDragOver(event: DragEvent<HTMLElement>, targetId: string, position: NoteMovePosition) {
+    handleDragOver(event, targetId, position, {
+      normalize: false
+    });
+  }
+
+  function handleDrop(
+    event: DragEvent<HTMLElement>,
+    targetId: string,
+    position: NoteMovePosition,
+    options?: {
+      normalize?: boolean;
+    }
+  ) {
     const draggedId = resolveDraggedNoteId(event);
 
     if (!props.canReorder || !draggedId || draggedId === targetId) {
@@ -135,7 +155,7 @@ export function NoteListPane(props: {
       return;
     }
 
-    const nextPosition = normalizeNoteCardDropPosition(props.notes, draggedId, targetId, position);
+    const nextPosition = options?.normalize === false ? position : normalizeNoteCardDropPosition(props.notes, draggedId, targetId, position);
 
     event.preventDefault();
     event.stopPropagation();
@@ -155,6 +175,12 @@ export function NoteListPane(props: {
     }
 
     handleDrop(event, nextDropTarget.targetId, nextDropTarget.position);
+  }
+
+  function handleNoteDropZoneDrop(event: DragEvent<HTMLElement>, targetId: string, position: NoteMovePosition) {
+    handleDrop(event, targetId, position, {
+      normalize: false
+    });
   }
 
   function resolveNoteListDropTargetFromEvent(event: DragEvent<HTMLElement>) {
@@ -300,16 +326,19 @@ export function NoteListPane(props: {
             {props.notebookName ? "No notes yet." : "No notes match this view."}
           </div>
         ) : (
-          props.notes.map((note) =>
+          props.notes.map((note, index) =>
             renderNote(note, {
               canDragNotes,
               canReorder: props.canReorder,
               draggedNoteId,
               dragging,
               dropTarget,
+              showAfterDropZone: index === props.notes.length - 1,
               onDragEnd: clearDragState,
               onCardDragOver: handleNoteCardDragOver,
               onCardDrop: handleNoteCardDrop,
+              onDropZoneDragOver: handleNoteDropZoneDragOver,
+              onDropZoneDrop: handleNoteDropZoneDrop,
               onDragStart: handleDragStart,
               onSelectNote: props.onSelectNote,
               selectedNoteId: props.selectedNoteId
@@ -341,9 +370,12 @@ function renderNote(
     draggedNoteId: string | null;
     dragging: boolean;
     dropTarget: NoteDropTarget | null;
+    showAfterDropZone: boolean;
     onDragEnd(): void;
     onCardDragOver(event: DragEvent<HTMLElement>, targetId: string): void;
     onCardDrop(event: DragEvent<HTMLElement>, targetId: string): void;
+    onDropZoneDragOver(event: DragEvent<HTMLElement>, targetId: string, position: NoteMovePosition): void;
+    onDropZoneDrop(event: DragEvent<HTMLElement>, targetId: string, position: NoteMovePosition): void;
     onDragStart(event: DragEvent<HTMLElement>, note: NoteSummary): void;
     onSelectNote(noteId: string): void;
     selectedNoteId: string | null;
@@ -352,6 +384,7 @@ function renderNote(
   const selected = helpers.selectedNoteId === note.id;
   const dropPosition = helpers.canReorder && helpers.dropTarget?.targetId === note.id ? helpers.dropTarget.position : null;
   const draggingSource = helpers.draggedNoteId === note.id;
+  const dragTargetVisible = helpers.dragging && !draggingSource;
   const previewExcerpt = formatPreviewExcerpt(note.excerpt);
   const displayTitle = getDisplayNoteTitle(note.title);
   const noteCard = (
@@ -396,7 +429,7 @@ function renderNote(
       key={note.id}
       data-note-slot-id={note.id}
       data-testid={buildNoteTestId("slot", note.title)}
-      className={`bb-note-drop-slot min-w-0 space-y-0.5 ${dropPosition ? `is-drop-${dropPosition}` : ""}`}
+      className={`bb-note-drop-slot min-w-0 space-y-0.5 ${dragTargetVisible ? "is-drag-ready" : ""} ${dropPosition ? `is-drop-${dropPosition}` : ""}`}
       onDragEnter={helpers.canReorder ? (event) => helpers.onCardDragOver(event, note.id) : undefined}
       onDragOver={helpers.canReorder ? (event) => helpers.onCardDragOver(event, note.id) : undefined}
       onDrop={helpers.canReorder ? (event) => helpers.onCardDrop(event, note.id) : undefined}
@@ -404,18 +437,24 @@ function renderNote(
       {helpers.canReorder ? (
         <NoteDropZone
           testId={buildNoteTestId("before", note.title)}
+          position="before"
           active={helpers.dropTarget?.targetId === note.id && helpers.dropTarget.position === "before"}
-          dragging={helpers.dragging && helpers.draggedNoteId !== note.id}
+          dragging={dragTargetVisible}
+          onDragOver={(event) => helpers.onDropZoneDragOver(event, note.id, "before")}
+          onDrop={(event) => helpers.onDropZoneDrop(event, note.id, "before")}
         />
       ) : null}
       <div className="min-w-0 rounded-[1.15rem]">
         {noteCard}
       </div>
-      {helpers.canReorder ? (
+      {helpers.canReorder && helpers.showAfterDropZone ? (
         <NoteDropZone
           testId={buildNoteTestId("after", note.title)}
+          position="after"
           active={helpers.dropTarget?.targetId === note.id && helpers.dropTarget.position === "after"}
-          dragging={helpers.dragging && helpers.draggedNoteId !== note.id}
+          dragging={dragTargetVisible}
+          onDragOver={(event) => helpers.onDropZoneDragOver(event, note.id, "after")}
+          onDrop={(event) => helpers.onDropZoneDrop(event, note.id, "after")}
         />
       ) : null}
     </div>
@@ -424,14 +463,19 @@ function renderNote(
 
 function NoteDropZone(props: {
   testId: string;
+  position: NoteMovePosition;
   active: boolean;
   dragging: boolean;
+  onDragOver(event: DragEvent<HTMLDivElement>): void;
+  onDrop(event: DragEvent<HTMLDivElement>): void;
 }) {
   return (
     <div
       data-testid={props.testId}
       aria-hidden="true"
-      className={`bb-dropzone bb-dropzone--note ${props.dragging ? "is-visible" : ""} ${props.active ? "is-active" : ""}`}
+      onDragOver={props.dragging ? props.onDragOver : undefined}
+      onDrop={props.dragging ? props.onDrop : undefined}
+      className={`bb-dropzone bb-dropzone--note bb-dropzone--note-${props.position} ${props.dragging ? "is-visible" : ""} ${props.active ? "is-active" : ""}`}
     />
   );
 }

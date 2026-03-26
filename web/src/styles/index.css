@@ -307,6 +307,27 @@ button:disabled {
   justify-items: start;
 }
 
+.bb-topbar__titlebar {
+  display: grid;
+  gap: 0.28rem;
+  min-width: 0;
+  max-width: min(100%, 34rem);
+}
+
+.bb-topbar__titlebar-label {
+  color: var(--ink-soft);
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.bb-topbar__titlebar-input {
+  min-width: 0;
+  min-height: 2.7rem;
+  padding-block: 0.55rem;
+}
+
 .bb-brand-mark {
   display: inline-grid;
   grid-template-columns: auto auto;
@@ -1099,8 +1120,18 @@ button:disabled {
 
 .bb-note-drop-slot {
   position: relative;
+  isolation: isolate;
+  overflow: visible;
   padding-block: 0.18rem;
   margin-block: -0.18rem;
+  transition:
+    padding-block 180ms var(--ease),
+    margin-block 180ms var(--ease);
+}
+
+.bb-note-drop-slot.is-drag-ready {
+  padding-block: 0.95rem;
+  margin-block: 0.14rem;
 }
 
 .bb-note-drop-slot::before,
@@ -1127,6 +1158,12 @@ button:disabled {
     opacity 180ms var(--ease),
     transform 180ms var(--ease);
   pointer-events: none;
+}
+
+.bb-note-drop-slot.is-drag-ready::before,
+.bb-note-drop-slot.is-drag-ready::after {
+  opacity: 0.28;
+  transform: scaleX(0.94);
 }
 
 .bb-note-drop-slot::before {
@@ -1437,6 +1474,8 @@ button:disabled {
 }
 
 .bb-note-card {
+  position: relative;
+  z-index: 1;
   overflow: hidden;
   padding: 0.66rem 0.76rem;
 }
@@ -1623,12 +1662,14 @@ button:disabled {
   text-align: left;
 }
 
-.bb-tree-row__content--draggable,
+.bb-tree-row__content--draggable {
+  cursor: pointer;
+}
+
 .bb-note-card--draggable {
   cursor: grab;
 }
 
-.bb-tree-row__content--draggable:active,
 .bb-note-card--draggable:active {
   cursor: grabbing;
 }
@@ -1718,9 +1759,21 @@ button:disabled {
 }
 
 .bb-dropzone--note {
+  position: absolute;
+  left: 0.42rem;
+  right: 0.42rem;
   height: 0.22rem;
   opacity: 0.001;
   pointer-events: none;
+  z-index: 4;
+}
+
+.bb-dropzone--note-before {
+  top: 0.08rem;
+}
+
+.bb-dropzone--note-after {
+  bottom: 0.08rem;
 }
 
 .bb-dropzone--tree {
@@ -1814,7 +1867,8 @@ button:disabled {
 }
 
 .bb-dropzone--note.is-visible {
-  height: 0.7rem;
+  height: 0.9rem;
+  pointer-events: auto;
 }
 
 .bb-dropzone.is-visible.is-active {
@@ -2064,30 +2118,6 @@ button:disabled {
   gap: 0.35rem;
   margin-left: auto;
   flex-wrap: wrap;
-}
-
-.bb-editor-titlebar {
-  display: flex;
-  align-items: center;
-  gap: 0.7rem;
-  flex: 1 1 20rem;
-  min-width: min(100%, 18rem);
-}
-
-.bb-editor-titlebar__label {
-  flex: 0 0 auto;
-  color: var(--ink-soft);
-  font-size: 0.76rem;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-}
-
-.bb-editor-titlebar__input {
-  flex: 1 1 auto;
-  min-width: 0;
-  min-height: 2.7rem;
-  padding-block: 0.55rem;
 }
 
 .bb-editor-toolbar-row {
@@ -2649,12 +2679,8 @@ button:disabled {
   }
 
   .bb-editor-header__actions,
-  .bb-editor-titlebar {
+  .bb-topbar__titlebar {
     width: 100%;
-  }
-
-  .bb-editor-titlebar {
-    flex-wrap: wrap;
   }
 
   .bb-editor-toolbar-divider {
