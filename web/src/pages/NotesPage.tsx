@@ -2571,7 +2571,7 @@ function getEditorStatus(props: {
   }
 
   if (props.editorNote.updatedAt) {
-    return props.editorNote.updatedAt;
+    return `Updated at ${props.editorNote.updatedAt}`;
   }
 
   return "Draft";

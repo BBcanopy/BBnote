@@ -4,6 +4,8 @@ import path from "node:path";
 import { expect, test } from "@playwright/test";
 import JSZip from "jszip";
 
+const UPDATED_AT_STATUS_PATTERN = /^Updated at \d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
+
 test("keeps desktop lanes viewport-height and only shows the pane grip on border hover", async ({ page }) => {
   await page.setViewportSize({ width: 1900, height: 1000 });
 
@@ -487,7 +489,7 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
   await expect(page.locator(".bb-editor-header .bb-editor-mode").first()).toBeVisible();
   await expect
     .poll(async () => ((await page.locator(".bb-editor-footer").first().textContent()) ?? "").trim())
-    .toMatch(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z/);
+    .toMatch(UPDATED_AT_STATUS_PATTERN);
 
   await page.getByRole("button", { name: /^new note$/i }).click();
   await expect(page).toHaveURL(/\/folders\/[^/]+\/notes\/[^/]+$/);
@@ -495,7 +497,7 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
   const followUpFooter = page.locator(".bb-editor-footer").first();
   await expect
     .poll(async () => ((await followUpFooter.textContent()) ?? "").trim())
-    .toMatch(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z/);
+    .toMatch(UPDATED_AT_STATUS_PATTERN);
   const followUpInitialFooterText = ((await followUpFooter.textContent()) ?? "").trim();
   await page.getByRole("textbox", { name: "Title" }).first().fill(followUpNoteTitle);
   await page.getByPlaceholder("Write in Markdown").first().fill("Second note to test manual priority.");
@@ -504,7 +506,7 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
       const footerText = ((await followUpFooter.textContent()) ?? "").trim();
       return footerText !== followUpInitialFooterText ? footerText : "";
     })
-    .toMatch(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z/);
+    .toMatch(UPDATED_AT_STATUS_PATTERN);
 
   await expect.poll(async () => page.locator('[data-testid^="note-drag-"]').count()).toBe(2);
   await expect(page.locator('[data-testid^="note-drag-"] .bb-note-icon')).toHaveCount(0);
@@ -558,12 +560,12 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
       const footerText = ((await followUpEditorFooter.textContent()) ?? "").trim();
       return footerText !== previousFollowUpFooterText ? footerText : "";
     })
-    .toMatch(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z/);
+    .toMatch(UPDATED_AT_STATUS_PATTERN);
   await expect(page.locator(".bb-skeleton-card")).toHaveCount(0);
   await expect(page.getByTestId(buildNoteTestId("drag", followUpNoteTitle))).toBeVisible();
   await expect
     .poll(async () => ((await page.locator(".bb-editor-footer").first().textContent()) ?? "").trim())
-    .toMatch(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z/);
+    .toMatch(UPDATED_AT_STATUS_PATTERN);
 
   await page.getByPlaceholder("Search notes").fill("priority");
   await expect(page.locator('[data-testid^="note-before-"]')).toHaveCount(0);
@@ -1169,7 +1171,7 @@ test("syncs notebook and note selection into the URL and restores deep links on 
   await page.getByPlaceholder("Write in Markdown").first().fill("Route this note back in.");
   await expect
     .poll(async () => ((await page.locator(".bb-editor-footer").first().textContent()) ?? "").trim())
-    .toMatch(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z/);
+    .toMatch(UPDATED_AT_STATUS_PATTERN);
   await expect(page.getByRole("button", { name: new RegExp(noteTitle, "i") }).first()).toBeVisible();
 
   await page.goto(folderUrl);
@@ -1271,7 +1273,7 @@ async function createNotebookAndPersistedNote(page: import("@playwright/test").P
   const editorFooter = page.locator(".bb-editor-footer").first();
   await expect
     .poll(async () => ((await editorFooter.textContent()) ?? "").trim())
-    .toMatch(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z/);
+    .toMatch(UPDATED_AT_STATUS_PATTERN);
   const initialFooterText = ((await editorFooter.textContent()) ?? "").trim();
   await page.getByRole("textbox", { name: "Title" }).first().fill(`Export ready note ${suffix}`);
   await page.getByPlaceholder("Write in Markdown").first().fill("This note should travel well.");
@@ -1280,7 +1282,7 @@ async function createNotebookAndPersistedNote(page: import("@playwright/test").P
       const footerText = ((await editorFooter.textContent()) ?? "").trim();
       return footerText !== initialFooterText ? footerText : "";
     })
-    .toMatch(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z/);
+    .toMatch(UPDATED_AT_STATUS_PATTERN);
   await expect(page.getByRole("button", { name: new RegExp(`Export ready note ${suffix}`, "i") })).toBeVisible();
 }
 
@@ -1402,7 +1404,7 @@ async function createNoteWithContent(page: import("@playwright/test").Page, titl
   const editorFooter = page.locator(".bb-editor-footer").first();
   await expect
     .poll(async () => ((await editorFooter.textContent()) ?? "").trim())
-    .toMatch(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z/);
+    .toMatch(UPDATED_AT_STATUS_PATTERN);
   const initialFooterText = ((await editorFooter.textContent()) ?? "").trim();
   await page.getByRole("textbox", { name: "Title" }).first().fill(title);
   await page.getByPlaceholder("Write in Markdown").first().fill(body);
@@ -1411,7 +1413,7 @@ async function createNoteWithContent(page: import("@playwright/test").Page, titl
       const footerText = ((await editorFooter.textContent()) ?? "").trim();
       return footerText !== initialFooterText ? footerText : "";
     })
-    .toMatch(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z/);
+    .toMatch(UPDATED_AT_STATUS_PATTERN);
   await expect(page.getByTestId(buildNoteTestId("drag", title))).toBeVisible();
 }
 
