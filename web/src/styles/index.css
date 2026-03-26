@@ -1829,6 +1829,7 @@ button:disabled {
 
 .bb-dropzone--note.is-visible {
   height: 0.9rem;
+  pointer-events: auto;
 }
 
 .bb-dropzone.is-visible.is-active {

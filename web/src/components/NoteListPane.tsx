@@ -407,6 +407,8 @@ function renderNote(
           testId={buildNoteTestId("before", note.title)}
           active={helpers.dropTarget?.targetId === note.id && helpers.dropTarget.position === "before"}
           dragging={dragTargetVisible}
+          onDragOver={(event) => helpers.onCardDragOver(event, note.id)}
+          onDrop={(event) => helpers.onCardDrop(event, note.id)}
         />
       ) : null}
       <div className="min-w-0 rounded-[1.15rem]">
@@ -417,6 +419,8 @@ function renderNote(
           testId={buildNoteTestId("after", note.title)}
           active={helpers.dropTarget?.targetId === note.id && helpers.dropTarget.position === "after"}
           dragging={dragTargetVisible}
+          onDragOver={(event) => helpers.onCardDragOver(event, note.id)}
+          onDrop={(event) => helpers.onCardDrop(event, note.id)}
         />
       ) : null}
     </div>
@@ -427,11 +431,15 @@ function NoteDropZone(props: {
   testId: string;
   active: boolean;
   dragging: boolean;
+  onDragOver(event: DragEvent<HTMLDivElement>): void;
+  onDrop(event: DragEvent<HTMLDivElement>): void;
 }) {
   return (
     <div
       data-testid={props.testId}
       aria-hidden="true"
+      onDragOver={props.dragging ? props.onDragOver : undefined}
+      onDrop={props.dragging ? props.onDrop : undefined}
       className={`bb-dropzone bb-dropzone--note ${props.dragging ? "is-visible" : ""} ${props.active ? "is-active" : ""}`}
     />
   );

@@ -81,6 +81,48 @@ describe("NoteListPane", () => {
     expect(screen.getByTestId(buildNoteTestId("after", "Roadmap follow-up"))).toHaveClass("is-visible");
   });
 
+  it("reorders a note when dropped on the visible after drop zone", () => {
+    const handleMoveNote = vi.fn<NoteListPaneProps["onMoveNote"]>();
+    const dataTransfer = createDataTransfer();
+
+    renderNoteListPane({
+      notes: [
+        buildNote({
+          id: "note-1",
+          title: "Quarterly review",
+          sortOrder: 0
+        }),
+        buildNote({
+          id: "note-2",
+          title: "Roadmap follow-up",
+          sortOrder: 1
+        })
+      ],
+      onMoveNote: handleMoveNote
+    });
+
+    const targetCard = screen.getByTestId(buildNoteTestId("drag", "Roadmap follow-up"));
+    mockElementRect(targetCard, {
+      top: 100,
+      height: 100
+    });
+
+    fireEvent.dragStart(screen.getByTestId(buildNoteTestId("drag", "Quarterly review")), { dataTransfer });
+    const dragOverEvent = createEvent.dragOver(screen.getByTestId(buildNoteTestId("after", "Roadmap follow-up")), { dataTransfer });
+    Object.defineProperty(dragOverEvent, "clientY", {
+      configurable: true,
+      value: 190
+    });
+    fireEvent(screen.getByTestId(buildNoteTestId("after", "Roadmap follow-up")), dragOverEvent);
+    fireEvent.drop(screen.getByTestId(buildNoteTestId("after", "Roadmap follow-up")), { dataTransfer });
+
+    expect(handleMoveNote).toHaveBeenCalledWith({
+      draggedId: "note-1",
+      targetId: "note-2",
+      position: "after"
+    });
+  });
+
   it("reorders a note before another card when dropped near the top of the target", () => {
     const handleMoveNote = vi.fn<NoteListPaneProps["onMoveNote"]>();
     const dataTransfer = createDataTransfer();

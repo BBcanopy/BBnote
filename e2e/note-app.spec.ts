@@ -742,7 +742,7 @@ test("reorders notes by dropping onto note cards and persists the order", async 
   await expect(downwardTargetCard).toHaveClass(/bb-note-card--drop-after/);
   await endDrag(downwardSource, downwardIndicatorDrag);
 
-  await dragNoteCardToNoteCard(downwardSource, downwardTargetSlot, "top");
+  await dragNoteCardToNoteCard(downwardSource, downwardTargetSlot, "bottom");
   await expectNoteOrderInLane(page, [secondNoteTitle, firstNoteTitle]);
 
   await page.reload();
