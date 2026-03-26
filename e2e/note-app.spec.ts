@@ -856,7 +856,7 @@ test("reorders notes when the drop lands in the note-lane gap", async ({ page })
   await expectNoteOrderInLane(page, [secondNoteTitle, firstNoteTitle, thirdNoteTitle]);
 });
 
-test("shows a compact editor header, supports table insertion, fullscreen editing, and wraps selections with markdown formatting tools", async ({
+test("shows the note title in the topbar, keeps folder and note drag cursors distinct, and supports table insertion, fullscreen editing, and markdown formatting tools", async ({
   page
 }) => {
   await page.setViewportSize({ width: 1900, height: 1000 });
@@ -869,33 +869,44 @@ test("shows a compact editor header, supports table insertion, fullscreen editin
   await notebookRow(page, notebookName).click();
   await createNoteWithContent(page, noteTitle, "alpha\nbeta\ngamma");
 
+  const topbar = page.locator(".bb-topbar");
   const editorPanel = page.getByTestId("editor-panel-desktop");
   const editorHeader = editorPanel.locator(".bb-editor-header");
-  const titleLabel = editorHeader.getByText(/^title$/i);
-  const titleInput = editorHeader.getByRole("textbox", { name: "Title" });
+  const titleLabel = topbar.getByText(/^title$/i);
+  const titleInput = topbar.getByRole("textbox", { name: "Title" });
   const expandEditorButton = editorHeader.getByRole("button", { name: /^expand editor$/i });
   const deleteButton = editorHeader.getByRole("button", { name: /delete note/i });
   const textarea = editorPanel.getByPlaceholder("Write in Markdown");
 
   await expect(titleLabel).toBeVisible();
   await expect(titleInput).toBeVisible();
+  await expect(editorHeader.getByRole("textbox", { name: "Title" })).toHaveCount(0);
   await expect(expandEditorButton).toBeVisible();
   await expect(deleteButton).toBeVisible();
   await expect(page.getByTestId("editor-format-toolbar").first()).toBeVisible();
 
-  const headerBox = await editorHeader.boundingBox();
+  const topbarBox = await topbar.boundingBox();
   const titleInputBox = await titleInput.boundingBox();
   const deleteButtonBox = await deleteButton.boundingBox();
-  expect(headerBox).not.toBeNull();
+  expect(topbarBox).not.toBeNull();
   expect(titleInputBox).not.toBeNull();
   expect(deleteButtonBox).not.toBeNull();
-  if (!headerBox || !titleInputBox || !deleteButtonBox) {
-    throw new Error("Expected the compact editor header layout to be visible.");
+  if (!topbarBox || !titleInputBox || !deleteButtonBox) {
+    throw new Error("Expected the topbar title input and editor actions layout to be visible.");
   }
-  expect(titleInputBox.y).toBeGreaterThanOrEqual(headerBox.y - 1);
-  expect(titleInputBox.y + titleInputBox.height).toBeLessThanOrEqual(headerBox.y + headerBox.height + 1);
-  expect(deleteButtonBox.y).toBeGreaterThanOrEqual(headerBox.y - 1);
-  expect(deleteButtonBox.y + deleteButtonBox.height).toBeLessThanOrEqual(headerBox.y + headerBox.height + 1);
+  expect(titleInputBox.y).toBeGreaterThanOrEqual(topbarBox.y - 1);
+  expect(titleInputBox.y + titleInputBox.height).toBeLessThanOrEqual(topbarBox.y + topbarBox.height + 1);
+
+  await expect
+    .poll(async () => notebookRow(page, notebookName).evaluate((element) => getComputedStyle(element).cursor))
+    .toBe("pointer");
+  await expect
+    .poll(async () =>
+      page
+        .getByTestId(buildNoteTestId("drag", noteTitle))
+        .evaluate((element) => getComputedStyle(element).cursor)
+    )
+    .toBe("grab");
 
   await textarea.fill("alpha");
   await selectTextRange(textarea, 0, 5);

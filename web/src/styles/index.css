@@ -307,6 +307,27 @@ button:disabled {
   justify-items: start;
 }
 
+.bb-topbar__titlebar {
+  display: grid;
+  gap: 0.28rem;
+  min-width: 0;
+  max-width: min(100%, 34rem);
+}
+
+.bb-topbar__titlebar-label {
+  color: var(--ink-soft);
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.bb-topbar__titlebar-input {
+  min-width: 0;
+  min-height: 2.7rem;
+  padding-block: 0.55rem;
+}
+
 .bb-brand-mark {
   display: inline-grid;
   grid-template-columns: auto auto;
@@ -1641,12 +1662,14 @@ button:disabled {
   text-align: left;
 }
 
-.bb-tree-row__content--draggable,
+.bb-tree-row__content--draggable {
+  cursor: pointer;
+}
+
 .bb-note-card--draggable {
   cursor: grab;
 }
 
-.bb-tree-row__content--draggable:active,
 .bb-note-card--draggable:active {
   cursor: grabbing;
 }
@@ -2095,30 +2118,6 @@ button:disabled {
   gap: 0.35rem;
   margin-left: auto;
   flex-wrap: wrap;
-}
-
-.bb-editor-titlebar {
-  display: flex;
-  align-items: center;
-  gap: 0.7rem;
-  flex: 1 1 20rem;
-  min-width: min(100%, 18rem);
-}
-
-.bb-editor-titlebar__label {
-  flex: 0 0 auto;
-  color: var(--ink-soft);
-  font-size: 0.76rem;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-}
-
-.bb-editor-titlebar__input {
-  flex: 1 1 auto;
-  min-width: 0;
-  min-height: 2.7rem;
-  padding-block: 0.55rem;
 }
 
 .bb-editor-toolbar-row {
@@ -2680,12 +2679,8 @@ button:disabled {
   }
 
   .bb-editor-header__actions,
-  .bb-editor-titlebar {
+  .bb-topbar__titlebar {
     width: 100%;
-  }
-
-  .bb-editor-titlebar {
-    flex-wrap: wrap;
   }
 
   .bb-editor-toolbar-divider {
