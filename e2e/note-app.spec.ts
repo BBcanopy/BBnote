@@ -270,12 +270,16 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
   await expect(brandPill).toHaveText("BB");
   const brandPillBox = await brandPill.boundingBox();
   const brandTitleBox = await brandTitle.boundingBox();
-  const expectedBrandPillBackground = await resolveBackgroundImage(
-    page,
-    "linear-gradient(145deg, color-mix(in srgb, #5d94d1 36%, var(--brand-start)) 0%, color-mix(in srgb, #4b78bf 42%, var(--brand-end)) 100%)"
+  const expectedBrandPillBackground = normalizeGradientBoundaryStops(
+    await resolveBackgroundImage(
+      page,
+      "linear-gradient(145deg, color-mix(in srgb, #5d94d1 36%, var(--brand-start)) 0%, color-mix(in srgb, #4b78bf 42%, var(--brand-end)) 100%)"
+    )
   );
   await expect
-    .poll(async () => brandPill.evaluate((element) => getComputedStyle(element).backgroundImage))
+    .poll(async () =>
+      normalizeGradientBoundaryStops(await brandPill.evaluate((element) => getComputedStyle(element).backgroundImage))
+    )
     .toBe(expectedBrandPillBackground);
   expect(brandPillBox).not.toBeNull();
   expect(brandTitleBox).not.toBeNull();
@@ -1459,6 +1463,57 @@ async function resolveBackgroundImage(page: import("@playwright/test").Page, bac
     probe.remove();
     return resolved;
   }, backgroundImage);
+}
+
+function normalizeGradientBoundaryStops(backgroundImage: string) {
+  const trimmedBackgroundImage = backgroundImage.trim();
+  if (!trimmedBackgroundImage.startsWith("linear-gradient(") || !trimmedBackgroundImage.endsWith(")")) {
+    return trimmedBackgroundImage;
+  }
+
+  const innerValue = trimmedBackgroundImage.slice("linear-gradient(".length, -1);
+  const parts: string[] = [];
+  let currentPart = "";
+  let depth = 0;
+
+  for (const character of innerValue) {
+    if (character === "(") {
+      depth += 1;
+    } else if (character === ")") {
+      depth = Math.max(0, depth - 1);
+    }
+
+    if (character === "," && depth === 0) {
+      parts.push(currentPart.trim());
+      currentPart = "";
+      continue;
+    }
+
+    currentPart += character;
+  }
+
+  if (currentPart) {
+    parts.push(currentPart.trim());
+  }
+
+  if (parts.length < 3) {
+    return trimmedBackgroundImage;
+  }
+
+  const [gradientPrefix, ...colorStops] = parts;
+  const normalizedColorStops = colorStops.map((colorStop, index) => {
+    if (index === 0) {
+      return colorStop.replace(/\s+0%$/i, "");
+    }
+
+    if (index === colorStops.length - 1) {
+      return colorStop.replace(/\s+100%$/i, "");
+    }
+
+    return colorStop;
+  });
+
+  return `linear-gradient(${[gradientPrefix, ...normalizedColorStops].join(", ")})`;
 }
 
 async function resolveTextColor(page: import("@playwright/test").Page, color: string) {
