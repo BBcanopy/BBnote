@@ -236,6 +236,72 @@ describe("NoteListPane", () => {
     });
   });
 
+  it("reorders a note when the drop lands on the note-list gap instead of a card", () => {
+    const handleMoveNote = vi.fn();
+    const dataTransfer = createDataTransfer();
+
+    renderNoteListPane({
+      notes: [
+        buildNote({
+          id: "note-1",
+          title: "Quarterly review",
+          sortOrder: 0
+        }),
+        buildNote({
+          id: "note-2",
+          title: "Roadmap follow-up",
+          sortOrder: 1
+        }),
+        buildNote({
+          id: "note-3",
+          title: "Budget wrap-up",
+          sortOrder: 2
+        })
+      ],
+      onMoveNote: handleMoveNote
+    });
+
+    const noteList = document.querySelector(".bb-note-list");
+    if (!(noteList instanceof HTMLElement)) {
+      throw new Error("Expected the note list to render.");
+    }
+
+    mockElementRect(screen.getByTestId(buildNoteTestId("drag", "Quarterly review")), {
+      top: 100,
+      height: 60
+    });
+    mockElementRect(screen.getByTestId(buildNoteTestId("drag", "Roadmap follow-up")), {
+      top: 180,
+      height: 60
+    });
+    mockElementRect(screen.getByTestId(buildNoteTestId("drag", "Budget wrap-up")), {
+      top: 260,
+      height: 60
+    });
+
+    fireEvent.dragStart(screen.getByTestId(buildNoteTestId("drag", "Quarterly review")), { dataTransfer });
+    const dragOverEvent = createEvent.dragOver(noteList, { dataTransfer });
+    Object.defineProperty(dragOverEvent, "clientY", {
+      configurable: true,
+      value: 248
+    });
+    fireEvent(noteList, dragOverEvent);
+    expect(screen.getByTestId(buildNoteTestId("slot", "Roadmap follow-up"))).toHaveClass("is-drop-after");
+
+    const dropEvent = createEvent.drop(noteList, { dataTransfer });
+    Object.defineProperty(dropEvent, "clientY", {
+      configurable: true,
+      value: 248
+    });
+    fireEvent(noteList, dropEvent);
+
+    expect(handleMoveNote).toHaveBeenCalledWith({
+      draggedId: "note-1",
+      targetId: "note-2",
+      position: "after"
+    });
+  });
+
   it("marks note slots as move destinations during reorder", () => {
     const dataTransfer = createDataTransfer();
 

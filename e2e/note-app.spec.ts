@@ -730,6 +730,51 @@ test("reorders notes by dropping onto note cards and persists the order", async 
   await expectNoteOrderInLane(page, [firstNoteTitle, secondNoteTitle]);
 });
 
+test("reorders notes when the drop lands in the note-lane gap", async ({ page }) => {
+  await page.setViewportSize({ width: 1900, height: 1000 });
+  const suffix = Date.now().toString();
+  const notebookName = `Gap reorder ${suffix}`;
+  const firstNoteTitle = `Alpha ${suffix}`;
+  const secondNoteTitle = `Beta ${suffix}`;
+  const thirdNoteTitle = `Gamma ${suffix}`;
+
+  await login(page);
+  await createNotebookWithDialog(page, notebookName);
+  await notebookRow(page, notebookName).click();
+
+  await createNoteWithContent(page, firstNoteTitle, "First note body.");
+  await createNoteWithContent(page, secondNoteTitle, "Second note body.");
+  await createNoteWithContent(page, thirdNoteTitle, "Third note body.");
+  await expectNoteOrderInLane(page, [firstNoteTitle, secondNoteTitle, thirdNoteTitle]);
+
+  const source = page.getByTestId(buildNoteTestId("drag", firstNoteTitle));
+  const secondSlot = page.getByTestId(buildNoteTestId("slot", secondNoteTitle));
+  const thirdSlot = page.getByTestId(buildNoteTestId("slot", thirdNoteTitle));
+  const noteList = page.locator(".bb-note-list").first();
+  const secondBox = await secondSlot.boundingBox();
+  const thirdBox = await thirdSlot.boundingBox();
+  if (!secondBox || !thirdBox) {
+    throw new Error("Expected the note lane slots to be visible.");
+  }
+
+  const gapDrag = await startDrag(page, source);
+  const gapY = secondBox.y + secondBox.height + Math.max(2, (thirdBox.y - (secondBox.y + secondBox.height)) / 2);
+  await noteList.dispatchEvent("dragover", {
+    dataTransfer: gapDrag,
+    clientY: gapY
+  });
+  await expect(secondSlot).toHaveClass(/is-drop-after/);
+  await noteList.dispatchEvent("drop", {
+    dataTransfer: gapDrag,
+    clientY: gapY
+  });
+  await expectNoteOrderInLane(page, [secondNoteTitle, firstNoteTitle, thirdNoteTitle]);
+
+  await page.reload();
+  await notebookRow(page, notebookName).click();
+  await expectNoteOrderInLane(page, [secondNoteTitle, firstNoteTitle, thirdNoteTitle]);
+});
+
 test("auto-saves voice notes on stop, inserts them into the editor, keeps delete available, and shows live recorder progress", async ({
   page
 }) => {

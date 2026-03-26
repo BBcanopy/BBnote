@@ -157,6 +157,39 @@ export function NoteListPane(props: {
     handleDrop(event, nextDropTarget.targetId, nextDropTarget.position);
   }
 
+  function resolveNoteListDropTargetFromEvent(event: DragEvent<HTMLElement>) {
+    const draggedId = resolveDraggedNoteId(event);
+    if (!props.canReorder || !draggedId || !(event.currentTarget instanceof HTMLElement)) {
+      return null;
+    }
+
+    return resolveNoteListDropTarget(event.currentTarget, props.notes, draggedId, event.clientY);
+  }
+
+  function handleNoteListDragOver(event: DragEvent<HTMLElement>) {
+    const nextDropTarget = resolveNoteListDropTargetFromEvent(event);
+    if (!nextDropTarget) {
+      return;
+    }
+
+    event.preventDefault();
+    if (event.dataTransfer) {
+      event.dataTransfer.dropEffect = "move";
+    }
+    setDeleteTargetActive(false);
+    setDropTarget(nextDropTarget);
+  }
+
+  function handleNoteListDrop(event: DragEvent<HTMLElement>) {
+    const nextDropTarget = resolveNoteListDropTargetFromEvent(event) ?? dropTarget;
+    if (!nextDropTarget) {
+      clearDragState();
+      return;
+    }
+
+    handleDrop(event, nextDropTarget.targetId, nextDropTarget.position);
+  }
+
   function resolveNoteCardDropPosition(event: DragEvent<HTMLElement>, targetId: string, draggedId: string | null): NoteMovePosition {
     const fallbackPosition = resolveRelativeDropPosition(props.notes, targetId, draggedId);
     const rect = resolveNoteDropReferenceRect(event.currentTarget);
@@ -255,7 +288,7 @@ export function NoteListPane(props: {
           className="text-sm"
         />
       </label>
-      <div className="bb-note-list">
+      <div className="bb-note-list" onDragOver={props.canReorder ? handleNoteListDragOver : undefined} onDrop={props.canReorder ? handleNoteListDrop : undefined}>
         {props.loading ? (
           <>
             <SkeletonCard />
@@ -361,6 +394,7 @@ function renderNote(
   return (
     <div
       key={note.id}
+      data-note-slot-id={note.id}
       data-testid={buildNoteTestId("slot", note.title)}
       className={`bb-note-drop-slot min-w-0 space-y-0.5 ${dropPosition ? `is-drop-${dropPosition}` : ""}`}
       onDragEnter={helpers.canReorder ? (event) => helpers.onCardDragOver(event, note.id) : undefined}
@@ -419,6 +453,112 @@ function resolveNoteDropReferenceRect(currentTarget: EventTarget | null) {
   }
 
   return currentTarget.getBoundingClientRect();
+}
+
+function resolveNoteListDropTarget(
+  container: HTMLElement,
+  notes: NoteSummary[],
+  draggedId: string,
+  clientY: number
+): NoteDropTarget | null {
+  const candidates = [...container.querySelectorAll<HTMLElement>("[data-note-slot-id]")]
+    .map((slot) => {
+      const targetId = slot.dataset.noteSlotId;
+      if (!targetId) {
+        return null;
+      }
+
+      const rect = resolveNoteDropReferenceRect(slot);
+      return {
+        targetId,
+        rect
+      };
+    })
+    .filter((candidate): candidate is { targetId: string; rect: DOMRect } => candidate !== null && candidate.rect.height > 0);
+
+  if (!candidates.length) {
+    return null;
+  }
+
+  let nextDropTarget: NoteDropTarget = {
+    targetId: candidates[candidates.length - 1].targetId,
+    position: "after"
+  };
+
+  for (let index = 0; index < candidates.length; index += 1) {
+    const candidate = candidates[index];
+    const midpoint = candidate.rect.top + candidate.rect.height / 2;
+
+    if (clientY <= candidate.rect.top) {
+      nextDropTarget = {
+        targetId: candidate.targetId,
+        position: "before"
+      };
+      break;
+    }
+
+    if (clientY <= candidate.rect.bottom) {
+      nextDropTarget = {
+        targetId: candidate.targetId,
+        position: clientY <= midpoint ? "before" : "after"
+      };
+      break;
+    }
+
+    const nextCandidate = candidates[index + 1];
+    if (nextCandidate && clientY < nextCandidate.rect.top) {
+      nextDropTarget = {
+        targetId: candidate.targetId,
+        position: "after"
+      };
+      break;
+    }
+  }
+
+  const adjustedDropTarget = adjustSelfTargetedListDropTarget(candidates, nextDropTarget, draggedId);
+  if (!adjustedDropTarget) {
+    return null;
+  }
+
+  return {
+    targetId: adjustedDropTarget.targetId,
+    position: normalizeNoteCardDropPosition(notes, draggedId, adjustedDropTarget.targetId, adjustedDropTarget.position)
+  };
+}
+
+function adjustSelfTargetedListDropTarget(
+  candidates: { targetId: string; rect: DOMRect }[],
+  dropTarget: NoteDropTarget,
+  draggedId: string
+): NoteDropTarget | null {
+  if (dropTarget.targetId !== draggedId) {
+    return dropTarget;
+  }
+
+  const draggedIndex = candidates.findIndex((candidate) => candidate.targetId === draggedId);
+  if (draggedIndex < 0) {
+    return null;
+  }
+
+  if (dropTarget.position === "before") {
+    if (draggedIndex === 0) {
+      return null;
+    }
+
+    return {
+      targetId: candidates[draggedIndex - 1].targetId,
+      position: "after"
+    };
+  }
+
+  if (draggedIndex === candidates.length - 1) {
+    return null;
+  }
+
+  return {
+    targetId: candidates[draggedIndex + 1].targetId,
+    position: "before"
+  };
 }
 
 function getDisplayNoteTitle(title: string) {
