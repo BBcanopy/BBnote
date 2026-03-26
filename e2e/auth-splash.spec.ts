@@ -5,6 +5,7 @@ test("shows the simplified auth splash and docs page", async ({ page }) => {
 
   await expect(page.locator("html")).toHaveAttribute("data-theme", "sea");
   await expect(page.getByRole("heading", { name: "BBNote" })).toBeVisible();
+  await expect(page.locator(".bb-auth-hero__mark .bb-brand-mark__pill")).toHaveText("BB");
   await expect(page.getByRole("button", { name: /sign in with oidc/i })).toBeVisible();
   await expect(page.getByRole("link", { name: /read api docs/i })).toBeVisible();
   await expect(page.getByText("Quietly structured note work")).toHaveCount(0);
