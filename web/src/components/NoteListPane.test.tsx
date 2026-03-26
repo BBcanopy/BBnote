@@ -236,6 +236,43 @@ describe("NoteListPane", () => {
     });
   });
 
+  it("normalizes an adjacent dropzone hover and drop so it still changes the order", () => {
+    const handleMoveNote = vi.fn();
+    const dataTransfer = createDataTransfer();
+
+    renderNoteListPane({
+      notes: [
+        buildNote({
+          id: "note-1",
+          title: "Quarterly review",
+          sortOrder: 0
+        }),
+        buildNote({
+          id: "note-2",
+          title: "Roadmap follow-up",
+          sortOrder: 1
+        })
+      ],
+      onMoveNote: handleMoveNote
+    });
+
+    const targetBeforeDropzone = screen.getByTestId(buildNoteTestId("before", "Roadmap follow-up"));
+    const targetSlot = screen.getByTestId(buildNoteTestId("slot", "Roadmap follow-up"));
+
+    fireEvent.dragStart(screen.getByTestId(buildNoteTestId("drag", "Quarterly review")), { dataTransfer });
+    fireEvent.dragEnter(targetBeforeDropzone, { dataTransfer });
+
+    expect(targetSlot).toHaveClass("is-drop-after");
+
+    fireEvent.drop(targetBeforeDropzone, { dataTransfer });
+
+    expect(handleMoveNote).toHaveBeenCalledWith({
+      draggedId: "note-1",
+      targetId: "note-2",
+      position: "after"
+    });
+  });
+
   it("marks before and after note drop targets as move destinations during reorder", () => {
     const dataTransfer = createDataTransfer();
 

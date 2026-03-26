@@ -89,13 +89,15 @@ export function NoteListPane(props: {
       return;
     }
 
+    const nextPosition = normalizeNoteCardDropPosition(props.notes, draggedId, targetId, position);
+
     event.preventDefault();
     event.stopPropagation();
     if (event.dataTransfer) {
       event.dataTransfer.dropEffect = "move";
     }
     setDeleteTargetActive(false);
-    setDropTarget({ targetId, position });
+    setDropTarget({ targetId, position: nextPosition });
   }
 
   function resolveNoteCardDropTarget(event: DragEvent<HTMLElement>, targetId: string) {
@@ -127,13 +129,15 @@ export function NoteListPane(props: {
       return;
     }
 
+    const nextPosition = normalizeNoteCardDropPosition(props.notes, draggedId, targetId, position);
+
     event.preventDefault();
     event.stopPropagation();
     clearDragState();
     props.onMoveNote({
       draggedId,
       targetId,
-      position
+      position: nextPosition
     });
   }
 

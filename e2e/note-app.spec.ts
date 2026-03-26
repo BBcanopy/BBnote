@@ -623,6 +623,7 @@ test("reorders notes by dropping onto note cards and persists the order", async 
   await expectNoteOrderInLane(page, [firstNoteTitle, secondNoteTitle]);
 
   const downwardSource = page.getByTestId(buildNoteTestId("drag", firstNoteTitle));
+  const downwardTargetBefore = page.getByTestId(buildNoteTestId("before", secondNoteTitle));
   const downwardTargetCard = page.getByTestId(buildNoteTestId("drag", secondNoteTitle));
   const downwardTargetSlot = page.getByTestId(buildNoteTestId("slot", secondNoteTitle));
   const downwardTargetBox = await downwardTargetCard.boundingBox();
@@ -631,13 +632,13 @@ test("reorders notes by dropping onto note cards and persists the order", async 
   }
 
   const downwardDrag = await startDrag(page, downwardSource);
-  await downwardTargetSlot.dispatchEvent("dragover", {
+  await downwardTargetBefore.dispatchEvent("dragover", {
     dataTransfer: downwardDrag,
     clientY: downwardTargetBox.y + 10
   });
   await expect(downwardTargetSlot).toHaveClass(/is-drop-after/);
   await expect(downwardTargetCard).toHaveClass(/bb-note-card--drop-after/);
-  await dropOnTarget(downwardSource, downwardTargetSlot, downwardDrag);
+  await dropOnTarget(downwardSource, downwardTargetBefore, downwardDrag);
   await expectNoteOrderInLane(page, [secondNoteTitle, firstNoteTitle]);
 
   await page.reload();
