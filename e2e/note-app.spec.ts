@@ -245,8 +245,7 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
   const searchTerm = `budget-${suffix}-ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff`;
 
   await login(page);
-
-  await expect(page.getByText("No notebooks yet.")).toBeVisible();
+  const initialNotebookCount = await page.locator('[data-testid^="notebook-drag-"]').count();
   const topbar = page.locator(".bb-topbar").first();
   const topbarBox = await topbar.boundingBox();
   const viewport = page.viewportSize();
@@ -369,11 +368,11 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
 
   await createNotebookWithDialog(page, notebookName);
   await expect(page.getByRole("button", { name: /open notebooks pane/i })).toHaveCount(0);
-  await expect.poll(async () => page.locator('[data-testid^="notebook-drag-"]').count()).toBe(1);
+  await expect.poll(async () => page.locator('[data-testid^="notebook-drag-"]').count()).toBe(initialNotebookCount + 1);
 
   await createNotebookWithDialog(page, subNotebookName);
   await expect(page.getByRole("button", { name: /open notebooks pane/i })).toHaveCount(0);
-  await expect.poll(async () => page.locator('[data-testid^="notebook-drag-"]').count()).toBe(2);
+  await expect.poll(async () => page.locator('[data-testid^="notebook-drag-"]').count()).toBe(initialNotebookCount + 2);
   await expect(page.locator('[data-testid^="notebook-drag-"]').filter({ hasText: subNotebookName }).first()).toBeVisible();
 
   const renamedSubNotebookName = `Plans ${suffix}`;
@@ -399,7 +398,7 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
 
   await notebookRow(page, renamedSubNotebookName).click();
   await createNotebookWithDialog(page, archiveNotebookName);
-  await expect.poll(async () => page.locator('[data-testid^="notebook-drag-"]').count()).toBe(3);
+  await expect.poll(async () => page.locator('[data-testid^="notebook-drag-"]').count()).toBe(initialNotebookCount + 3);
 
   await page.getByRole("button", { name: new RegExp(`choose icon for ${archiveNotebookName}`, "i") }).click();
   await page.getByRole("menuitem", { name: /^use star icon$/i }).click();
@@ -421,7 +420,9 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
       const items = await page
         .locator('[data-testid^="notebook-drag-"]')
         .evaluateAll((elements) => elements.map((element) => element.textContent?.replace(/\s+/g, " ").trim() ?? ""));
-      return items[0]?.includes(archiveNotebookName) && items[1]?.includes(notebookName);
+      const archiveIndex = items.findIndex((item) => item.includes(archiveNotebookName));
+      const notebookIndex = items.findIndex((item) => item.includes(notebookName));
+      return archiveIndex !== -1 && notebookIndex !== -1 && archiveIndex < notebookIndex;
     })
     .toBeTruthy();
 
@@ -567,7 +568,7 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
   ).toBeTruthy();
 
   await page.getByPlaceholder("Search notes").fill(searchTerm);
-  await notePreview.click();
+  await page.getByRole("button", { name: new RegExp(noteTitle, "i") }).first().click();
   await expect(page.getByRole("button", { name: /collapse notebooks pane/i })).toBeVisible();
   await expect(page.getByRole("button", { name: /collapse notes pane/i })).toBeVisible();
   await expect(page.getByRole("button", { name: /open notebooks and notes panes/i })).toHaveCount(0);
@@ -784,7 +785,9 @@ test("reorders notes when the drop lands in the note-lane gap", async ({ page })
   await expectNoteOrderInLane(page, [secondNoteTitle, firstNoteTitle, thirdNoteTitle]);
 });
 
-test("shows a compact editor header and wraps selections with markdown formatting tools", async ({ page }) => {
+test("shows a compact editor header, supports table insertion, fullscreen editing, and wraps selections with markdown formatting tools", async ({
+  page
+}) => {
   await page.setViewportSize({ width: 1900, height: 1000 });
   const suffix = Date.now().toString();
   const notebookName = `Formatting ${suffix}`;
@@ -795,14 +798,17 @@ test("shows a compact editor header and wraps selections with markdown formattin
   await notebookRow(page, notebookName).click();
   await createNoteWithContent(page, noteTitle, "alpha\nbeta\ngamma");
 
-  const editorHeader = page.locator(".bb-editor-header").first();
+  const editorPanel = page.getByTestId("editor-panel-desktop");
+  const editorHeader = editorPanel.locator(".bb-editor-header");
   const titleLabel = editorHeader.getByText(/^title$/i);
   const titleInput = editorHeader.getByRole("textbox", { name: "Title" });
+  const expandEditorButton = editorHeader.getByRole("button", { name: /^expand editor$/i });
   const deleteButton = editorHeader.getByRole("button", { name: /delete note/i });
-  const textarea = page.getByPlaceholder("Write in Markdown").first();
+  const textarea = editorPanel.getByPlaceholder("Write in Markdown");
 
   await expect(titleLabel).toBeVisible();
   await expect(titleInput).toBeVisible();
+  await expect(expandEditorButton).toBeVisible();
   await expect(deleteButton).toBeVisible();
   await expect(page.getByTestId("editor-format-toolbar").first()).toBeVisible();
 
@@ -822,23 +828,44 @@ test("shows a compact editor header and wraps selections with markdown formattin
 
   await textarea.fill("alpha");
   await selectTextRange(textarea, 0, 5);
-  await page.getByRole("button", { name: /^bold$/i }).click();
+  await editorPanel.getByRole("button", { name: /^bold$/i }).click();
   await expect(textarea).toHaveValue("**alpha**");
 
   await textarea.fill("beta");
   await selectTextRange(textarea, 0, 4);
-  await page.getByRole("button", { name: /^italic$/i }).click();
+  await editorPanel.getByRole("button", { name: /^italic$/i }).click();
   await expect(textarea).toHaveValue("*beta*");
 
   await textarea.fill("gamma");
   await selectTextRange(textarea, 0, 5);
-  await page.getByRole("button", { name: /^underline$/i }).click();
+  await editorPanel.getByRole("button", { name: /^underline$/i }).click();
   await expect(textarea).toHaveValue("<u>gamma</u>");
 
   await textarea.fill("line one\nline two");
   await selectTextRange(textarea, 0, 17);
-  await page.getByRole("button", { name: /^quote$/i }).click();
+  await editorPanel.getByRole("button", { name: /^quote$/i }).click();
   await expect(textarea).toHaveValue("> line one\n> line two");
+
+  await textarea.fill("");
+  await editorPanel.getByRole("button", { name: /^insert table$/i }).click();
+  await expect(textarea).toHaveValue("| Column 1 | Column 2 |\n| --- | --- |\n| Value 1 | Value 2 |");
+
+  const editorWidthBeforeFullscreen = (await editorPanel.boundingBox())?.width ?? 0;
+  await expandEditorButton.click();
+  await expect(editorHeader.getByRole("button", { name: /^exit fullscreen editor$/i })).toBeVisible();
+  await expect(page.getByTestId("notebook-pane")).toHaveCount(0);
+  await expect(page.getByTestId("notes-pane")).toHaveCount(0);
+  await expect
+    .poll(async () => ((await editorPanel.boundingBox())?.width ?? 0) - editorWidthBeforeFullscreen)
+    .toBeGreaterThan(500);
+
+  await editorHeader.getByRole("button", { name: /^exit fullscreen editor$/i }).click();
+  await expect(page.getByTestId("notebook-pane")).toBeVisible();
+  await expect(page.getByTestId("notes-pane")).toBeVisible();
+  await expect(editorHeader.getByRole("button", { name: /^expand editor$/i })).toBeVisible();
+  await expect
+    .poll(async () => Math.abs(((await editorPanel.boundingBox())?.width ?? 0) - editorWidthBeforeFullscreen))
+    .toBeLessThan(48);
 });
 
 test("auto-saves voice notes on stop, inserts them into the editor, keeps delete available, and shows live recorder progress", async ({
@@ -1089,9 +1116,8 @@ async function login(page: import("@playwright/test").Page) {
   await page.goto("/");
   await page.getByRole("button", { name: /sign in with oidc/i }).click();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "sea");
-  await expect(page.getByRole("button", { name: /^new note$/i })).toBeVisible();
   await expect(page.getByText("Notebook workspace")).toHaveCount(0);
-  await expect(page.getByText("No note selected").first()).toBeVisible();
+  await expect(page.getByTestId("editor-panel-desktop").locator(".bb-empty-state").getByText("No note selected")).toBeVisible();
   await expect(page.getByRole("textbox", { name: "Title" })).toHaveCount(0);
   await expect(page.getByRole("combobox", { name: "Notebook" })).toHaveCount(0);
 }

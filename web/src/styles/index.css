@@ -1960,6 +1960,16 @@ button:disabled {
     height: 100%;
     overflow: hidden;
   }
+
+  .bb-workspace-shell--editor-fullscreen .bb-editor-panel--workspace {
+    border-radius: 1.35rem;
+  }
+
+  .bb-editor-panel--workspace.bb-editor-panel--fullscreen {
+    min-width: 0;
+    width: 100%;
+    flex: 1 1 auto;
+  }
 }
 
 .bb-editor-panel__content {
@@ -2053,6 +2063,7 @@ button:disabled {
   justify-content: flex-end;
   gap: 0.35rem;
   margin-left: auto;
+  flex-wrap: wrap;
 }
 
 .bb-editor-titlebar {

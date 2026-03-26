@@ -1,4 +1,6 @@
 import {
+  ArrowsInSimple,
+  ArrowsOutSimple,
   CaretLeft,
   CaretRight,
   CircleNotch,
@@ -13,6 +15,7 @@ import {
   PencilSimple,
   Plus,
   Quotes,
+  Table,
   TextB,
   TextItalic,
   TextStrikethrough,
@@ -109,6 +112,7 @@ export function NotesPage() {
   const [editorNote, setEditorNote] = useState<EditorState | null>(null);
   const [search, setSearch] = useState("");
   const [editorPane, setEditorPane] = useState<EditorPane>("markdown");
+  const [editorFullscreen, setEditorFullscreen] = useState(false);
   const [folderPaneCollapsed, setFolderPaneCollapsed] = useState(false);
   const [notePaneCollapsed, setNotePaneCollapsed] = useState(false);
   const [folderPaneWidth, setFolderPaneWidth] = useState(DEFAULT_FOLDER_PANE_WIDTH);
@@ -1004,8 +1008,15 @@ export function NotesPage() {
         </button>
       </section>
 
-      <div className="hidden min-h-0 flex-1 items-stretch overflow-hidden lg:flex">
-        {explorerCollapsed ? (
+      <div
+        className={[
+          "hidden min-h-0 flex-1 items-stretch overflow-hidden lg:flex",
+          editorFullscreen ? "bb-workspace-shell--editor-fullscreen" : ""
+        ]
+          .filter(Boolean)
+          .join(" ")}
+      >
+        {editorFullscreen ? null : explorerCollapsed ? (
           <CollapsedPaneRail
             label="Notebooks and notes"
             ariaLabel="Open notebooks and notes panes"
@@ -1023,8 +1034,8 @@ export function NotesPage() {
                 onOpen={() => setFolderPaneCollapsed(false)}
               />
             ) : (
-                <div className="flex shrink-0 items-stretch">
-                  <div data-testid="notebook-pane" className="bb-workspace-lane bb-workspace-lane--folders shrink-0" style={{ width: folderPaneWidth }}>
+              <div className="flex shrink-0 items-stretch">
+                <div data-testid="notebook-pane" className="bb-workspace-lane bb-workspace-lane--folders shrink-0" style={{ width: folderPaneWidth }}>
                   <FolderTree
                     folders={folders}
                     selectedFolderId={selectedFolderId}
@@ -1063,8 +1074,8 @@ export function NotesPage() {
                 onOpen={() => setNotePaneCollapsed(false)}
               />
             ) : (
-                <div className="flex shrink-0 items-stretch">
-                  <div data-testid="notes-pane" className="bb-workspace-lane bb-workspace-lane--notes shrink-0" style={{ width: notePaneWidth }}>
+              <div className="flex shrink-0 items-stretch">
+                <div data-testid="notes-pane" className="bb-workspace-lane bb-workspace-lane--notes shrink-0" style={{ width: notePaneWidth }}>
                   <NoteListPane
                     notes={notes}
                     search={search}
@@ -1101,13 +1112,17 @@ export function NotesPage() {
         )}
 
         <EditorPanel
+          panelTestId="editor-panel-desktop"
           editorNote={editorNote}
           editorPane={editorPane}
+          showFullscreenToggle
+          isFullscreen={editorFullscreen}
           canUseMediaActions={canUseMediaActions}
           mediaActionDisabledReason="Select a notebook to add media."
           onEditorPaneChange={setEditorPane}
           onTitleChange={(title) => setEditorNote((current) => (current ? { ...current, title } : current))}
           onBodyChange={(bodyMarkdown) => setEditorNote((current) => (current ? { ...current, bodyMarkdown } : current))}
+          onToggleFullscreen={() => setEditorFullscreen((current) => !current)}
           onDeleteRequest={handleRequestDeleteCurrentNote}
           onUploadSelectedFile={(file, insertBehavior) => handleUploadSelectedFile(file, insertBehavior)}
           onInsertLink={(attachment) => appendToBody(`[${attachment.name}](${attachment.url})`)}
@@ -1126,13 +1141,16 @@ export function NotesPage() {
 
       <div className="lg:hidden">
         <EditorPanel
+          panelTestId="editor-panel-mobile"
           editorNote={editorNote}
           editorPane={editorPane}
+          isFullscreen={false}
           canUseMediaActions={canUseMediaActions}
           mediaActionDisabledReason="Select a notebook to add media."
           onEditorPaneChange={setEditorPane}
           onTitleChange={(title) => setEditorNote((current) => (current ? { ...current, title } : current))}
           onBodyChange={(bodyMarkdown) => setEditorNote((current) => (current ? { ...current, bodyMarkdown } : current))}
+          onToggleFullscreen={() => undefined}
           onDeleteRequest={handleRequestDeleteCurrentNote}
           onUploadSelectedFile={(file, insertBehavior) => handleUploadSelectedFile(file, insertBehavior)}
           onInsertLink={(attachment) => appendToBody(`[${attachment.name}](${attachment.url})`)}
@@ -1233,13 +1251,17 @@ export function NotesPage() {
 }
 
 function EditorPanel(props: {
+  panelTestId?: string;
   editorNote: EditorState | null;
   editorPane: EditorPane;
+  showFullscreenToggle?: boolean;
+  isFullscreen: boolean;
   canUseMediaActions: boolean;
   mediaActionDisabledReason: string;
   onEditorPaneChange(value: EditorPane): void;
   onTitleChange(title: string): void;
   onBodyChange(bodyMarkdown: string): void;
+  onToggleFullscreen(): void;
   onDeleteRequest(): void;
   onUploadSelectedFile(file: File | null, insertBehavior: MediaInsertBehavior): Promise<boolean>;
   onInsertLink(attachment: AttachmentRef): void;
@@ -1259,6 +1281,7 @@ function EditorPanel(props: {
   const videoInputRef = useRef<HTMLInputElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const bodyTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const formatSelectionFrameRef = useRef<number | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const recordedChunksRef = useRef<Blob[]>([]);
@@ -1284,6 +1307,9 @@ function EditorPanel(props: {
 
   useEffect(() => {
     return () => {
+      if (formatSelectionFrameRef.current !== null) {
+        window.cancelAnimationFrame(formatSelectionFrameRef.current);
+      }
       discardRecordingRef.current = true;
       stopRecorder();
       clearRecorderClip();
@@ -1588,9 +1614,14 @@ function EditorPanel(props: {
     );
 
     props.onBodyChange(nextValue);
-    window.requestAnimationFrame(() => {
+    if (formatSelectionFrameRef.current !== null) {
+      window.cancelAnimationFrame(formatSelectionFrameRef.current);
+    }
+
+    formatSelectionFrameRef.current = window.requestAnimationFrame(() => {
+      formatSelectionFrameRef.current = null;
       const nextTextarea = bodyTextareaRef.current;
-      if (!nextTextarea) {
+      if (!nextTextarea || nextTextarea.value !== nextValue) {
         return;
       }
 
@@ -1677,6 +1708,7 @@ function EditorPanel(props: {
         icon={<TextB size={17} />}
         disabled={formatActionsDisabled}
         disabledTitle={formatToolbarDisabledTitle}
+        preserveFocus
         onClick={() => handleApplyMarkdownFormat("bold")}
       />
       <MediaToolbarButton
@@ -1684,6 +1716,7 @@ function EditorPanel(props: {
         icon={<TextItalic size={17} />}
         disabled={formatActionsDisabled}
         disabledTitle={formatToolbarDisabledTitle}
+        preserveFocus
         onClick={() => handleApplyMarkdownFormat("italic")}
       />
       <MediaToolbarButton
@@ -1691,6 +1724,7 @@ function EditorPanel(props: {
         icon={<TextUnderline size={17} />}
         disabled={formatActionsDisabled}
         disabledTitle={formatToolbarDisabledTitle}
+        preserveFocus
         onClick={() => handleApplyMarkdownFormat("underline")}
       />
       <MediaToolbarButton
@@ -1698,6 +1732,7 @@ function EditorPanel(props: {
         icon={<TextStrikethrough size={17} />}
         disabled={formatActionsDisabled}
         disabledTitle={formatToolbarDisabledTitle}
+        preserveFocus
         onClick={() => handleApplyMarkdownFormat("strikethrough")}
       />
       <MediaToolbarButton
@@ -1705,6 +1740,7 @@ function EditorPanel(props: {
         icon={<Code size={17} />}
         disabled={formatActionsDisabled}
         disabledTitle={formatToolbarDisabledTitle}
+        preserveFocus
         onClick={() => handleApplyMarkdownFormat("code")}
       />
       <MediaToolbarButton
@@ -1712,6 +1748,7 @@ function EditorPanel(props: {
         icon={<Quotes size={17} />}
         disabled={formatActionsDisabled}
         disabledTitle={formatToolbarDisabledTitle}
+        preserveFocus
         onClick={() => handleApplyMarkdownFormat("quote")}
       />
       <MediaToolbarButton
@@ -1719,7 +1756,16 @@ function EditorPanel(props: {
         icon={<ListBullets size={17} />}
         disabled={formatActionsDisabled}
         disabledTitle={formatToolbarDisabledTitle}
+        preserveFocus
         onClick={() => handleApplyMarkdownFormat("bulleted-list")}
+      />
+      <MediaToolbarButton
+        label="Insert table"
+        icon={<Table size={17} />}
+        disabled={formatActionsDisabled}
+        disabledTitle={formatToolbarDisabledTitle}
+        preserveFocus
+        onClick={() => handleApplyMarkdownFormat("table")}
       />
     </div>
   ) : null;
@@ -1810,7 +1856,15 @@ function EditorPanel(props: {
     ) : null;
 
   return (
-    <section className="bb-editor-panel bb-editor-panel--workspace lg:flex-1">
+    <section
+      data-testid={props.panelTestId}
+      className={[
+        "bb-editor-panel bb-editor-panel--workspace lg:flex-1",
+        props.isFullscreen ? "bb-editor-panel--fullscreen" : ""
+      ]
+        .filter(Boolean)
+        .join(" ")}
+    >
       <div className="bb-editor-header">
         {props.editorNote ? (
           <label className="bb-editor-titlebar">
@@ -1828,6 +1882,17 @@ function EditorPanel(props: {
         )}
         <div className="bb-editor-header__actions">
           {editorMode}
+          {props.showFullscreenToggle ? (
+            <button
+              type="button"
+              onClick={props.onToggleFullscreen}
+              aria-label={props.isFullscreen ? "Exit fullscreen editor" : "Expand editor"}
+              title={props.isFullscreen ? "Exit fullscreen editor" : "Expand editor"}
+              className={`bb-icon-button bb-icon-button--toolbar bb-icon-button--accent${props.isFullscreen ? " bb-icon-button--is-active" : ""}`}
+            >
+              {props.isFullscreen ? <ArrowsInSimple size={17} /> : <ArrowsOutSimple size={17} />}
+            </button>
+          ) : null}
           <button
             type="button"
             onClick={props.onDeleteRequest}
@@ -2059,11 +2124,22 @@ function MediaToolbarButton(props: {
   disabledTitle?: string;
   icon: ReactNode;
   label: string;
+  preserveFocus?: boolean;
   onClick(): void;
 }) {
   return (
     <button
       type="button"
+      onPointerDown={(event) => {
+        if (props.preserveFocus && !props.disabled) {
+          event.preventDefault();
+        }
+      }}
+      onMouseDown={(event) => {
+        if (props.preserveFocus && !props.disabled) {
+          event.preventDefault();
+        }
+      }}
       onClick={props.onClick}
       disabled={props.disabled}
       aria-label={props.label}

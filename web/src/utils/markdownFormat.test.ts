@@ -41,4 +41,12 @@ describe("formatMarkdownSelection", () => {
       nextSelectionEnd: 16
     });
   });
+
+  it("inserts a markdown table template at the cursor", () => {
+    expect(formatMarkdownSelection("alpha", 5, 5, "table")).toEqual({
+      nextValue: "alpha\n\n| Column 1 | Column 2 |\n| --- | --- |\n| Value 1 | Value 2 |",
+      nextSelectionStart: 9,
+      nextSelectionEnd: 28
+    });
+  });
 });

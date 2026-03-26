@@ -5,7 +5,8 @@ export type MarkdownFormatKind =
   | "strikethrough"
   | "code"
   | "quote"
-  | "bulleted-list";
+  | "bulleted-list"
+  | "table";
 
 interface MarkdownSelectionResult {
   nextValue: string;
@@ -30,13 +31,17 @@ export function formatMarkdownSelection(
     return applyLinePrefixFormat(value, safeStart, safeEnd, "- ", "List item");
   }
 
+  if (kind === "table") {
+    return applyTableFormat(value, safeStart, safeEnd);
+  }
+
   const wrappers = {
     bold: { prefix: "**", suffix: "**", placeholder: "bold text" },
     italic: { prefix: "*", suffix: "*", placeholder: "italic text" },
     underline: { prefix: "<u>", suffix: "</u>", placeholder: "underlined text" },
     strikethrough: { prefix: "~~", suffix: "~~", placeholder: "crossed text" },
     code: { prefix: "`", suffix: "`", placeholder: "inline code" }
-  } satisfies Record<Exclude<MarkdownFormatKind, "quote" | "bulleted-list">, { prefix: string; suffix: string; placeholder: string }>;
+  } satisfies Record<Exclude<MarkdownFormatKind, "quote" | "bulleted-list" | "table">, { prefix: string; suffix: string; placeholder: string }>;
 
   return applyWrapFormat(value, safeStart, safeEnd, wrappers[kind]);
 }
@@ -89,6 +94,58 @@ function applyLinePrefixFormat(
     nextSelectionStart: lineStart,
     nextSelectionEnd: lineStart + formattedBlock.length
   };
+}
+
+function applyTableFormat(
+  value: string,
+  selectionStart: number,
+  selectionEnd: number
+): MarkdownSelectionResult {
+  const selectedText = value.slice(selectionStart, selectionEnd).trim();
+  const firstHeader = selectedText || "Column 1";
+  const secondHeader = "Column 2";
+  const firstLine = `| ${firstHeader} | ${secondHeader} |`;
+  const table = `${firstLine}\n| --- | --- |\n| Value 1 | Value 2 |`;
+  const prefix = getBlockBoundaryPrefix(value.slice(0, selectionStart));
+  const suffix = getBlockBoundarySuffix(value.slice(selectionEnd));
+
+  return {
+    nextValue: `${value.slice(0, selectionStart)}${prefix}${table}${suffix}${value.slice(selectionEnd)}`,
+    nextSelectionStart: selectionStart + prefix.length + 2,
+    nextSelectionEnd: selectionStart + prefix.length + firstLine.length - 2
+  };
+}
+
+function getBlockBoundaryPrefix(valueBeforeSelection: string) {
+  if (valueBeforeSelection.length === 0) {
+    return "";
+  }
+
+  if (valueBeforeSelection.endsWith("\n\n")) {
+    return "";
+  }
+
+  if (valueBeforeSelection.endsWith("\n")) {
+    return "\n";
+  }
+
+  return "\n\n";
+}
+
+function getBlockBoundarySuffix(valueAfterSelection: string) {
+  if (valueAfterSelection.length === 0) {
+    return "";
+  }
+
+  if (valueAfterSelection.startsWith("\n\n")) {
+    return "";
+  }
+
+  if (valueAfterSelection.startsWith("\n")) {
+    return "\n";
+  }
+
+  return "\n\n";
 }
 
 function clampSelectionIndex(value: number, max: number) {
