@@ -29,6 +29,7 @@ describe("PageNav", () => {
 
     const input = screen.getByRole("textbox", { name: "Title" });
 
+    expect(screen.queryByText(/^title$/i)).not.toBeInTheDocument();
     expect(input).toHaveValue("Quarterly plan");
     fireEvent.change(input, { target: { value: "Updated plan" } });
     expect(handleChange).toHaveBeenCalledWith("Updated plan");
