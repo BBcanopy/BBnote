@@ -521,6 +521,15 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
 
   const notebookHeader = page.getByTestId("notebook-pane").locator(".bb-pane-card__header").first();
   const notesHeader = page.getByTestId("notes-pane").locator(".bb-pane-card__header").first();
+  const expectedTrashBackgroundColor = await resolveBackgroundColor(
+    page,
+    "color-mix(in srgb, var(--danger) 5%, var(--surface-muted))"
+  );
+  const expectedTrashColor = await resolveTextColor(page, "color-mix(in srgb, var(--danger) 72%, var(--ink-soft))");
+  const expectedActiveTrashBackgroundImage = await resolveBackgroundImage(
+    page,
+    "linear-gradient(135deg, color-mix(in srgb, var(--danger) 14%, var(--surface-strong)), color-mix(in srgb, var(--danger) 8%, var(--surface-muted)))"
+  );
   await expect(page.getByTestId("notes-delete-target")).toHaveCount(0);
   const followUpNoteDrag = page.getByTestId(buildNoteTestId("drag", followUpNoteTitle));
   await expect(page.getByTestId("notebooks-delete-target")).toHaveCount(0);
@@ -531,10 +540,13 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
   await expect(page.getByTestId("notebooks-actions")).toHaveCount(0);
   await expect(deleteNotebookTargetForNote).toHaveAttribute("aria-label", "Delete note");
   const notebookDeleteStyles = await expectCenteredHeaderAction(notebookHeader, deleteNotebookTargetForNote);
+  expect(notebookDeleteStyles.backgroundColor).toBe(expectedTrashBackgroundColor);
+  expect(notebookDeleteStyles.color).toBe(expectedTrashColor);
   await deleteNotebookTargetForNote.dispatchEvent("dragover", { dataTransfer: cancelDeleteFromNotebookLaneDrag });
   await expect(deleteNotebookTargetForNote).toHaveClass(/is-active/);
   const activeNotebookDeleteStyles = await getHeaderActionStyles(deleteNotebookTargetForNote);
   expect(activeNotebookDeleteStyles.backgroundColor).not.toBe(notebookDeleteStyles.backgroundColor);
+  expect(activeNotebookDeleteStyles.backgroundImage).toBe(expectedActiveTrashBackgroundImage);
   await dropOnTarget(followUpNoteDrag, deleteNotebookTargetForNote, cancelDeleteFromNotebookLaneDrag);
   const deleteNoteDialog = page.getByRole("dialog", { name: /^delete note\?$/i });
   await expect(deleteNoteDialog).toBeVisible();
@@ -550,11 +562,14 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
   await expect(page.getByTestId("notes-actions")).toHaveCount(0);
   const noteDeleteStyles = await expectCenteredHeaderAction(notesHeader, deleteNoteTarget);
   expect(noteDeleteStyles.backgroundColor).toBe(notebookDeleteStyles.backgroundColor);
+  expect(noteDeleteStyles.backgroundColor).toBe(expectedTrashBackgroundColor);
   expect(noteDeleteStyles.color).toBe(notebookDeleteStyles.color);
+  expect(noteDeleteStyles.color).toBe(expectedTrashColor);
   await deleteNoteTarget.dispatchEvent("dragover", { dataTransfer: cancelDeleteDrag });
   await expect(deleteNoteTarget).toHaveClass(/is-active/);
   const activeNoteDeleteStyles = await getHeaderActionStyles(deleteNoteTarget);
   expect(activeNoteDeleteStyles.backgroundColor).not.toBe(noteDeleteStyles.backgroundColor);
+  expect(activeNoteDeleteStyles.backgroundImage).toBe(expectedActiveTrashBackgroundImage);
   await dropOnTarget(followUpNoteDrag, deleteNoteTarget, cancelDeleteDrag);
   const deleteNoteDialogFromNotesLane = page.getByRole("dialog", { name: /^delete note\?$/i });
   await expect(deleteNoteDialogFromNotesLane).toBeVisible();
@@ -1116,9 +1131,53 @@ async function getHeaderActionStyles(action: import("@playwright/test").Locator)
     return {
       backgroundColor,
       backgroundAlpha,
+      backgroundImage: styles.backgroundImage,
+      color: styles.color,
       backdropFilter: styles.backdropFilter,
       boxShadow: styles.boxShadow,
       zIndex: styles.zIndex
     };
   });
+}
+
+async function resolveBackgroundColor(page: import("@playwright/test").Page, backgroundColor: string) {
+  return await page.evaluate((value) => {
+    const probe = document.createElement("div");
+    probe.style.position = "fixed";
+    probe.style.opacity = "0";
+    probe.style.pointerEvents = "none";
+    probe.style.backgroundColor = value;
+    document.body.appendChild(probe);
+    const resolved = getComputedStyle(probe).backgroundColor;
+    probe.remove();
+    return resolved;
+  }, backgroundColor);
+}
+
+async function resolveBackgroundImage(page: import("@playwright/test").Page, backgroundImage: string) {
+  return await page.evaluate((value) => {
+    const probe = document.createElement("div");
+    probe.style.position = "fixed";
+    probe.style.opacity = "0";
+    probe.style.pointerEvents = "none";
+    probe.style.backgroundImage = value;
+    document.body.appendChild(probe);
+    const resolved = getComputedStyle(probe).backgroundImage;
+    probe.remove();
+    return resolved;
+  }, backgroundImage);
+}
+
+async function resolveTextColor(page: import("@playwright/test").Page, color: string) {
+  return await page.evaluate((value) => {
+    const probe = document.createElement("div");
+    probe.style.position = "fixed";
+    probe.style.opacity = "0";
+    probe.style.pointerEvents = "none";
+    probe.style.color = value;
+    document.body.appendChild(probe);
+    const resolved = getComputedStyle(probe).color;
+    probe.remove();
+    return resolved;
+  }, color);
 }
