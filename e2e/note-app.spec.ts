@@ -531,6 +531,10 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
   await expect(page.getByTestId("notebooks-actions")).toHaveCount(0);
   await expect(deleteNotebookTargetForNote).toHaveAttribute("aria-label", "Delete note");
   const notebookDeleteStyles = await expectCenteredHeaderAction(notebookHeader, deleteNotebookTargetForNote);
+  await deleteNotebookTargetForNote.dispatchEvent("dragover", { dataTransfer: cancelDeleteFromNotebookLaneDrag });
+  await expect(deleteNotebookTargetForNote).toHaveClass(/is-active/);
+  const activeNotebookDeleteStyles = await getHeaderActionStyles(deleteNotebookTargetForNote);
+  expect(activeNotebookDeleteStyles.backgroundColor).not.toBe(notebookDeleteStyles.backgroundColor);
   await dropOnTarget(followUpNoteDrag, deleteNotebookTargetForNote, cancelDeleteFromNotebookLaneDrag);
   const deleteNoteDialog = page.getByRole("dialog", { name: /^delete note\?$/i });
   await expect(deleteNoteDialog).toBeVisible();
@@ -547,6 +551,10 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
   const noteDeleteStyles = await expectCenteredHeaderAction(notesHeader, deleteNoteTarget);
   expect(noteDeleteStyles.backgroundColor).toBe(notebookDeleteStyles.backgroundColor);
   expect(noteDeleteStyles.color).toBe(notebookDeleteStyles.color);
+  await deleteNoteTarget.dispatchEvent("dragover", { dataTransfer: cancelDeleteDrag });
+  await expect(deleteNoteTarget).toHaveClass(/is-active/);
+  const activeNoteDeleteStyles = await getHeaderActionStyles(deleteNoteTarget);
+  expect(activeNoteDeleteStyles.backgroundColor).not.toBe(noteDeleteStyles.backgroundColor);
   await dropOnTarget(followUpNoteDrag, deleteNoteTarget, cancelDeleteDrag);
   const deleteNoteDialogFromNotesLane = page.getByRole("dialog", { name: /^delete note\?$/i });
   await expect(deleteNoteDialogFromNotesLane).toBeVisible();
@@ -955,7 +963,19 @@ async function expectCenteredHeaderAction(
   expect(Math.abs(actionRightX - headerRightX)).toBeLessThan(8);
   expect(actionBox.width).toBeGreaterThan(headerBox.width - 8);
 
-  const shellStyles = await action.evaluate((element) => {
+  const shellStyles = await getHeaderActionStyles(action);
+
+  expect(shellStyles.backgroundColor).not.toBe("rgba(0, 0, 0, 0)");
+  expect(shellStyles.backgroundAlpha).toBeGreaterThan(0.2);
+  expect(shellStyles.backgroundAlpha).toBeLessThan(0.95);
+  expect(shellStyles.backdropFilter).not.toBe("none");
+  expect(shellStyles.boxShadow).not.toBe("none");
+  expect(Number(shellStyles.zIndex)).toBeGreaterThan(1);
+  return shellStyles;
+}
+
+async function getHeaderActionStyles(action: import("@playwright/test").Locator) {
+  return await action.evaluate((element) => {
     const styles = getComputedStyle(element);
     const backgroundColor = styles.backgroundColor;
     const rgbaMatch = backgroundColor.match(/^rgba\((.+)\)$/);
@@ -975,12 +995,4 @@ async function expectCenteredHeaderAction(
       zIndex: styles.zIndex
     };
   });
-
-  expect(shellStyles.backgroundColor).not.toBe("rgba(0, 0, 0, 0)");
-  expect(shellStyles.backgroundAlpha).toBeGreaterThan(0.2);
-  expect(shellStyles.backgroundAlpha).toBeLessThan(0.95);
-  expect(shellStyles.backdropFilter).not.toBe("none");
-  expect(shellStyles.boxShadow).not.toBe("none");
-  expect(Number(shellStyles.zIndex)).toBeGreaterThan(1);
-  return shellStyles;
 }

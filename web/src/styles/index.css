@@ -1678,7 +1678,7 @@ button:disabled {
 
 .bb-folder-trash-target,
 .bb-note-trash-target {
-  background: color-mix(in srgb, var(--danger) 30%, transparent);
+  background: color-mix(in srgb, var(--danger) 24%, transparent);
   backdrop-filter: blur(10px) saturate(0.82);
   box-shadow:
     inset 0 1px 0 color-mix(in srgb, white 22%, transparent),
@@ -1690,7 +1690,7 @@ button:disabled {
 .bb-folder-trash-target:hover,
 .bb-note-trash-target.is-active,
 .bb-note-trash-target:hover {
-  background: color-mix(in srgb, var(--danger) 40%, transparent);
+  background: color-mix(in srgb, var(--danger) 52%, transparent);
   box-shadow:
     inset 0 1px 0 color-mix(in srgb, white 28%, transparent),
     0 22px 34px -28px color-mix(in srgb, var(--danger) 34%, rgba(18, 34, 36, 0.28));
