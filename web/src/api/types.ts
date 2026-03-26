@@ -1,5 +1,8 @@
 export type UserTheme = "sea" | "ember" | "midnight";
 
+export const folderIconIds = ["folder", "inbox", "archive", "bookmark", "briefcase", "book", "calendar", "star"] as const;
+export type FolderIconId = (typeof folderIconIds)[number];
+
 export interface AuthSession {
   authenticated: boolean;
   user: {
@@ -14,6 +17,7 @@ export interface FolderNode {
   name: string;
   parentId: string | null;
   path: string;
+  icon: FolderIconId;
   childCount: number;
   noteCount: number;
 }

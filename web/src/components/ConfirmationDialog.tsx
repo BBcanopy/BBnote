@@ -1,49 +1,33 @@
-import { useEffect, useId, useRef } from "react";
+import { useEffect, useId } from "react";
 
-export function TextPromptDialog(props: {
+export function ConfirmationDialog(props: {
   open: boolean;
   title: string;
   description?: string;
-  value: string;
-  placeholder?: string;
   confirmLabel: string;
-  onChange(value: string): void;
+  cancelLabel?: string;
+  tone?: "danger" | "primary";
   onClose(): void;
   onConfirm(): void;
 }) {
   const titleId = useId();
   const descriptionId = useId();
-  const inputRef = useRef<HTMLInputElement | null>(null);
-  const onCloseRef = useRef(props.onClose);
-  const canConfirm = props.value.trim().length > 0;
-
-  useEffect(() => {
-    onCloseRef.current = props.onClose;
-  }, [props.onClose]);
 
   useEffect(() => {
     if (!props.open) {
       return;
     }
 
-    const timer = window.setTimeout(() => {
-      inputRef.current?.focus();
-      inputRef.current?.select();
-    }, 0);
-
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
         event.preventDefault();
-        onCloseRef.current();
+        props.onClose();
       }
     }
 
     window.addEventListener("keydown", handleKeyDown);
-    return () => {
-      window.clearTimeout(timer);
-      window.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [props.open]);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [props.open, props.onClose]);
 
   if (!props.open) {
     return null;
@@ -59,16 +43,7 @@ export function TextPromptDialog(props: {
         className="bb-dialog"
         onClick={(event) => event.stopPropagation()}
       >
-        <form
-          className="bb-dialog__content"
-          onSubmit={(event) => {
-            event.preventDefault();
-            if (!canConfirm) {
-              return;
-            }
-            props.onConfirm();
-          }}
-        >
+        <div className="bb-dialog__content">
           <div className="bb-dialog__copy">
             <h2 id={titleId} className="bb-dialog__title">
               {props.title}
@@ -80,23 +55,19 @@ export function TextPromptDialog(props: {
             ) : null}
           </div>
 
-          <input
-            ref={inputRef}
-            value={props.value}
-            onChange={(event) => props.onChange(event.target.value)}
-            placeholder={props.placeholder}
-            className="bb-input"
-          />
-
           <div className="bb-dialog__actions">
             <button type="button" onClick={props.onClose} className="bb-button bb-button--ghost">
-              Cancel
+              {props.cancelLabel ?? "Cancel"}
             </button>
-            <button type="submit" disabled={!canConfirm} className="bb-button bb-button--primary">
+            <button
+              type="button"
+              onClick={props.onConfirm}
+              className={`bb-button ${props.tone === "primary" ? "bb-button--primary" : "bb-button--danger"}`}
+            >
               {props.confirmLabel}
             </button>
           </div>
-        </form>
+        </div>
       </div>
     </div>
   );

@@ -13,9 +13,27 @@ import type { AppServices } from "../service/serviceFactory.js";
 
 export function registerAttachmentController(app: FastifyInstance, services: AppServices) {
   const guard = authenticate(services);
+  const uploadLimitText = formatByteLimit(services.config.attachmentMaxBytes);
 
   app.post("/api/v1/notes/:id/attachments", {
     preHandler: guard,
+    config: {
+      multipartOptions: {
+        limits: {
+          fileSize: services.config.attachmentMaxBytes,
+          files: 1
+        }
+      }
+    },
+    errorHandler(error, _request, reply) {
+      if (error instanceof app.multipartErrors.RequestFileTooLargeError || error.code === "FST_REQ_FILE_TOO_LARGE") {
+        return reply.code(413).send({
+          message: `Attachments larger than ${uploadLimitText} are not supported.`
+        });
+      }
+
+      return reply.send(error);
+    },
     schema: {
       tags: ["Attachments"],
       summary: "Upload an attachment",
@@ -33,7 +51,8 @@ export function registerAttachmentController(app: FastifyInstance, services: App
       },
       response: {
         201: passthroughObjectSchema,
-        400: errorMessageSchema
+        400: errorMessageSchema,
+        413: errorMessageSchema
       }
     }
   }, async (request, reply) => {
@@ -42,12 +61,18 @@ export function registerAttachmentController(app: FastifyInstance, services: App
     if (!file) {
       return reply.code(400).send({ message: "No attachment uploaded." });
     }
+    const content = await file.toBuffer();
+    if (content.length > services.config.attachmentMaxBytes) {
+      return reply.code(413).send({
+        message: `Attachments larger than ${uploadLimitText} are not supported.`
+      });
+    }
     const uploaded = await services.attachmentService.createAttachment({
       ownerId: request.auth!.ownerId,
       noteId: params.id,
       originalName: file.filename,
       mimeType: file.mimetype,
-      content: await file.toBuffer()
+      content
     });
     return reply.code(201).send(uploaded);
   });
@@ -79,4 +104,19 @@ export function registerAttachmentController(app: FastifyInstance, services: App
     await services.attachmentService.deleteAttachment(request.auth!.ownerId, params.id);
     return reply.code(204).send();
   });
+}
+
+function formatByteLimit(sizeBytes: number) {
+  const mebibyte = 1024 * 1024;
+  const kibibyte = 1024;
+
+  if (sizeBytes % mebibyte === 0) {
+    return `${sizeBytes / mebibyte} MiB`;
+  }
+
+  if (sizeBytes % kibibyte === 0) {
+    return `${sizeBytes / kibibyte} KiB`;
+  }
+
+  return `${sizeBytes} bytes`;
 }

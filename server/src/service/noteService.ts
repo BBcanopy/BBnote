@@ -26,11 +26,12 @@ export class NoteService {
   async listNotes(options: ListOptions): Promise<PaginatedNotes> {
     const limit = Math.min(Math.max(options.limit ?? 20, 1), 100);
     const offset = decodeCursor(options.cursor);
-    const records = options.q
+    const searchQuery = options.q?.trim();
+    const records = searchQuery
       ? this.noteDb.search({
           ownerId: options.ownerId,
           folderId: options.folderId,
-          query: options.q,
+          query: searchQuery,
           limit: limit + 1,
           offset
         })
@@ -114,9 +115,6 @@ export class NoteService {
       throw new Error("Folder not found.");
     }
     const trimmedTitle = input.title.trim();
-    if (!trimmedTitle) {
-      throw new Error("Note title is required.");
-    }
     const noteId = randomUUID();
     const createdAt = input.createdAt ?? new Date().toISOString();
     const updatedAt = input.updatedAt ?? createdAt;
@@ -174,9 +172,6 @@ export class NoteService {
       throw new Error("Folder not found.");
     }
     const trimmedTitle = input.title.trim();
-    if (!trimmedTitle) {
-      throw new Error("Note title is required.");
-    }
 
     const previousBody = await this.storageService.readMarkdown(record.filePath);
     const folderChanged = record.folderId !== folder.id;
@@ -224,6 +219,22 @@ export class NoteService {
       throw error;
     }
     return this.getNote(input.ownerId, input.noteId);
+  }
+
+  async moveNote(input: { ownerId: string; noteId: string; folderId: string }) {
+    const record = this.noteDb.getById(input.ownerId, input.noteId);
+    if (!record) {
+      throw new Error("Note not found.");
+    }
+
+    const bodyMarkdown = await this.storageService.readMarkdown(record.filePath);
+    return this.updateNote({
+      ownerId: input.ownerId,
+      noteId: input.noteId,
+      folderId: input.folderId,
+      title: record.title,
+      bodyMarkdown
+    });
   }
 
   async deleteNote(ownerId: string, noteId: string) {

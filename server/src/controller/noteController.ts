@@ -11,7 +11,7 @@ import type { AppServices } from "../service/serviceFactory.js";
 
 const noteBodySchema = z.object({
   folderId: z.string().uuid(),
-  title: z.string().trim().min(1),
+  title: z.string().trim(),
   bodyMarkdown: z.string()
 });
 
@@ -27,6 +27,10 @@ const noteListQuerySchema = z.object({
 const noteReorderBodySchema = z.object({
   folderId: z.string().uuid(),
   orderedNoteIds: z.array(z.string().uuid()).min(1)
+});
+
+const noteMoveBodySchema = z.object({
+  folderId: z.string().uuid()
 });
 
 export function registerNoteController(app: FastifyInstance, services: AppServices) {
@@ -187,6 +191,39 @@ export function registerNoteController(app: FastifyInstance, services: AppServic
       folderId: body.folderId,
       title: body.title,
       bodyMarkdown: body.bodyMarkdown
+    });
+  });
+
+  app.patch("/api/v1/notes/:id/move", {
+    preHandler: guard,
+    schema: {
+      tags: ["Notes"],
+      summary: "Move a note to another notebook",
+      security: sessionCookieSecurity,
+      params: createUuidParamsSchema("id", "Note identifier"),
+      body: {
+        type: "object",
+        required: ["folderId"],
+        properties: {
+          folderId: { type: "string", format: "uuid" }
+        }
+      },
+      response: {
+        200: passthroughObjectSchema,
+        400: errorMessageSchema
+      }
+    }
+  }, async (request, reply) => {
+    const params = z.object({ id: z.string().uuid() }).parse(request.params);
+    const parsedBody = noteMoveBodySchema.safeParse(request.body);
+    if (!parsedBody.success) {
+      return reply.code(400).send({ message: parsedBody.error.message });
+    }
+
+    return services.noteService.moveNote({
+      ownerId: request.auth!.ownerId,
+      noteId: params.id,
+      folderId: parsedBody.data.folderId
     });
   });
 

@@ -39,6 +39,7 @@ describe("buildConfig", () => {
     expect(config.oidcClientSecret).toBe(REQUIRED_ENV.OIDC_CLIENT_SECRET);
     expect(config.sessionSecret).toBe(REQUIRED_ENV.SESSION_SECRET);
     expect(config.notesRoot).toBe(REQUIRED_ENV.NOTES_ROOT);
+    expect(config.attachmentMaxBytes).toBe(100 * 1024 * 1024);
   });
 
   it("fails fast when a required value is missing", () => {
@@ -49,5 +50,17 @@ describe("buildConfig", () => {
   it("fails fast when the session secret is too short", () => {
     process.env.SESSION_SECRET = "too-short";
     expect(() => buildConfig()).toThrow("Environment variable SESSION_SECRET must be at least 32 characters long.");
+  });
+
+  it("accepts an explicit attachment upload limit", () => {
+    process.env.ATTACHMENT_MAX_BYTES = "4096";
+
+    expect(buildConfig().attachmentMaxBytes).toBe(4096);
+  });
+
+  it("rejects invalid attachment upload limits", () => {
+    process.env.ATTACHMENT_MAX_BYTES = "invalid";
+
+    expect(() => buildConfig()).toThrow("Environment variable ATTACHMENT_MAX_BYTES must be a positive integer.");
   });
 });

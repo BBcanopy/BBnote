@@ -1,8 +1,9 @@
 import { ArrowsClockwise, NotePencil, SignOut } from "@phosphor-icons/react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { NavLink, useLocation } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import type { UserTheme } from "../api/types";
 import { themeOptions } from "../theme/theme";
+import { isNotesPathname } from "../utils/noteRoute";
 
 export function UserMenu(props: {
   name: string | null;
@@ -81,7 +82,6 @@ export function UserMenu(props: {
                   <span className={`bb-theme-option__swatch bb-theme-option__swatch--${option.id}`} />
                   <span className="bb-theme-option__copy">
                     <strong>{option.label}</strong>
-                    <span>{option.description}</span>
                   </span>
                 </button>
               ))}
@@ -109,16 +109,17 @@ export function UserMenu(props: {
 }
 
 function MenuLink(props: { to: string; label: string; icon: ReactNode }) {
+  const location = useLocation();
+  const active = props.to === "/" ? isNotesPathname(location.pathname) : location.pathname === props.to;
+
   return (
-    <NavLink
+    <Link
       to={props.to}
-      end={props.to === "/"}
-      className={({ isActive }) =>
-        `bb-menu-link${isActive ? " is-active" : ""}`
-      }
+      aria-current={active ? "page" : undefined}
+      className={`bb-menu-link${active ? " is-active" : ""}`}
     >
       {props.icon}
       {props.label}
-    </NavLink>
+    </Link>
   );
 }

@@ -8,6 +8,7 @@ describe("AuthSplash", () => {
     const handleLogin = vi.fn();
     render(<AuthSplash onLogin={handleLogin} busy={false} />);
     expect(screen.getByRole("heading", { name: "BBNote" })).toBeInTheDocument();
+    expect(screen.getByText("BB", { selector: ".bb-brand-mark__pill" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /read api docs/i })).toHaveAttribute("href", "/docs");
     expect(screen.queryByText(/quietly structured note work/i)).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/workspace preview/i)).not.toBeInTheDocument();

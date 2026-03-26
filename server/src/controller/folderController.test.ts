@@ -97,6 +97,66 @@ describe("folderController integration", () => {
       })
     ).rejects.toThrow(/descendants/i);
   });
+
+  it("persists folder icons and only deletes empty notebooks", async () => {
+    const projects = await createNotebook(app, token, "Projects", null);
+    const archive = await createNotebook(app, token, "Archive", null);
+
+    const updateIconResponse = await app.inject({
+      method: "PATCH",
+      url: `/api/v1/folders/${projects.id}`,
+      headers: authHeaders(token),
+      payload: {
+        name: "Projects",
+        icon: "briefcase",
+        parentId: null
+      }
+    });
+    expect(updateIconResponse.statusCode).toBe(200);
+    expect(updateIconResponse.json()).toMatchObject({
+      id: projects.id,
+      icon: "briefcase"
+    });
+
+    const noteResponse = await app.inject({
+      method: "POST",
+      url: "/api/v1/notes",
+      headers: authHeaders(token),
+      payload: {
+        folderId: projects.id,
+        title: "Keep me",
+        bodyMarkdown: "still here"
+      }
+    });
+    expect(noteResponse.statusCode).toBe(201);
+
+    const rejectDeleteResponse = await app.inject({
+      method: "DELETE",
+      url: `/api/v1/folders/${projects.id}`,
+      headers: authHeaders(token)
+    });
+    expect(rejectDeleteResponse.statusCode).toBe(500);
+
+    const deleteEmptyResponse = await app.inject({
+      method: "DELETE",
+      url: `/api/v1/folders/${archive.id}`,
+      headers: authHeaders(token)
+    });
+    expect(deleteEmptyResponse.statusCode).toBe(204);
+
+    const listResponse = await app.inject({
+      method: "GET",
+      url: "/api/v1/folders",
+      headers: authHeaders(token)
+    });
+    expect(listResponse.statusCode).toBe(200);
+    expect(listResponse.json()).toEqual([
+      expect.objectContaining({
+        id: projects.id,
+        icon: "briefcase"
+      })
+    ]);
+  });
 });
 
 async function createNotebook(app: FastifyInstance, token: string, name: string, parentId: string | null) {

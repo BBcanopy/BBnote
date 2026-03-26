@@ -5,21 +5,17 @@ export const defaultTheme: UserTheme = "sea";
 export const themeOptions: Array<{
   id: UserTheme;
   label: string;
-  description: string;
 }> = [
   {
     id: "sea",
-    label: "Sea",
-    description: "Cool glass, mineral greens, and a bright work surface."
+    label: "Sea"
   },
   {
     id: "ember",
-    label: "Ember",
-    description: "Warm paper tones with copper accents."
+    label: "Ember"
   },
   {
     id: "midnight",
-    label: "Midnight",
-    description: "Dark studio contrast with teal highlights."
+    label: "Midnight"
   }
 ];

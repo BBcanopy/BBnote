@@ -3,9 +3,11 @@ import { z } from "zod";
 import { createUuidParamsSchema, errorMessageSchema, sessionCookieSecurity } from "./openapi.js";
 import { authenticate } from "./authenticate.js";
 import type { AppServices } from "../service/serviceFactory.js";
+import { folderIconValues } from "../service/models.js";
 
 const folderBodySchema = z.object({
   name: z.string().min(1),
+  icon: z.enum(folderIconValues).optional(),
   parentId: z.string().uuid().nullable().optional(),
   sortOrder: z.number().int().min(0).optional()
 });
@@ -35,6 +37,7 @@ export function registerFolderController(app: FastifyInstance, services: AppServ
         required: ["name"],
         properties: {
           name: { type: "string" },
+          icon: { type: "string", enum: [...folderIconValues] },
           parentId: { type: "string", format: "uuid", nullable: true }
         }
       }
@@ -43,6 +46,7 @@ export function registerFolderController(app: FastifyInstance, services: AppServ
     const body = folderBodySchema.parse(request.body);
     const folder = await services.folderService.createFolder(request.auth!.ownerId, {
       name: body.name,
+      icon: body.icon,
       parentId: body.parentId ?? null
     });
     return reply.code(201).send(folder);
@@ -60,6 +64,7 @@ export function registerFolderController(app: FastifyInstance, services: AppServ
         required: ["name"],
         properties: {
           name: { type: "string" },
+          icon: { type: "string", enum: [...folderIconValues] },
           parentId: { type: "string", format: "uuid", nullable: true },
           sortOrder: { type: "integer", minimum: 0 }
         }
@@ -73,6 +78,7 @@ export function registerFolderController(app: FastifyInstance, services: AppServ
     const params = z.object({ id: z.string().uuid() }).parse(request.params);
     return services.folderService.updateFolder(request.auth!.ownerId, params.id, {
       name: body.name,
+      icon: body.icon,
       parentId: body.parentId ?? null,
       sortOrder: body.sortOrder
     });

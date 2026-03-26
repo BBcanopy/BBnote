@@ -1,6 +1,8 @@
 import type {
+  AttachmentRef,
   AuthSession,
   ExportJob,
+  FolderIconId,
   FolderNode,
   ImportJob,
   NoteDetail,
@@ -29,7 +31,7 @@ async function request<T>(url: string, options: RequestOptions = {}): Promise<T>
 
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(errorText || `Request failed with status ${response.status}`);
+    throw new Error(extractErrorMessage(errorText, response.status));
   }
 
   if (response.status === 204) {
@@ -60,14 +62,14 @@ export function listFolders() {
   return request<FolderNode[]>("/api/v1/folders");
 }
 
-export function createFolder(payload: { name: string; parentId: string | null }) {
+export function createFolder(payload: { name: string; icon?: FolderIconId; parentId: string | null }) {
   return request<FolderNode>("/api/v1/folders", {
     method: "POST",
     body: JSON.stringify(payload)
   });
 }
 
-export function updateFolder(folderId: string, payload: { name: string; parentId: string | null; sortOrder?: number }) {
+export function updateFolder(folderId: string, payload: { name: string; icon?: FolderIconId; parentId: string | null; sortOrder?: number }) {
   return request<FolderNode>(`/api/v1/folders/${folderId}`, {
     method: "PATCH",
     body: JSON.stringify(payload)
@@ -116,6 +118,13 @@ export function updateNote(noteId: string, payload: { folderId: string; title: s
   });
 }
 
+export function moveNote(noteId: string, payload: { folderId: string }) {
+  return request<NoteDetail>(`/api/v1/notes/${noteId}/move`, {
+    method: "PATCH",
+    body: JSON.stringify(payload)
+  });
+}
+
 export function reorderNotes(payload: { folderId: string; orderedNoteIds: string[] }) {
   return request<void>("/api/v1/notes/reorder", {
     method: "PATCH",
@@ -132,7 +141,7 @@ export function deleteNote(noteId: string) {
 export function uploadAttachment(noteId: string, file: File) {
   const formData = new FormData();
   formData.set("file", file);
-  return request(`/api/v1/notes/${noteId}/attachments`, {
+  return request<AttachmentRef>(`/api/v1/notes/${noteId}/attachments`, {
     method: "POST",
     body: formData
   });
@@ -149,7 +158,7 @@ export function fetchAttachmentBlob(attachmentUrl: string) {
     credentials: "same-origin"
   }).then(async (response) => {
     if (!response.ok) {
-      throw new Error("Attachment fetch failed.");
+      throw new Error(extractErrorMessage(await response.text(), response.status));
     }
     return response.blob();
   });
@@ -184,7 +193,24 @@ export async function downloadExport(jobId: string) {
     credentials: "same-origin"
   });
   if (!response.ok) {
-    throw new Error("Export download failed.");
+    throw new Error(extractErrorMessage(await response.text(), response.status));
   }
   return response.blob();
+}
+
+function extractErrorMessage(errorText: string, status: number) {
+  if (!errorText) {
+    return `Request failed with status ${status}`;
+  }
+
+  try {
+    const parsed = JSON.parse(errorText) as { message?: unknown };
+    if (typeof parsed.message === "string" && parsed.message.trim()) {
+      return parsed.message;
+    }
+  } catch {
+    return errorText;
+  }
+
+  return errorText;
 }

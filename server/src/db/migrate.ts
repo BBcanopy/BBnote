@@ -19,6 +19,7 @@ export function runMigrations(connection: Database.Database) {
       owner_id text not null,
       parent_id text references folders(id) on delete cascade,
       name text not null,
+      icon text not null default 'folder',
       storage_dir_name text not null,
       sort_order integer not null default 0,
       created_at text not null,
@@ -124,6 +125,10 @@ export function runMigrations(connection: Database.Database) {
 
   if (!folderColumns.includes("sort_order")) {
     connection.exec("alter table folders add column sort_order integer not null default 0;");
+  }
+
+  if (!folderColumns.includes("icon")) {
+    connection.exec("alter table folders add column icon text not null default 'folder';");
   }
 
   const noteColumns = connection
