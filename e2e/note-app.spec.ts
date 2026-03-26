@@ -267,7 +267,7 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
   const topbarBox = await topbar.boundingBox();
   const viewport = page.viewportSize();
   expect(topbarBox?.width ?? 0).toBeGreaterThan(((viewport?.width ?? 0) * 0.95));
-  expect(topbarBox?.height ?? 0).toBeLessThan(62);
+  expect(topbarBox?.height ?? 0).toBeLessThan(38);
   const topbarStyles = await topbar.evaluate((element) => {
     const styles = getComputedStyle(element);
     return {
@@ -903,6 +903,7 @@ test("shows the note title in the topbar, keeps folder and note drag cursors dis
   expect(titleInputBox.y + titleInputBox.height).toBeLessThanOrEqual(topbarBox.y + topbarBox.height + 1);
   expect(Math.abs(titleInputBox.x + titleInputBox.width / 2 - (topbarBox.x + topbarBox.width / 2))).toBeLessThan(24);
   expect(titleInputBox.width).toBeGreaterThan(topbarBox.width * 0.45);
+  expect(topbarBox.height).toBeLessThan(38);
   expect(textareaBox.height / editorStackBox.height).toBeGreaterThan(0.72);
   expect(updatedAtStatusBox.x + updatedAtStatusBox.width).toBeLessThanOrEqual(editorHeaderActionsBox.x + 8);
 
@@ -1195,11 +1196,14 @@ test("syncs notebook and note selection into the URL and restores deep links on 
 test("opens migration from the avatar menu and runs both export and import flows", async ({ page }) => {
   await page.setViewportSize({ width: 1900, height: 1000 });
   await login(page);
+  const rootTopbarBox = await page.locator(".bb-topbar").boundingBox();
+  const rootTopbarWidth = rootTopbarBox?.width ?? 0;
+  const rootTopbarHeight = rootTopbarBox?.height ?? 0;
   await createNotebookAndPersistedNote(page);
   const userMenuButton = page.getByRole("button", { name: /open user menu/i });
-  const notesTopbarWidth = (await page.locator(".bb-topbar").boundingBox())?.width ?? 0;
   const viewport = page.viewportSize();
-  expect(notesTopbarWidth).toBeGreaterThan(((viewport?.width ?? 0) * 0.95));
+  expect(rootTopbarWidth).toBeGreaterThan(((viewport?.width ?? 0) * 0.95));
+  expect(rootTopbarHeight).toBeLessThan(38);
 
   await expect(page.getByRole("navigation", { name: /primary navigation/i })).toHaveCount(0);
   await expect(page.getByRole("link", { name: /bbnote home/i })).toHaveAttribute("href", "/");
@@ -1243,10 +1247,13 @@ test("opens migration from the avatar menu and runs both export and import flows
   await expect(page).toHaveURL(/\/migration$/);
   await expect(page.locator(".bb-shell").first()).not.toHaveClass(/bb-shell--workspace/);
   await expect(page.getByRole("heading", { name: /bring in an archive/i })).toBeVisible();
-  const migrationTopbarWidth = (await page.locator(".bb-topbar").boundingBox())?.width ?? 0;
+  const migrationTopbarBox = await page.locator(".bb-topbar").boundingBox();
+  const migrationTopbarWidth = migrationTopbarBox?.width ?? 0;
+  const migrationTopbarHeight = migrationTopbarBox?.height ?? 0;
   expect(migrationTopbarWidth).toBeLessThan(((viewport?.width ?? 0) * 0.9));
   expect(migrationTopbarWidth).toBeGreaterThan(((viewport?.width ?? 0) * 0.75));
-  expect(migrationTopbarWidth).toBeLessThan(notesTopbarWidth - 150);
+  expect(migrationTopbarWidth).toBeLessThan(rootTopbarWidth - 150);
+  expect(Math.abs(migrationTopbarHeight - rootTopbarHeight)).toBeLessThan(2);
   await expect(page.getByRole("heading", { name: /bring notes in, package everything out/i })).toHaveCount(0);
   await expect(page.getByRole("heading", { name: /create a markdown bundle/i })).toBeVisible();
   await page.getByRole("button", { name: /export all notes/i }).click();
