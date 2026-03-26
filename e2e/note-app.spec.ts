@@ -329,7 +329,7 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
   const archiveNotebookRow = page.getByTestId(buildNotebookTestId("drag", archiveNotebookName));
   const archiveNotebookDragRow = notebookRow(page, archiveNotebookName);
   await expect(archiveNotebookRow).toBeVisible();
-  await dragToDropZone(
+  await dragLocatorToLocator(
     page,
     archiveNotebookDragRow,
     page.getByTestId(buildNotebookTestId("before", notebookName))
@@ -408,10 +408,9 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
   await expect.poll(async () => page.locator('[data-testid^="note-drag-"]').count()).toBe(2);
   await expect(page.locator('[data-testid^="note-drag-"] .bb-note-icon')).toHaveCount(0);
   const followUpNoteCard = page.locator('[data-testid^="note-drag-"]').filter({ hasText: followUpNoteTitle }).first();
-  const targetNoteDropZone = page.getByTestId(buildNoteTestId("before", noteTitle));
+  const targetNoteSlot = page.getByTestId(buildNoteTestId("slot", noteTitle));
   await expect(followUpNoteCard).toBeVisible();
-  await targetNoteDropZone.scrollIntoViewIfNeeded();
-  await dragToDropZone(page, followUpNoteCard, targetNoteDropZone);
+  await dragNoteCardToNoteCard(followUpNoteCard, targetNoteSlot, "top");
   await expect
     .poll(async () => {
       const items = await page
@@ -623,22 +622,23 @@ test("reorders notes by dropping onto note cards and persists the order", async 
   await expectNoteOrderInLane(page, [firstNoteTitle, secondNoteTitle]);
 
   const downwardSource = page.getByTestId(buildNoteTestId("drag", firstNoteTitle));
-  const downwardTargetBefore = page.getByTestId(buildNoteTestId("before", secondNoteTitle));
   const downwardTargetCard = page.getByTestId(buildNoteTestId("drag", secondNoteTitle));
   const downwardTargetSlot = page.getByTestId(buildNoteTestId("slot", secondNoteTitle));
-  const downwardTargetBox = await downwardTargetCard.boundingBox();
+  const downwardTargetBox = await downwardTargetSlot.boundingBox();
   if (!downwardTargetBox) {
     throw new Error("Expected the lower note card to be visible.");
   }
 
-  const downwardDrag = await startDrag(page, downwardSource);
-  await downwardTargetBefore.dispatchEvent("dragover", {
-    dataTransfer: downwardDrag,
+  const downwardIndicatorDrag = await startDrag(page, downwardSource);
+  await downwardTargetSlot.dispatchEvent("dragover", {
+    dataTransfer: downwardIndicatorDrag,
     clientY: downwardTargetBox.y + 10
   });
   await expect(downwardTargetSlot).toHaveClass(/is-drop-after/);
   await expect(downwardTargetCard).toHaveClass(/bb-note-card--drop-after/);
-  await dropOnTarget(downwardSource, downwardTargetBefore, downwardDrag);
+  await endDrag(downwardSource, downwardIndicatorDrag);
+
+  await dragNoteCardToNoteCard(downwardSource, downwardTargetSlot, "top");
   await expectNoteOrderInLane(page, [secondNoteTitle, firstNoteTitle]);
 
   await page.reload();
@@ -1082,16 +1082,6 @@ async function dragLocatorToLocator(
   target: import("@playwright/test").Locator
 ) {
   const dataTransfer = await startDrag(page, source);
-  await dropOnTarget(source, target, dataTransfer);
-}
-
-async function dragToDropZone(
-  page: import("@playwright/test").Page,
-  source: import("@playwright/test").Locator,
-  target: import("@playwright/test").Locator
-) {
-  const dataTransfer = await startDrag(page, source);
-  await expect(target).toBeAttached();
   await dropOnTarget(source, target, dataTransfer);
 }
 

@@ -1,5 +1,6 @@
 import { CaretLeft, MagnifyingGlass, Plus, Trash } from "@phosphor-icons/react";
-import { useEffect, useMemo, useState, type DragEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type DragEvent } from "react";
+import { flushSync } from "react-dom";
 import type { NoteSummary } from "../api/types";
 import { getDragPayload, setDragPayload } from "../utils/dragPayload";
 import type { NoteMoveInstruction, NoteMovePosition } from "../utils/noteOrder";
@@ -32,6 +33,7 @@ export function NoteListPane(props: {
   const [draggedNoteFolderId, setDraggedNoteFolderId] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<NoteDropTarget | null>(null);
   const [deleteTargetActive, setDeleteTargetActive] = useState(false);
+  const draggedNoteIdRef = useRef<string | null>(null);
   const canDragNotes = props.enableCrossNotebookMove || props.canReorder;
   const dragging = canDragNotes && draggedNoteId !== null;
   const draggedNote = useMemo(
@@ -52,6 +54,7 @@ export function NoteListPane(props: {
   }, [draggedNote, draggedNoteFolderId, draggedNoteId]);
 
   function clearDragState() {
+    draggedNoteIdRef.current = null;
     setDraggedNoteId(null);
     setDraggedNoteFolderId(null);
     setDropTarget(null);
@@ -70,8 +73,11 @@ export function NoteListPane(props: {
       id: note.id,
       folderId: note.folderId
     });
-    setDraggedNoteId(note.id);
-    setDraggedNoteFolderId(note.folderId);
+    draggedNoteIdRef.current = note.id;
+    flushSync(() => {
+      setDraggedNoteId(note.id);
+      setDraggedNoteFolderId(note.folderId);
+    });
     props.onDraggedNoteChange({
       id: note.id,
       title: getDisplayNoteTitle(note.title)
@@ -80,7 +86,7 @@ export function NoteListPane(props: {
 
   function resolveDraggedNoteId(event: Pick<DragEvent<HTMLElement>, "dataTransfer">) {
     const payload = getDragPayload(event.dataTransfer);
-    return payload?.kind === "note" ? payload.id : draggedNoteId;
+    return payload?.kind === "note" ? payload.id : draggedNoteIdRef.current ?? draggedNoteId;
   }
 
   function handleDragOver(event: DragEvent<HTMLElement>, targetId: string, position: NoteMovePosition) {
@@ -183,8 +189,7 @@ export function NoteListPane(props: {
             aria-label="Delete note"
             title={`Drop ${getDisplayNoteTitle(draggedNote.title)} here to delete it`}
             onDragOver={(event) => {
-              const payload = getDragPayload(event.dataTransfer);
-              const draggedId = payload?.kind === "note" ? payload.id : draggedNoteId;
+              const draggedId = resolveDraggedNoteId(event);
               if (!draggedId) {
                 return;
               }
@@ -198,8 +203,7 @@ export function NoteListPane(props: {
             }}
             onDragLeave={() => setDeleteTargetActive(false)}
             onDrop={(event) => {
-              const payload = getDragPayload(event.dataTransfer);
-              const draggedId = payload?.kind === "note" ? payload.id : draggedNoteId;
+              const draggedId = resolveDraggedNoteId(event);
               const noteToDelete = props.notes.find((note) => note.id === draggedId) ?? draggedNote;
               clearDragState();
 
@@ -273,9 +277,7 @@ export function NoteListPane(props: {
               onDragEnd: clearDragState,
               onCardDragOver: handleNoteCardDragOver,
               onCardDrop: handleNoteCardDrop,
-              onDragOver: handleDragOver,
               onDragStart: handleDragStart,
-              onDrop: handleDrop,
               onSelectNote: props.onSelectNote,
               selectedNoteId: props.selectedNoteId
             })
@@ -309,9 +311,7 @@ function renderNote(
     onDragEnd(): void;
     onCardDragOver(event: DragEvent<HTMLElement>, targetId: string): void;
     onCardDrop(event: DragEvent<HTMLElement>, targetId: string): void;
-    onDragOver(event: DragEvent<HTMLElement>, targetId: string, position: NoteMovePosition): void;
     onDragStart(event: DragEvent<HTMLElement>, note: NoteSummary): void;
-    onDrop(event: DragEvent<HTMLElement>, targetId: string, position: NoteMovePosition): void;
     onSelectNote(noteId: string): void;
     selectedNoteId: string | null;
   }
@@ -370,12 +370,8 @@ function renderNote(
       {helpers.canReorder ? (
         <NoteDropZone
           testId={buildNoteTestId("before", note.title)}
-          noteId={note.id}
-          position="before"
           active={helpers.dropTarget?.targetId === note.id && helpers.dropTarget.position === "before"}
           dragging={helpers.dragging && helpers.draggedNoteId !== note.id}
-          onDragOver={helpers.onDragOver}
-          onDrop={helpers.onDrop}
         />
       ) : null}
       <div className="min-w-0 rounded-[1.15rem]">
@@ -384,12 +380,8 @@ function renderNote(
       {helpers.canReorder ? (
         <NoteDropZone
           testId={buildNoteTestId("after", note.title)}
-          noteId={note.id}
-          position="after"
           active={helpers.dropTarget?.targetId === note.id && helpers.dropTarget.position === "after"}
           dragging={helpers.dragging && helpers.draggedNoteId !== note.id}
-          onDragOver={helpers.onDragOver}
-          onDrop={helpers.onDrop}
         />
       ) : null}
     </div>
@@ -398,19 +390,13 @@ function renderNote(
 
 function NoteDropZone(props: {
   testId: string;
-  noteId: string;
-  position: NoteMovePosition;
   active: boolean;
   dragging: boolean;
-  onDragOver(event: DragEvent<HTMLElement>, noteId: string, position: NoteMovePosition): void;
-  onDrop(event: DragEvent<HTMLElement>, noteId: string, position: NoteMovePosition): void;
 }) {
   return (
     <div
       data-testid={props.testId}
-      onDragEnter={(event) => props.onDragOver(event, props.noteId, props.position)}
-      onDragOver={(event) => props.onDragOver(event, props.noteId, props.position)}
-      onDrop={(event) => props.onDrop(event, props.noteId, props.position)}
+      aria-hidden="true"
       className={`bb-dropzone bb-dropzone--note ${props.dragging ? "is-visible" : ""} ${props.active ? "is-active" : ""}`}
     />
   );

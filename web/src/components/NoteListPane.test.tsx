@@ -236,44 +236,7 @@ describe("NoteListPane", () => {
     });
   });
 
-  it("normalizes an adjacent dropzone hover and drop so it still changes the order", () => {
-    const handleMoveNote = vi.fn();
-    const dataTransfer = createDataTransfer();
-
-    renderNoteListPane({
-      notes: [
-        buildNote({
-          id: "note-1",
-          title: "Quarterly review",
-          sortOrder: 0
-        }),
-        buildNote({
-          id: "note-2",
-          title: "Roadmap follow-up",
-          sortOrder: 1
-        })
-      ],
-      onMoveNote: handleMoveNote
-    });
-
-    const targetBeforeDropzone = screen.getByTestId(buildNoteTestId("before", "Roadmap follow-up"));
-    const targetSlot = screen.getByTestId(buildNoteTestId("slot", "Roadmap follow-up"));
-
-    fireEvent.dragStart(screen.getByTestId(buildNoteTestId("drag", "Quarterly review")), { dataTransfer });
-    fireEvent.dragEnter(targetBeforeDropzone, { dataTransfer });
-
-    expect(targetSlot).toHaveClass("is-drop-after");
-
-    fireEvent.drop(targetBeforeDropzone, { dataTransfer });
-
-    expect(handleMoveNote).toHaveBeenCalledWith({
-      draggedId: "note-1",
-      targetId: "note-2",
-      position: "after"
-    });
-  });
-
-  it("marks before and after note drop targets as move destinations during reorder", () => {
+  it("marks note slots as move destinations during reorder", () => {
     const dataTransfer = createDataTransfer();
 
     renderNoteListPane({
@@ -291,10 +254,23 @@ describe("NoteListPane", () => {
       ]
     });
 
+    const targetSlot = screen.getByTestId(buildNoteTestId("slot", "Quarterly review"));
+    const targetCard = screen.getByTestId(buildNoteTestId("drag", "Quarterly review"));
+    mockElementRect(targetCard, {
+      top: 100,
+      height: 100
+    });
+
     fireEvent.dragStart(screen.getByTestId(buildNoteTestId("drag", "Roadmap follow-up")), { dataTransfer });
-    fireEvent.dragEnter(screen.getByTestId(buildNoteTestId("before", "Quarterly review")), { dataTransfer });
+    const dragOverEvent = createEvent.dragOver(targetSlot, { dataTransfer });
+    Object.defineProperty(dragOverEvent, "clientY", {
+      configurable: true,
+      value: 102
+    });
+    fireEvent(targetSlot, dragOverEvent);
 
     expect(dataTransfer.dropEffect).toBe("move");
+    expect(targetSlot).toHaveClass("is-drop-before");
   });
 
   it("shows untitled note placeholder text for blank titles", () => {

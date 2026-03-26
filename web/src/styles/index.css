@@ -1682,6 +1682,7 @@ button:disabled {
 .bb-dropzone--note {
   height: 0.22rem;
   opacity: 0.001;
+  pointer-events: none;
 }
 
 .bb-dropzone--tree {
