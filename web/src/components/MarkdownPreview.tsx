@@ -1,4 +1,5 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { MusicNotesSimple } from "@phosphor-icons/react";
+import { isValidElement, useEffect, useState, type ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { fetchAttachmentBlob } from "../api/client";
@@ -19,7 +20,12 @@ export function MarkdownPreview(props: { bodyMarkdown: string; attachments?: Att
           a: ({ href, children }) => {
             const attachment = href ? attachmentsByUrl.get(normalizeAttachmentUrl(href)) : undefined;
             if (attachment?.mimeType.startsWith("audio/")) {
-              return <SecureAttachmentAudio src={href}>{children}</SecureAttachmentAudio>;
+              return (
+                <SecureAttachmentAudio
+                  src={href}
+                  title={extractMarkdownMediaLabel(children, attachment.name)}
+                />
+              );
             }
             if (attachment?.mimeType.startsWith("video/")) {
               return <SecureAttachmentVideo src={href}>{children}</SecureAttachmentVideo>;
@@ -44,7 +50,7 @@ function SecureAttachmentImage(props: { src?: string; alt: string }) {
   return <img src={objectUrl} alt={props.alt} />;
 }
 
-function SecureAttachmentAudio(props: { src?: string; children: ReactNode }) {
+function SecureAttachmentAudio(props: { src?: string; title: string }) {
   const objectUrl = useSecureAttachmentObjectUrl(props.src);
 
   if (!objectUrl) {
@@ -52,9 +58,17 @@ function SecureAttachmentAudio(props: { src?: string; children: ReactNode }) {
   }
 
   return (
-    <span className="bb-markdown__media">
-      <audio controls preload="metadata" src={objectUrl} className="bb-markdown__media-player" />
-      <span className="bb-markdown__media-caption">{props.children}</span>
+    <span className="bb-markdown__audio-card">
+      <span className="bb-markdown__audio-head">
+        <span className="bb-markdown__audio-icon" aria-hidden="true">
+          <MusicNotesSimple size={18} />
+        </span>
+        <span className="bb-markdown__audio-copy">
+          <span className="bb-markdown__audio-label">Voice note</span>
+          <span className="bb-markdown__audio-title">{props.title}</span>
+        </span>
+      </span>
+      <audio controls preload="metadata" src={objectUrl} className="bb-markdown__audio-player" />
     </span>
   );
 }
@@ -162,4 +176,25 @@ function normalizeAttachmentUrl(value?: string) {
   }
 
   return value;
+}
+
+function extractMarkdownMediaLabel(content: ReactNode, fallbackLabel: string) {
+  const flattenedText = flattenReactText(content).trim();
+  return flattenedText || fallbackLabel;
+}
+
+function flattenReactText(content: ReactNode): string {
+  if (typeof content === "string" || typeof content === "number") {
+    return String(content);
+  }
+
+  if (Array.isArray(content)) {
+    return content.map((child) => flattenReactText(child)).join("");
+  }
+
+  if (isValidElement<{ children?: ReactNode }>(content)) {
+    return flattenReactText(content.props.children);
+  }
+
+  return "";
 }

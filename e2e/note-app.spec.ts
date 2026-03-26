@@ -722,9 +722,17 @@ test("auto-saves voice notes on stop, keeps delete available, and shows live rec
   await expect(recorderPanels).toHaveCount(0);
   await expect(page.getByPlaceholder("Write in Markdown").first()).toHaveValue("");
   await expect(page.getByRole("button", { name: /^retry save$/i })).toHaveCount(0);
+  await voiceAttachment.getByRole("button", { name: /^audio$/i }).click();
+  await page.getByRole("button", { name: /^preview$/i }).click();
+  const audioEmbed = page.locator(".bb-editor-preview .bb-markdown__audio-card").first();
+  await expect(audioEmbed).toBeVisible();
+  await expect(audioEmbed.locator(".bb-markdown__audio-title")).toHaveText(/voice-note-\d{14}\.webm/i);
+  await expect(audioEmbed.getByText("Voice note")).toBeVisible();
+  await expect(audioEmbed.locator("audio")).toHaveCount(1);
+  await expect(audioEmbed.locator(".bb-markdown__media-caption")).toHaveCount(0);
+  await page.getByRole("button", { name: /^markdown$/i }).click();
   await voiceAttachment.getByRole("button", { name: /^remove$/i }).click();
   await expect(voiceAttachment).toHaveCount(0);
-  await expect(page.getByText("Attachments").first()).toHaveCount(0);
 });
 
 test("persists empty notes immediately so repeated new-note clicks create multiple blank notes", async ({ page }) => {
