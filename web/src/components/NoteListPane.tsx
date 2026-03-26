@@ -352,6 +352,7 @@ function renderNote(
   const selected = helpers.selectedNoteId === note.id;
   const dropPosition = helpers.canReorder && helpers.dropTarget?.targetId === note.id ? helpers.dropTarget.position : null;
   const draggingSource = helpers.draggedNoteId === note.id;
+  const dragTargetVisible = helpers.dragging && !draggingSource;
   const previewExcerpt = formatPreviewExcerpt(note.excerpt);
   const displayTitle = getDisplayNoteTitle(note.title);
   const noteCard = (
@@ -396,7 +397,7 @@ function renderNote(
       key={note.id}
       data-note-slot-id={note.id}
       data-testid={buildNoteTestId("slot", note.title)}
-      className={`bb-note-drop-slot min-w-0 space-y-0.5 ${dropPosition ? `is-drop-${dropPosition}` : ""}`}
+      className={`bb-note-drop-slot min-w-0 space-y-0.5 ${dragTargetVisible ? "is-drag-ready" : ""} ${dropPosition ? `is-drop-${dropPosition}` : ""}`}
       onDragEnter={helpers.canReorder ? (event) => helpers.onCardDragOver(event, note.id) : undefined}
       onDragOver={helpers.canReorder ? (event) => helpers.onCardDragOver(event, note.id) : undefined}
       onDrop={helpers.canReorder ? (event) => helpers.onCardDrop(event, note.id) : undefined}
@@ -405,7 +406,7 @@ function renderNote(
         <NoteDropZone
           testId={buildNoteTestId("before", note.title)}
           active={helpers.dropTarget?.targetId === note.id && helpers.dropTarget.position === "before"}
-          dragging={helpers.dragging && helpers.draggedNoteId !== note.id}
+          dragging={dragTargetVisible}
         />
       ) : null}
       <div className="min-w-0 rounded-[1.15rem]">
@@ -415,7 +416,7 @@ function renderNote(
         <NoteDropZone
           testId={buildNoteTestId("after", note.title)}
           active={helpers.dropTarget?.targetId === note.id && helpers.dropTarget.position === "after"}
-          dragging={helpers.dragging && helpers.draggedNoteId !== note.id}
+          dragging={dragTargetVisible}
         />
       ) : null}
     </div>

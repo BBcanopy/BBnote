@@ -1101,6 +1101,14 @@ button:disabled {
   position: relative;
   padding-block: 0.18rem;
   margin-block: -0.18rem;
+  transition:
+    padding-block 180ms var(--ease),
+    margin-block 180ms var(--ease);
+}
+
+.bb-note-drop-slot.is-drag-ready {
+  padding-block: 0.28rem;
+  margin-block: -0.1rem;
 }
 
 .bb-note-drop-slot::before,
@@ -1127,6 +1135,12 @@ button:disabled {
     opacity 180ms var(--ease),
     transform 180ms var(--ease);
   pointer-events: none;
+}
+
+.bb-note-drop-slot.is-drag-ready::before,
+.bb-note-drop-slot.is-drag-ready::after {
+  opacity: 0.28;
+  transform: scaleX(0.94);
 }
 
 .bb-note-drop-slot::before {
@@ -1814,7 +1828,7 @@ button:disabled {
 }
 
 .bb-dropzone--note.is-visible {
-  height: 0.7rem;
+  height: 0.9rem;
 }
 
 .bb-dropzone.is-visible.is-active {

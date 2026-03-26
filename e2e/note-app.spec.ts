@@ -496,7 +496,24 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
   await expect(page.locator('[data-testid^="note-drag-"] .bb-note-icon')).toHaveCount(0);
   const followUpNoteCard = page.locator('[data-testid^="note-drag-"]').filter({ hasText: followUpNoteTitle }).first();
   const targetNoteSlot = page.getByTestId(buildNoteTestId("slot", noteTitle));
+  const targetNoteDropBefore = page.getByTestId(buildNoteTestId("before", noteTitle));
+  const targetNoteDropAfter = page.getByTestId(buildNoteTestId("after", noteTitle));
   await expect(followUpNoteCard).toBeVisible();
+  const dragReadyPreview = await startDrag(page, followUpNoteCard);
+  await expect(targetNoteSlot).toHaveClass(/is-drag-ready/);
+  await expect
+    .poll(async () => Number.parseFloat(await targetNoteDropBefore.evaluate((element) => getComputedStyle(element).height)))
+    .toBeGreaterThan(10);
+  await expect
+    .poll(async () => Number.parseFloat(await targetNoteDropAfter.evaluate((element) => getComputedStyle(element).height)))
+    .toBeGreaterThan(10);
+  await expect
+    .poll(async () => Number.parseFloat(await targetNoteDropBefore.evaluate((element) => getComputedStyle(element).opacity)))
+    .toBeGreaterThan(0.95);
+  await expect
+    .poll(async () => Number.parseFloat(await targetNoteDropAfter.evaluate((element) => getComputedStyle(element).opacity)))
+    .toBeGreaterThan(0.95);
+  await endDrag(followUpNoteCard, dragReadyPreview);
   await dragNoteCardToNoteCard(followUpNoteCard, targetNoteSlot, "top");
   await expect
     .poll(async () => {

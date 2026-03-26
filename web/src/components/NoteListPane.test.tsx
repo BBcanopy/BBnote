@@ -55,6 +55,32 @@ describe("NoteListPane", () => {
     expect(screen.getByTestId("notes-delete-target")).toHaveClass("bb-pane-card__header-center-action--lane");
   });
 
+  it("shows drag-ready landing slots on other notes while dragging", () => {
+    const dataTransfer = createDataTransfer();
+
+    renderNoteListPane({
+      notes: [
+        buildNote({
+          id: "note-1",
+          title: "Quarterly review",
+          sortOrder: 0
+        }),
+        buildNote({
+          id: "note-2",
+          title: "Roadmap follow-up",
+          sortOrder: 1
+        })
+      ]
+    });
+
+    fireEvent.dragStart(screen.getByTestId(buildNoteTestId("drag", "Quarterly review")), { dataTransfer });
+
+    expect(screen.getByTestId(buildNoteTestId("slot", "Quarterly review"))).not.toHaveClass("is-drag-ready");
+    expect(screen.getByTestId(buildNoteTestId("slot", "Roadmap follow-up"))).toHaveClass("is-drag-ready");
+    expect(screen.getByTestId(buildNoteTestId("before", "Roadmap follow-up"))).toHaveClass("is-visible");
+    expect(screen.getByTestId(buildNoteTestId("after", "Roadmap follow-up"))).toHaveClass("is-visible");
+  });
+
   it("reorders a note before another card when dropped near the top of the target", () => {
     const handleMoveNote = vi.fn<NoteListPaneProps["onMoveNote"]>();
     const dataTransfer = createDataTransfer();
