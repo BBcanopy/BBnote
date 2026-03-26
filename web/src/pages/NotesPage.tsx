@@ -1349,6 +1349,8 @@ function EditorPanel(props: {
   const mediaActionsDisabled = props.loading || props.uploadingAttachment || savingRecording || !props.canUseMediaActions;
   const formatActionsDisabled = !props.editorNote || props.editorPane !== "markdown";
   const hasAttachments = (props.editorNote?.attachments.length ?? 0) > 0;
+  const headerStatusText = props.statusText.startsWith("Updated at ") ? props.statusText : null;
+  const footerStatusText = headerStatusText ? null : props.statusText;
   const activeTableDimensions = tableHoverDimensions ?? tableDimensions;
 
   useEffect(() => {
@@ -2112,7 +2114,13 @@ function EditorPanel(props: {
         .join(" ")}
     >
       <div className="bb-editor-header">
-        <div className="bb-editor-header__spacer" aria-hidden="true" />
+        <div className="bb-editor-header__meta">
+          {headerStatusText ? (
+            <span className="bb-editor-header__status" data-testid="editor-updated-at">
+              {headerStatusText}
+            </span>
+          ) : null}
+        </div>
         <div className="bb-editor-header__actions">
           {editorMode}
           {props.showFullscreenToggle ? (
@@ -2229,6 +2237,7 @@ function EditorPanel(props: {
 
             {hasAttachments ? (
               <AttachmentList
+                key={props.editorNote.noteId ?? "draft"}
                 attachments={props.editorNote.attachments}
                 disabled={!props.editorNote.noteId || props.uploadingAttachment}
                 onInsertLink={props.onInsertLink}
@@ -2244,7 +2253,7 @@ function EditorPanel(props: {
       )}
 
       <div className="bb-editor-footer">
-        <span>{props.statusText}</span>
+        {footerStatusText ? <span>{footerStatusText}</span> : null}
       </div>
     </section>
   );

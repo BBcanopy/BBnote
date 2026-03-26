@@ -1,5 +1,6 @@
-import { DownloadSimple, FileText, ImageSquare, Link, MusicNotesSimple, VideoCamera } from "@phosphor-icons/react";
+import { CaretDown, CaretRight, DownloadSimple, FileText, ImageSquare, Link, MusicNotesSimple, VideoCamera } from "@phosphor-icons/react";
 import type { ReactNode } from "react";
+import { useState } from "react";
 import type { AttachmentRef } from "../api/types";
 import { buttonDanger, buttonSecondary } from "./buttonStyles";
 
@@ -13,81 +14,102 @@ export function AttachmentList(props: {
   onDelete(attachmentId: string): void;
   onDownload(attachment: AttachmentRef): void;
 }) {
+  const [collapsed, setCollapsed] = useState(false);
+
   return (
-    <section className="bb-pane-card">
-      <div className="space-y-3">
-        {props.attachments.length === 0 ? (
-          <div className="bb-empty-state text-sm">
-            Uploaded files will appear here.
-          </div>
-        ) : (
-          props.attachments.map((attachment) => {
-            const kind = resolveAttachmentKind(attachment.mimeType);
-            return (
-              <div key={attachment.id} className="bb-attachment-card">
-                <div className="bb-attachment-meta">
-                  <div className="bb-note-icon">
-                    {kind === "image" ? <ImageSquare size={18} /> : null}
-                    {kind === "audio" ? <MusicNotesSimple size={18} /> : null}
-                    {kind === "video" ? <VideoCamera size={18} /> : null}
-                    {kind === "file" ? <FileText size={18} /> : null}
-                  </div>
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-medium text-[color:var(--ink)]">{attachment.name}</p>
-                    <p className="truncate text-xs text-[color:var(--ink-soft)]">{attachment.mimeType}</p>
-                  </div>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <InlineAction
-                    label="Link"
-                    icon={<Link size={16} />}
-                    disabled={props.disabled}
-                    onClick={() => props.onInsertLink(attachment)}
-                  />
-                  {kind === "image" ? (
-                    <InlineAction
-                      label="Image"
-                      icon={<ImageSquare size={16} />}
-                      disabled={props.disabled}
-                      onClick={() => props.onInsertImage(attachment)}
-                    />
-                  ) : null}
-                  {kind === "audio" ? (
-                    <InlineAction
-                      label="Audio"
-                      icon={<MusicNotesSimple size={16} />}
-                      disabled={props.disabled}
-                      onClick={() => props.onInsertAudio(attachment)}
-                    />
-                  ) : null}
-                  {kind === "video" ? (
-                    <InlineAction
-                      label="Video"
-                      icon={<VideoCamera size={16} />}
-                      disabled={props.disabled}
-                      onClick={() => props.onInsertVideo(attachment)}
-                    />
-                  ) : null}
-                  <InlineAction
-                    label="Download"
-                    icon={<DownloadSimple size={16} />}
-                    disabled={props.disabled}
-                    onClick={() => props.onDownload(attachment)}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => props.onDelete(attachment.id)}
-                    disabled={props.disabled}
-                    className={`${buttonDanger} min-h-0 h-8 px-3 text-xs`}
-                  >
-                    Remove
-                  </button>
-                </div>
+    <section className="bb-pane-card bb-attachment-list" data-testid="attachment-list">
+      <button
+        type="button"
+        className="bb-attachment-list__toggle"
+        aria-expanded={!collapsed}
+        onClick={() => setCollapsed((currentValue) => !currentValue)}
+      >
+        <span className="bb-attachment-list__summary">
+          <span className="bb-attachment-list__title">Attachments</span>
+          <span className="bb-attachment-list__count">{props.attachments.length}</span>
+        </span>
+        <span className="bb-attachment-list__toggle-icon" aria-hidden="true">
+          {collapsed ? <CaretRight size={16} /> : <CaretDown size={16} />}
+        </span>
+      </button>
+
+      {!collapsed ? (
+        <div className="bb-attachment-list__body">
+          <div className="space-y-3">
+            {props.attachments.length === 0 ? (
+              <div className="bb-empty-state text-sm">
+                Uploaded files will appear here.
               </div>
-            );
-          })
-        )}
-      </div>
+            ) : (
+              props.attachments.map((attachment) => {
+                const kind = resolveAttachmentKind(attachment.mimeType);
+                return (
+                  <div key={attachment.id} className="bb-attachment-card">
+                    <div className="bb-attachment-meta">
+                      <div className="bb-note-icon">
+                        {kind === "image" ? <ImageSquare size={18} /> : null}
+                        {kind === "audio" ? <MusicNotesSimple size={18} /> : null}
+                        {kind === "video" ? <VideoCamera size={18} /> : null}
+                        {kind === "file" ? <FileText size={18} /> : null}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium text-[color:var(--ink)]">{attachment.name}</p>
+                        <p className="truncate text-xs text-[color:var(--ink-soft)]">{attachment.mimeType}</p>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <InlineAction
+                        label="Link"
+                        icon={<Link size={16} />}
+                        disabled={props.disabled}
+                        onClick={() => props.onInsertLink(attachment)}
+                      />
+                      {kind === "image" ? (
+                        <InlineAction
+                          label="Image"
+                          icon={<ImageSquare size={16} />}
+                          disabled={props.disabled}
+                          onClick={() => props.onInsertImage(attachment)}
+                        />
+                      ) : null}
+                      {kind === "audio" ? (
+                        <InlineAction
+                          label="Audio"
+                          icon={<MusicNotesSimple size={16} />}
+                          disabled={props.disabled}
+                          onClick={() => props.onInsertAudio(attachment)}
+                        />
+                      ) : null}
+                      {kind === "video" ? (
+                        <InlineAction
+                          label="Video"
+                          icon={<VideoCamera size={16} />}
+                          disabled={props.disabled}
+                          onClick={() => props.onInsertVideo(attachment)}
+                        />
+                      ) : null}
+                      <InlineAction
+                        label="Download"
+                        icon={<DownloadSimple size={16} />}
+                        disabled={props.disabled}
+                        onClick={() => props.onDownload(attachment)}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => props.onDelete(attachment.id)}
+                        disabled={props.disabled}
+                        className={`${buttonDanger} min-h-0 h-8 px-3 text-xs`}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }

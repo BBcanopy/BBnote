@@ -2160,9 +2160,25 @@ button:disabled {
   flex-wrap: wrap;
 }
 
-.bb-editor-header__spacer {
+.bb-editor-header__meta {
+  display: flex;
+  align-items: center;
   flex: 1 1 auto;
   min-width: 0;
+}
+
+.bb-editor-header__meta:empty {
+  display: none;
+}
+
+.bb-editor-header__status {
+  color: var(--ink-soft);
+  font-family: "IBM Plex Mono", "SFMono-Regular", Consolas, monospace;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .bb-editor-header__actions {
@@ -2404,6 +2420,71 @@ button:disabled {
   justify-content: flex-end;
   gap: 0.65rem;
   flex-wrap: wrap;
+}
+
+.bb-attachment-list {
+  padding: 0;
+  overflow: hidden;
+}
+
+.bb-attachment-list__toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.95rem 1rem;
+  border: none;
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+}
+
+.bb-attachment-list__summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
+  min-width: 0;
+}
+
+.bb-attachment-list__title {
+  font-size: 0.92rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.bb-attachment-list__count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.6rem;
+  min-height: 1.6rem;
+  padding: 0 0.45rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent-soft) 76%, var(--surface-muted));
+  color: var(--accent-strong);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.bb-attachment-list__toggle-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink-soft);
+  transition:
+    transform 180ms var(--ease),
+    color 180ms var(--ease);
+}
+
+.bb-attachment-list__toggle:hover .bb-attachment-list__toggle-icon,
+.bb-attachment-list__toggle:focus-visible .bb-attachment-list__toggle-icon {
+  color: var(--accent-strong);
+}
+
+.bb-attachment-list__body {
+  padding: 0 0 0.1rem;
+  border-top: 1px solid color-mix(in srgb, var(--line) 80%, transparent);
 }
 
 .bb-attachment-card {
@@ -2831,6 +2912,7 @@ button:disabled {
     align-items: stretch;
   }
 
+  .bb-editor-header__meta,
   .bb-editor-header__actions,
   .bb-topbar__titlebar {
     width: 100%;

@@ -493,26 +493,15 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
   await expect(page.getByText(/^Saved /)).toHaveCount(0);
   await expect(page.locator(".bb-editor-body-header")).toHaveCount(0);
   await expect(page.locator(".bb-editor-header .bb-editor-mode").first()).toBeVisible();
-  await expect
-    .poll(async () => ((await page.locator(".bb-editor-footer").first().textContent()) ?? "").trim())
-    .toMatch(UPDATED_AT_STATUS_PATTERN);
+  await waitForUpdatedStatus(page);
 
   await page.getByRole("button", { name: /^new note$/i }).click();
   await expect(page).toHaveURL(/\/folders\/[^/]+\/notes\/[^/]+$/);
   await expect(page.getByRole("textbox", { name: "Title" }).first()).toHaveValue("");
-  const followUpFooter = page.locator(".bb-editor-footer").first();
-  await expect
-    .poll(async () => ((await followUpFooter.textContent()) ?? "").trim())
-    .toMatch(UPDATED_AT_STATUS_PATTERN);
-  const followUpInitialFooterText = ((await followUpFooter.textContent()) ?? "").trim();
+  const followUpInitialStatusText = await waitForUpdatedStatus(page);
   await page.getByRole("textbox", { name: "Title" }).first().fill(followUpNoteTitle);
   await page.getByPlaceholder("Write in Markdown").first().fill("Second note to test manual priority.");
-  await expect
-    .poll(async () => {
-      const footerText = ((await followUpFooter.textContent()) ?? "").trim();
-      return footerText !== followUpInitialFooterText ? footerText : "";
-    })
-    .toMatch(UPDATED_AT_STATUS_PATTERN);
+  await waitForUpdatedStatus(page, followUpInitialStatusText);
 
   await expect.poll(async () => page.locator('[data-testid^="note-drag-"]').count()).toBe(2);
   await expect(page.locator('[data-testid^="note-drag-"] .bb-note-icon')).toHaveCount(0);
@@ -552,26 +541,18 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
 
   await page.getByRole("button", { name: new RegExp(followUpNoteTitle, "i") }).click();
   const followUpBody = page.getByPlaceholder("Write in Markdown").first();
-  const followUpEditorFooter = page.locator(".bb-editor-footer").first();
   await expect(page.getByRole("textbox", { name: "Title" }).first()).toHaveValue(followUpNoteTitle);
   await expect(followUpBody).toHaveValue("Second note to test manual priority.");
-  const previousFollowUpFooterText = ((await followUpEditorFooter.textContent()) ?? "").trim();
+  const previousFollowUpStatusText = await waitForUpdatedStatus(page);
   await followUpBody.click();
   await followUpBody.press("Control+A");
   await followUpBody.press("Delete");
   await followUpBody.pressSequentially("Second note to test manual priority and autosave list refresh.");
   await expect(followUpBody).toHaveValue("Second note to test manual priority and autosave list refresh.");
-  await expect
-    .poll(async () => {
-      const footerText = ((await followUpEditorFooter.textContent()) ?? "").trim();
-      return footerText !== previousFollowUpFooterText ? footerText : "";
-    })
-    .toMatch(UPDATED_AT_STATUS_PATTERN);
+  await waitForUpdatedStatus(page, previousFollowUpStatusText);
   await expect(page.locator(".bb-skeleton-card")).toHaveCount(0);
   await expect(page.getByTestId(buildNoteTestId("drag", followUpNoteTitle))).toBeVisible();
-  await expect
-    .poll(async () => ((await page.locator(".bb-editor-footer").first().textContent()) ?? "").trim())
-    .toMatch(UPDATED_AT_STATUS_PATTERN);
+  await waitForUpdatedStatus(page);
 
   await page.getByPlaceholder("Search notes").fill("priority");
   await expect(page.locator('[data-testid^="note-before-"]')).toHaveCount(0);
@@ -632,8 +613,7 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
 
   const uploadFile = await createTempFile("budget.txt", "budget attachment");
   await page.locator('input[type="file"]').first().setInputFiles(uploadFile);
-  await expect(page.getByText("Attachments")).toHaveCount(0);
-  await expect(page.getByText("Linked files and embeds")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /attachments/i }).first()).toBeVisible();
   await expect(page.getByText("budget.txt").first()).toBeVisible();
 
   await page.getByRole("button", { name: /^link$/i }).click();
@@ -890,6 +870,8 @@ test("shows the note title in the topbar, keeps folder and note drag cursors dis
   const titleInput = topbar.getByRole("textbox", { name: "Title" });
   const expandEditorButton = editorHeader.getByRole("button", { name: /^expand editor$/i });
   const deleteButton = editorHeader.getByRole("button", { name: /delete note/i });
+  const updatedAtStatus = editorPanel.getByTestId("editor-updated-at");
+  const editorHeaderActions = editorHeader.locator(".bb-editor-header__actions");
   const textarea = editorPanel.getByPlaceholder("Write in Markdown");
 
   await expect(titleLabel).toHaveCount(0);
@@ -898,18 +880,23 @@ test("shows the note title in the topbar, keeps folder and note drag cursors dis
   await expect(expandEditorButton).toBeVisible();
   await expect(deleteButton).toBeVisible();
   await expect(page.getByTestId("editor-format-toolbar").first()).toBeVisible();
+  await expect(updatedAtStatus).toBeVisible();
 
   const topbarBox = await topbar.boundingBox();
   const editorStackBox = await editorStack.boundingBox();
   const titleInputBox = await titleInput.boundingBox();
   const textareaBox = await textarea.boundingBox();
   const deleteButtonBox = await deleteButton.boundingBox();
+  const updatedAtStatusBox = await updatedAtStatus.boundingBox();
+  const editorHeaderActionsBox = await editorHeaderActions.boundingBox();
   expect(topbarBox).not.toBeNull();
   expect(editorStackBox).not.toBeNull();
   expect(titleInputBox).not.toBeNull();
   expect(textareaBox).not.toBeNull();
   expect(deleteButtonBox).not.toBeNull();
-  if (!topbarBox || !editorStackBox || !titleInputBox || !textareaBox || !deleteButtonBox) {
+  expect(updatedAtStatusBox).not.toBeNull();
+  expect(editorHeaderActionsBox).not.toBeNull();
+  if (!topbarBox || !editorStackBox || !titleInputBox || !textareaBox || !deleteButtonBox || !updatedAtStatusBox || !editorHeaderActionsBox) {
     throw new Error("Expected the topbar title input and editor actions layout to be visible.");
   }
   expect(titleInputBox.y).toBeGreaterThanOrEqual(topbarBox.y - 1);
@@ -917,6 +904,7 @@ test("shows the note title in the topbar, keeps folder and note drag cursors dis
   expect(Math.abs(titleInputBox.x + titleInputBox.width / 2 - (topbarBox.x + topbarBox.width / 2))).toBeLessThan(24);
   expect(titleInputBox.width).toBeGreaterThan(topbarBox.width * 0.45);
   expect(textareaBox.height / editorStackBox.height).toBeGreaterThan(0.72);
+  expect(updatedAtStatusBox.x + updatedAtStatusBox.width).toBeLessThanOrEqual(editorHeaderActionsBox.x + 8);
 
   await expect
     .poll(async () => notebookRow(page, notebookName).evaluate((element) => getComputedStyle(element).cursor))
@@ -1090,7 +1078,7 @@ test("auto-saves voice notes on stop, inserts them into the editor, keeps delete
   await recorderPanel.getByRole("button", { name: /^stop$/i }).click();
   const voiceAttachment = page.locator(".bb-attachment-card").filter({ hasText: /voice-note-\d{14}\.webm/i }).first();
   const bodyTextarea = page.getByPlaceholder("Write in Markdown").first();
-  await expect(page.getByText("Attachments")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /attachments/i }).first()).toBeVisible();
   await expect(voiceAttachment).toBeVisible();
   await expect(recorderPanels).toHaveCount(0);
   await expect(bodyTextarea).toHaveValue(/\[voice-note-\d{14}\.webm\]\(.*\/attachments\/.*\)/i);
@@ -1124,11 +1112,22 @@ test("uploads multi-megabyte audio attachments without proxy 413 errors", async 
     buffer: audioPayload
   });
 
-  const attachmentCard = page.locator(".bb-attachment-card").filter({ hasText: audioFileName }).first();
-  const bodyTextarea = page.getByPlaceholder("Write in Markdown").first();
+  const editorPanel = page.getByTestId("editor-panel-desktop");
+  const attachmentCards = editorPanel.locator(".bb-attachment-card").filter({ hasText: audioFileName });
+  const attachmentCard = attachmentCards.first();
+  const bodyTextarea = editorPanel.getByPlaceholder("Write in Markdown");
+  const attachmentToggle = editorPanel.getByRole("button", { name: /attachments/i });
+  await expect(attachmentToggle).toBeVisible();
   await expect(attachmentCard).toBeVisible();
   await expect(bodyTextarea).toHaveValue(new RegExp(`\\[song-${suffix}\\.mp3\\]\\(.*\\/attachments\\/.*\\)`, "i"));
   await expect(page.locator(".bb-error-banner")).toHaveCount(0);
+  await expect(attachmentToggle).toHaveAttribute("aria-expanded", "true");
+  await attachmentToggle.click();
+  await expect(attachmentToggle).toHaveAttribute("aria-expanded", "false");
+  await expect(attachmentCards).toHaveCount(0);
+  await attachmentToggle.click();
+  await expect(attachmentToggle).toHaveAttribute("aria-expanded", "true");
+  await expect(attachmentCard).toBeVisible();
 
   await page.getByRole("button", { name: /^preview$/i }).click();
   const audioEmbed = page.locator(".bb-editor-preview .bb-markdown__audio-card").first();
@@ -1176,9 +1175,7 @@ test("syncs notebook and note selection into the URL and restores deep links on 
 
   await page.getByRole("textbox", { name: "Title" }).first().fill(noteTitle);
   await page.getByPlaceholder("Write in Markdown").first().fill("Route this note back in.");
-  await expect
-    .poll(async () => ((await page.locator(".bb-editor-footer").first().textContent()) ?? "").trim())
-    .toMatch(UPDATED_AT_STATUS_PATTERN);
+  await waitForUpdatedStatus(page);
   await expect(page.getByRole("button", { name: new RegExp(noteTitle, "i") }).first()).toBeVisible();
 
   await page.goto(folderUrl);
@@ -1277,19 +1274,10 @@ async function createNotebookAndPersistedNote(page: import("@playwright/test").P
   await page.getByRole("button", { name: /^new note$/i }).click();
   await expect(page).toHaveURL(/\/folders\/[^/]+\/notes\/[^/]+$/);
   await expect(page.getByRole("textbox", { name: "Title" }).first()).toHaveValue("");
-  const editorFooter = page.locator(".bb-editor-footer").first();
-  await expect
-    .poll(async () => ((await editorFooter.textContent()) ?? "").trim())
-    .toMatch(UPDATED_AT_STATUS_PATTERN);
-  const initialFooterText = ((await editorFooter.textContent()) ?? "").trim();
+  const initialUpdatedStatusText = await waitForUpdatedStatus(page);
   await page.getByRole("textbox", { name: "Title" }).first().fill(`Export ready note ${suffix}`);
   await page.getByPlaceholder("Write in Markdown").first().fill("This note should travel well.");
-  await expect
-    .poll(async () => {
-      const footerText = ((await editorFooter.textContent()) ?? "").trim();
-      return footerText !== initialFooterText ? footerText : "";
-    })
-    .toMatch(UPDATED_AT_STATUS_PATTERN);
+  await waitForUpdatedStatus(page, initialUpdatedStatusText);
   await expect(page.getByRole("button", { name: new RegExp(`Export ready note ${suffix}`, "i") })).toBeVisible();
 }
 
@@ -1404,20 +1392,36 @@ async function createNoteWithContent(page: import("@playwright/test").Page, titl
   await expect(newNoteButton).toBeEnabled();
   await newNoteButton.click();
   await expect(page.getByRole("textbox", { name: "Title" }).first()).toHaveValue("");
-  const editorFooter = page.locator(".bb-editor-footer").first();
-  await expect
-    .poll(async () => ((await editorFooter.textContent()) ?? "").trim())
-    .toMatch(UPDATED_AT_STATUS_PATTERN);
-  const initialFooterText = ((await editorFooter.textContent()) ?? "").trim();
+  const initialUpdatedStatusText = await waitForUpdatedStatus(page);
   await page.getByRole("textbox", { name: "Title" }).first().fill(title);
   await page.getByPlaceholder("Write in Markdown").first().fill(body);
+  await waitForUpdatedStatus(page, initialUpdatedStatusText);
+  await expect(page.getByTestId(buildNoteTestId("drag", title))).toBeVisible();
+}
+
+function editorUpdatedAtStatus(page: import("@playwright/test").Page) {
+  return page.getByTestId("editor-updated-at").first();
+}
+
+async function waitForUpdatedStatus(page: import("@playwright/test").Page, previousText?: string) {
+  let currentText = "";
+
   await expect
     .poll(async () => {
-      const footerText = ((await editorFooter.textContent()) ?? "").trim();
-      return footerText !== initialFooterText ? footerText : "";
+      currentText = ((await editorUpdatedAtStatus(page).textContent()) ?? "").trim();
+      if (!UPDATED_AT_STATUS_PATTERN.test(currentText)) {
+        return "";
+      }
+
+      if (previousText && currentText === previousText) {
+        return "";
+      }
+
+      return currentText;
     })
     .toMatch(UPDATED_AT_STATUS_PATTERN);
-  await expect(page.getByTestId(buildNoteTestId("drag", title))).toBeVisible();
+
+  return currentText;
 }
 
 async function expectNoteOrderInLane(page: import("@playwright/test").Page, titles: string[]) {
