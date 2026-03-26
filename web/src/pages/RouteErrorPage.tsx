@@ -69,7 +69,7 @@ export function RouteErrorPage() {
             <div className="bb-route-error__panel" aria-hidden="true">
               <div className="bb-route-error__note">
                 <div className="bb-route-error__note-head">
-                  <span className="bb-brand-mark__pill">bb</span>
+                  <span className="bb-brand-mark__pill">BB</span>
                   <span className="bb-route-error__note-chip">{notFound ? "missing page" : "route issue"}</span>
                 </div>
                 <p className="bb-route-error__status">{statusCode}</p>

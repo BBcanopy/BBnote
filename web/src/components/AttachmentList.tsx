@@ -18,7 +18,6 @@ export function AttachmentList(props: {
       <div className="bb-pane-card__header">
         <div className="bb-panel-header__copy">
           <p className="bb-eyebrow">Attachments</p>
-          <p className="bb-panel-title">Linked files and embeds</p>
         </div>
       </div>
       <div className="space-y-3">

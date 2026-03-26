@@ -9,7 +9,7 @@ export function BrandMark(props?: {
 
   return (
     <Link to={props?.to ?? "/"} className={className} aria-label={props?.ariaLabel ?? "BBNote home"}>
-      <span className="bb-brand-mark__pill">bb</span>
+      <span className="bb-brand-mark__pill">BB</span>
       <span className="bb-brand-mark__title">BBNote</span>
     </Link>
   );

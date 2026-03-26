@@ -3,7 +3,7 @@ import type { FolderNode } from "../api/types";
 import { FolderTree } from "./FolderTree";
 
 describe("FolderTree", () => {
-  it("moves a notebook into another notebook from the drag handle", () => {
+  it("moves a notebook into another notebook from the notebook row", () => {
     const handleMoveNotebook = vi.fn();
     const dataTransfer = createDataTransfer();
 
@@ -11,7 +11,7 @@ describe("FolderTree", () => {
       onMoveNotebook: handleMoveNotebook
     });
 
-    fireEvent.dragStart(screen.getByTestId(buildNotebookHandleTestId("Archive")), { dataTransfer });
+    fireEvent.dragStart(screen.getByRole("button", { name: /archive 0/i }), { dataTransfer });
     fireEvent.dragOver(screen.getByTestId(buildNotebookTestId("drag", "Projects")), { dataTransfer });
     fireEvent.drop(screen.getByTestId(buildNotebookTestId("drag", "Projects")), { dataTransfer });
 
@@ -22,7 +22,7 @@ describe("FolderTree", () => {
     });
   });
 
-  it("reorders a notebook before a sibling from the drag handle", () => {
+  it("reorders a notebook before a sibling from the notebook row", () => {
     const handleMoveNotebook = vi.fn();
     const dataTransfer = createDataTransfer();
 
@@ -30,7 +30,7 @@ describe("FolderTree", () => {
       onMoveNotebook: handleMoveNotebook
     });
 
-    fireEvent.dragStart(screen.getByTestId(buildNotebookHandleTestId("Archive")), { dataTransfer });
+    fireEvent.dragStart(screen.getByRole("button", { name: /archive 0/i }), { dataTransfer });
     fireEvent.dragOver(screen.getByTestId(buildNotebookTestId("before", "Roadmaps")), { dataTransfer });
     fireEvent.drop(screen.getByTestId(buildNotebookTestId("before", "Roadmaps")), { dataTransfer });
 
@@ -54,6 +54,23 @@ describe("FolderTree", () => {
       id: "projects",
       name: "Projects"
     }));
+  });
+
+  it("moves a dragged note into another notebook when the browser omits the drag payload", () => {
+    const handleMoveNote = vi.fn();
+
+    renderFolderTree({
+      draggedNote: {
+        id: "note-1",
+        title: "Quarterly review"
+      },
+      onMoveNote: handleMoveNote
+    });
+
+    fireEvent.dragOver(screen.getByTestId(buildNotebookTestId("drag", "Archive")));
+    fireEvent.drop(screen.getByTestId(buildNotebookTestId("drag", "Archive")));
+
+    expect(handleMoveNote).toHaveBeenCalledWith("note-1", "archive");
   });
 
   it("shows a temporary note delete target in the notebooks header and requests confirmation on drop", () => {
@@ -87,6 +104,18 @@ describe("FolderTree", () => {
       title: "Quarterly review"
     });
   });
+  it("hides notebook action buttons while the full-width delete target is shown", () => {
+    renderFolderTree({
+      draggedNote: {
+        id: "note-1",
+        title: "Quarterly review"
+      }
+    });
+
+    expect(screen.queryByTestId("notebooks-actions")).not.toBeInTheDocument();
+    expect(screen.getByTestId("notebooks-delete-target")).toHaveClass("bb-pane-card__header-center-action");
+    expect(screen.getByTestId("notebooks-delete-target")).toHaveClass("bb-pane-card__header-center-action--lane");
+  });
 });
 
 function renderFolderTree(overrides?: {
@@ -94,6 +123,7 @@ function renderFolderTree(overrides?: {
     id: string;
     title: string;
   } | null;
+  onMoveNote?: ReturnType<typeof vi.fn>;
   onMoveNotebook?: ReturnType<typeof vi.fn>;
   onRenameNotebook?: ReturnType<typeof vi.fn>;
   onRequestDeleteNote?: ReturnType<typeof vi.fn>;
@@ -105,7 +135,7 @@ function renderFolderTree(overrides?: {
       draggedNote={overrides?.draggedNote ?? null}
       onCreateNotebook={vi.fn()}
       onMoveNotebook={overrides?.onMoveNotebook ?? vi.fn()}
-      onMoveNote={vi.fn()}
+      onMoveNote={overrides?.onMoveNote ?? vi.fn()}
       onRenameNotebook={overrides?.onRenameNotebook ?? vi.fn()}
       onRequestDeleteNote={overrides?.onRequestDeleteNote ?? vi.fn()}
       onRequestDeleteNotebook={vi.fn()}
@@ -178,8 +208,4 @@ function createDataTransfer(): DataTransfer {
 
 function buildNotebookTestId(kind: "drag" | "before" | "after", name: string) {
   return `notebook-${kind}-${encodeURIComponent(name)}`;
-}
-
-function buildNotebookHandleTestId(name: string) {
-  return `notebook-handle-${encodeURIComponent(name)}`;
 }

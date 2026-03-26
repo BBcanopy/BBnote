@@ -65,7 +65,10 @@ describe("MarkdownPreview", () => {
       expect(container.querySelector("audio")).toHaveAttribute("src", "blob:audio/webm");
       expect(container.querySelector("video")).toHaveAttribute("src", "blob:video/webm");
     });
-    expect(screen.getByText("Voice clip")).toBeInTheDocument();
+    expect(container.querySelector(".bb-markdown__audio-card")).toBeInTheDocument();
+    expect(container.querySelector(".bb-markdown__audio-title")).toHaveTextContent("Voice clip");
+    expect(container.querySelector(".bb-markdown__audio-card .bb-markdown__media-caption")).not.toBeInTheDocument();
+    expect(screen.getByText("Voice note")).toBeInTheDocument();
     expect(screen.getByText("Demo clip")).toBeInTheDocument();
   });
 

@@ -5,7 +5,7 @@ export function AuthSplash(props: { onLogin(): void; busy: boolean }) {
         <article className="bb-auth-hero">
           <div className="bb-auth-hero__inner">
             <div className="bb-auth-hero__mark" aria-hidden="true">
-              <span className="bb-brand-mark__pill">bb</span>
+              <span className="bb-brand-mark__pill">BB</span>
             </div>
             <h1 className="bb-auth-hero__title">BBNote</h1>
             <div className="bb-auth-hero__actions">

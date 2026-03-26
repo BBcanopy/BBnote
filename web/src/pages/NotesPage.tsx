@@ -1,7 +1,10 @@
 import {
+  ArrowsInSimple,
+  ArrowsOutSimple,
   CaretLeft,
   CaretRight,
   CircleNotch,
+  Code,
   Eye,
   FileArrowUp,
   FolderSimple,
@@ -11,6 +14,12 @@ import {
   MusicNotesSimple,
   PencilSimple,
   Plus,
+  Quotes,
+  Table,
+  TextB,
+  TextItalic,
+  TextStrikethrough,
+  TextUnderline,
   Trash,
   VideoCamera
 } from "@phosphor-icons/react";
@@ -42,6 +51,7 @@ import { MarkdownPreview } from "../components/MarkdownPreview";
 import { NoteListPane } from "../components/NoteListPane";
 import { TextPromptDialog } from "../components/TextPromptDialog";
 import { buildFolderMutations, moveFolders, type FolderMoveInstruction } from "../utils/folderTree";
+import { formatMarkdownSelection, type MarkdownFormatKind } from "../utils/markdownFormat";
 import { buildNotesPath } from "../utils/noteRoute";
 import { buildNoteOrderIds, moveNotes, type NoteMoveInstruction } from "../utils/noteOrder";
 
@@ -69,6 +79,7 @@ const KEYBOARD_RESIZE_STEP = 24;
 const MEDIA_PLACEHOLDER_TITLE = "Untitled note";
 
 type MediaInsertBehavior = "image" | "link" | "none";
+type RecorderPhase = "closed" | "starting" | "recording" | "paused" | "processing" | "saving" | "recorded" | "error";
 
 type PaneResizeTarget = "folders" | "notes";
 
@@ -101,6 +112,7 @@ export function NotesPage() {
   const [editorNote, setEditorNote] = useState<EditorState | null>(null);
   const [search, setSearch] = useState("");
   const [editorPane, setEditorPane] = useState<EditorPane>("markdown");
+  const [editorFullscreen, setEditorFullscreen] = useState(false);
   const [folderPaneCollapsed, setFolderPaneCollapsed] = useState(false);
   const [notePaneCollapsed, setNotePaneCollapsed] = useState(false);
   const [folderPaneWidth, setFolderPaneWidth] = useState(DEFAULT_FOLDER_PANE_WIDTH);
@@ -996,8 +1008,15 @@ export function NotesPage() {
         </button>
       </section>
 
-      <div className="hidden min-h-[calc(100dvh-7rem)] items-stretch lg:flex">
-        {explorerCollapsed ? (
+      <div
+        className={[
+          "hidden min-h-0 flex-1 items-stretch overflow-hidden lg:flex",
+          editorFullscreen ? "bb-workspace-shell--editor-fullscreen" : ""
+        ]
+          .filter(Boolean)
+          .join(" ")}
+      >
+        {editorFullscreen ? null : explorerCollapsed ? (
           <CollapsedPaneRail
             label="Notebooks and notes"
             ariaLabel="Open notebooks and notes panes"
@@ -1015,8 +1034,8 @@ export function NotesPage() {
                 onOpen={() => setFolderPaneCollapsed(false)}
               />
             ) : (
-                <div className="flex shrink-0 items-stretch">
-                  <div data-testid="notebook-pane" className="bb-workspace-lane bb-workspace-lane--folders shrink-0" style={{ width: folderPaneWidth }}>
+              <div className="flex shrink-0 items-stretch">
+                <div data-testid="notebook-pane" className="bb-workspace-lane bb-workspace-lane--folders shrink-0" style={{ width: folderPaneWidth }}>
                   <FolderTree
                     folders={folders}
                     selectedFolderId={selectedFolderId}
@@ -1055,8 +1074,8 @@ export function NotesPage() {
                 onOpen={() => setNotePaneCollapsed(false)}
               />
             ) : (
-                <div className="flex shrink-0 items-stretch">
-                  <div data-testid="notes-pane" className="bb-workspace-lane bb-workspace-lane--notes shrink-0" style={{ width: notePaneWidth }}>
+              <div className="flex shrink-0 items-stretch">
+                <div data-testid="notes-pane" className="bb-workspace-lane bb-workspace-lane--notes shrink-0" style={{ width: notePaneWidth }}>
                   <NoteListPane
                     notes={notes}
                     search={search}
@@ -1093,13 +1112,17 @@ export function NotesPage() {
         )}
 
         <EditorPanel
+          panelTestId="editor-panel-desktop"
           editorNote={editorNote}
           editorPane={editorPane}
+          showFullscreenToggle
+          isFullscreen={editorFullscreen}
           canUseMediaActions={canUseMediaActions}
           mediaActionDisabledReason="Select a notebook to add media."
           onEditorPaneChange={setEditorPane}
           onTitleChange={(title) => setEditorNote((current) => (current ? { ...current, title } : current))}
           onBodyChange={(bodyMarkdown) => setEditorNote((current) => (current ? { ...current, bodyMarkdown } : current))}
+          onToggleFullscreen={() => setEditorFullscreen((current) => !current)}
           onDeleteRequest={handleRequestDeleteCurrentNote}
           onUploadSelectedFile={(file, insertBehavior) => handleUploadSelectedFile(file, insertBehavior)}
           onInsertLink={(attachment) => appendToBody(`[${attachment.name}](${attachment.url})`)}
@@ -1118,13 +1141,16 @@ export function NotesPage() {
 
       <div className="lg:hidden">
         <EditorPanel
+          panelTestId="editor-panel-mobile"
           editorNote={editorNote}
           editorPane={editorPane}
+          isFullscreen={false}
           canUseMediaActions={canUseMediaActions}
           mediaActionDisabledReason="Select a notebook to add media."
           onEditorPaneChange={setEditorPane}
           onTitleChange={(title) => setEditorNote((current) => (current ? { ...current, title } : current))}
           onBodyChange={(bodyMarkdown) => setEditorNote((current) => (current ? { ...current, bodyMarkdown } : current))}
+          onToggleFullscreen={() => undefined}
           onDeleteRequest={handleRequestDeleteCurrentNote}
           onUploadSelectedFile={(file, insertBehavior) => handleUploadSelectedFile(file, insertBehavior)}
           onInsertLink={(attachment) => appendToBody(`[${attachment.name}](${attachment.url})`)}
@@ -1225,13 +1251,17 @@ export function NotesPage() {
 }
 
 function EditorPanel(props: {
+  panelTestId?: string;
   editorNote: EditorState | null;
   editorPane: EditorPane;
+  showFullscreenToggle?: boolean;
+  isFullscreen: boolean;
   canUseMediaActions: boolean;
   mediaActionDisabledReason: string;
   onEditorPaneChange(value: EditorPane): void;
   onTitleChange(title: string): void;
   onBodyChange(bodyMarkdown: string): void;
+  onToggleFullscreen(): void;
   onDeleteRequest(): void;
   onUploadSelectedFile(file: File | null, insertBehavior: MediaInsertBehavior): Promise<boolean>;
   onInsertLink(attachment: AttachmentRef): void;
@@ -1250,12 +1280,16 @@ function EditorPanel(props: {
   const audioInputRef = useRef<HTMLInputElement | null>(null);
   const videoInputRef = useRef<HTMLInputElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const bodyTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const formatSelectionFrameRef = useRef<number | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const recordedChunksRef = useRef<Blob[]>([]);
   const discardRecordingRef = useRef(false);
+  const recordingStartedAtRef = useRef<number | null>(null);
+  const recordingElapsedOffsetRef = useRef(0);
   const [recorderState, setRecorderState] = useState<{
-    phase: "closed" | "starting" | "recording" | "processing" | "recorded" | "error";
+    phase: RecorderPhase;
     blob: Blob | null;
     error: string | null;
     previewUrl: string | null;
@@ -1265,18 +1299,49 @@ function EditorPanel(props: {
     error: null,
     previewUrl: null
   });
+  const [recordingElapsedMs, setRecordingElapsedMs] = useState(0);
   const [savingRecording, setSavingRecording] = useState(false);
   const mediaActionsDisabled = props.loading || props.uploadingAttachment || savingRecording || !props.canUseMediaActions;
+  const formatActionsDisabled = !props.editorNote || props.editorPane !== "markdown";
+  const hasAttachments = (props.editorNote?.attachments.length ?? 0) > 0;
 
   useEffect(() => {
     return () => {
+      if (formatSelectionFrameRef.current !== null) {
+        window.cancelAnimationFrame(formatSelectionFrameRef.current);
+      }
       discardRecordingRef.current = true;
       stopRecorder();
       clearRecorderClip();
     };
   }, []);
 
+  useEffect(() => {
+    if (recorderState.phase !== "recording") {
+      return;
+    }
+
+    const syncElapsed = () => {
+      setRecordingElapsedMs(getRecorderElapsedMs(recordingStartedAtRef.current, recordingElapsedOffsetRef.current));
+    };
+
+    syncElapsed();
+    const intervalId = window.setInterval(syncElapsed, 250);
+    return () => window.clearInterval(intervalId);
+  }, [recorderState.phase]);
+
+  function resetRecorderProgress() {
+    recordingStartedAtRef.current = null;
+    recordingElapsedOffsetRef.current = 0;
+    setRecordingElapsedMs(0);
+  }
+
+  function captureRecorderElapsedMs() {
+    return getRecorderElapsedMs(recordingStartedAtRef.current, recordingElapsedOffsetRef.current);
+  }
+
   function clearRecorderClip() {
+    resetRecorderProgress();
     setRecorderState((current) => {
       if (current.previewUrl) {
         URL.revokeObjectURL(current.previewUrl);
@@ -1327,6 +1392,7 @@ function EditorPanel(props: {
     }
 
     if (!navigator.mediaDevices?.getUserMedia || typeof window.MediaRecorder === "undefined") {
+      resetRecorderProgress();
       setRecorderState({
         phase: "error",
         blob: null,
@@ -1375,22 +1441,13 @@ function EditorPanel(props: {
           return;
         }
 
-        const previewUrl = URL.createObjectURL(clip);
-        setRecorderState((current) => {
-          if (current.previewUrl) {
-            URL.revokeObjectURL(current.previewUrl);
-          }
-
-          return {
-            phase: "recorded",
-            blob: clip,
-            error: null,
-            previewUrl
-          };
-        });
+        void persistRecordingClip(clip);
       });
 
       recorder.start();
+      recordingStartedAtRef.current = Date.now();
+      recordingElapsedOffsetRef.current = 0;
+      setRecordingElapsedMs(0);
       setRecorderState({
         phase: "recording",
         blob: null,
@@ -1400,6 +1457,7 @@ function EditorPanel(props: {
     } catch (error) {
       stopRecorderStream();
       mediaRecorderRef.current = null;
+      resetRecorderProgress();
       setRecorderState({
         phase: "error",
         blob: null,
@@ -1411,10 +1469,14 @@ function EditorPanel(props: {
 
   function handleStopRecording() {
     const recorder = mediaRecorderRef.current;
-    if (!recorder || recorder.state !== "recording") {
+    if (!recorder || (recorder.state !== "recording" && recorder.state !== "paused")) {
       return;
     }
 
+    const elapsedMs = captureRecorderElapsedMs();
+    recordingStartedAtRef.current = null;
+    recordingElapsedOffsetRef.current = elapsedMs;
+    setRecordingElapsedMs(elapsedMs);
     setRecorderState((current) => ({
       ...current,
       phase: "processing"
@@ -1422,10 +1484,46 @@ function EditorPanel(props: {
     recorder.stop();
   }
 
+  function handlePauseRecording() {
+    const recorder = mediaRecorderRef.current;
+    if (!recorder || recorder.state !== "recording" || typeof recorder.pause !== "function") {
+      return;
+    }
+
+    const elapsedMs = captureRecorderElapsedMs();
+    recordingStartedAtRef.current = null;
+    recordingElapsedOffsetRef.current = elapsedMs;
+    setRecordingElapsedMs(elapsedMs);
+    recorder.pause();
+    setRecorderState((current) => ({
+      ...current,
+      phase: "paused"
+    }));
+  }
+
+  function handleResumeRecording() {
+    const recorder = mediaRecorderRef.current;
+    if (!recorder || recorder.state !== "paused" || typeof recorder.resume !== "function") {
+      return;
+    }
+
+    recordingStartedAtRef.current = Date.now();
+    setRecordingElapsedMs(recordingElapsedOffsetRef.current);
+    recorder.resume();
+    setRecorderState((current) => ({
+      ...current,
+      phase: "recording"
+    }));
+  }
+
   function handleDiscardRecording() {
     const recorder = mediaRecorderRef.current;
-    if (recorder && recorder.state === "recording") {
+    if (recorder && (recorder.state === "recording" || recorder.state === "paused")) {
       discardRecordingRef.current = true;
+      const elapsedMs = captureRecorderElapsedMs();
+      recordingStartedAtRef.current = null;
+      recordingElapsedOffsetRef.current = elapsedMs;
+      setRecordingElapsedMs(elapsedMs);
       setRecorderState((current) => ({
         ...current,
         phase: "processing"
@@ -1438,34 +1536,363 @@ function EditorPanel(props: {
     clearRecorderClip();
   }
 
-  async function handleSaveRecording() {
-    if (!recorderState.blob) {
-      return;
-    }
-
+  async function persistRecordingClip(clip: Blob) {
     setSavingRecording(true);
-    const fileName = `voice-note-${new Date().toISOString().replace(/[^\d]/g, "").slice(0, 14)}${extensionForMimeType(recorderState.blob.type)}`;
+    setRecorderState((current) => {
+      if (current.previewUrl) {
+        URL.revokeObjectURL(current.previewUrl);
+      }
+
+      return {
+        phase: "saving",
+        blob: clip,
+        error: null,
+        previewUrl: null
+      };
+    });
+
+    const fileName = `voice-note-${new Date().toISOString().replace(/[^\d]/g, "").slice(0, 14)}${extensionForMimeType(clip.type)}`;
 
     try {
       const uploaded = await props.onUploadSelectedFile(
-        new File([recorderState.blob], fileName, {
-          type: recorderState.blob.type || "audio/webm"
+        new File([clip], fileName, {
+          type: clip.type || "audio/webm"
         }),
         "link"
       );
 
       if (uploaded) {
-        handleDiscardRecording();
+        clearRecorderClip();
+        return true;
       }
+
+      const previewUrl = URL.createObjectURL(clip);
+      setRecorderState({
+        phase: "recorded",
+        blob: clip,
+        error: "Voice note could not be attached. Try again or discard it.",
+        previewUrl
+      });
+      return false;
+    } catch (error) {
+      const previewUrl = URL.createObjectURL(clip);
+      setRecorderState({
+        phase: "recorded",
+        blob: clip,
+        error: formatRecorderError(error),
+        previewUrl
+      });
+      return false;
     } finally {
       setSavingRecording(false);
     }
   }
 
+  async function handleSaveRecording() {
+    if (!recorderState.blob) {
+      return;
+    }
+
+    await persistRecordingClip(recorderState.blob);
+  }
+
+  function handleApplyMarkdownFormat(kind: MarkdownFormatKind) {
+    if (!props.editorNote || props.editorPane !== "markdown") {
+      return;
+    }
+
+    const textarea = bodyTextareaRef.current;
+    if (!textarea) {
+      return;
+    }
+
+    const { nextValue, nextSelectionStart, nextSelectionEnd } = formatMarkdownSelection(
+      props.editorNote.bodyMarkdown,
+      textarea.selectionStart,
+      textarea.selectionEnd,
+      kind
+    );
+
+    props.onBodyChange(nextValue);
+    if (formatSelectionFrameRef.current !== null) {
+      window.cancelAnimationFrame(formatSelectionFrameRef.current);
+    }
+
+    formatSelectionFrameRef.current = window.requestAnimationFrame(() => {
+      formatSelectionFrameRef.current = null;
+      const nextTextarea = bodyTextareaRef.current;
+      if (!nextTextarea || nextTextarea.value !== nextValue) {
+        return;
+      }
+
+      nextTextarea.focus();
+      nextTextarea.setSelectionRange(nextSelectionStart, nextSelectionEnd);
+    });
+  }
+
+  const recorderSummaryText = getRecorderSummaryText(recorderState.phase, recorderState.error);
+  const showRecorderProgress = recorderState.phase === "recording" || recorderState.phase === "paused";
+  const formattedRecorderElapsed = formatRecorderDuration(recordingElapsedMs);
+  const recorderProgressValueText =
+    recorderState.phase === "paused"
+      ? `Recording paused at ${formattedRecorderElapsed}`
+      : `Recording for ${formattedRecorderElapsed}`;
+  const formatToolbarDisabledTitle = !props.editorNote ? "Select a note to format text." : "Switch to Markdown to format text.";
+  const editorMode = (
+    <div className="bb-editor-mode">
+      <ModeButton
+        active={props.editorPane === "markdown"}
+        disabled={!props.editorNote}
+        label="Markdown"
+        icon={<PencilSimple size={17} />}
+        onClick={() => props.onEditorPaneChange("markdown")}
+      />
+      <ModeButton
+        active={props.editorPane === "preview"}
+        disabled={!props.editorNote}
+        label="Preview"
+        icon={<Eye size={17} />}
+        onClick={() => props.onEditorPaneChange("preview")}
+      />
+    </div>
+  );
+  const mediaToolbar = (
+    <div className="bb-editor-toolbar-group bb-editor-media-toolbar" data-testid="editor-media-toolbar">
+      <MediaToolbarButton
+        label="Add image"
+        icon={<ImageSquare size={17} />}
+        disabled={mediaActionsDisabled}
+        disabledTitle={props.mediaActionDisabledReason}
+        onClick={() => openFilePicker(imageInputRef)}
+      />
+      <MediaToolbarButton
+        label="Add audio"
+        icon={<MusicNotesSimple size={17} />}
+        disabled={mediaActionsDisabled}
+        disabledTitle={props.mediaActionDisabledReason}
+        onClick={() => openFilePicker(audioInputRef)}
+      />
+      <MediaToolbarButton
+        label="Add video"
+        icon={<VideoCamera size={17} />}
+        disabled={mediaActionsDisabled}
+        disabledTitle={props.mediaActionDisabledReason}
+        onClick={() => openFilePicker(videoInputRef)}
+      />
+      <MediaToolbarButton
+        label="Record voice"
+        icon={<Microphone size={17} />}
+        disabled={mediaActionsDisabled || recorderState.phase === "starting" || recorderState.phase === "processing"}
+        disabledTitle={props.mediaActionDisabledReason}
+        active={
+          recorderState.phase === "recording" ||
+          recorderState.phase === "paused" ||
+          recorderState.phase === "saving" ||
+          recorderState.phase === "recorded"
+        }
+        onClick={() => void handleStartRecording()}
+      />
+      <MediaToolbarButton
+        label="Upload file"
+        icon={<FileArrowUp size={17} />}
+        disabled={mediaActionsDisabled}
+        disabledTitle={props.mediaActionDisabledReason}
+        onClick={() => openFilePicker(fileInputRef)}
+      />
+    </div>
+  );
+  const formattingToolbar = props.editorNote ? (
+    <div className="bb-editor-toolbar-group bb-editor-format-toolbar" data-testid="editor-format-toolbar">
+      <MediaToolbarButton
+        label="Bold"
+        icon={<TextB size={17} />}
+        disabled={formatActionsDisabled}
+        disabledTitle={formatToolbarDisabledTitle}
+        preserveFocus
+        onClick={() => handleApplyMarkdownFormat("bold")}
+      />
+      <MediaToolbarButton
+        label="Italic"
+        icon={<TextItalic size={17} />}
+        disabled={formatActionsDisabled}
+        disabledTitle={formatToolbarDisabledTitle}
+        preserveFocus
+        onClick={() => handleApplyMarkdownFormat("italic")}
+      />
+      <MediaToolbarButton
+        label="Underline"
+        icon={<TextUnderline size={17} />}
+        disabled={formatActionsDisabled}
+        disabledTitle={formatToolbarDisabledTitle}
+        preserveFocus
+        onClick={() => handleApplyMarkdownFormat("underline")}
+      />
+      <MediaToolbarButton
+        label="Strikethrough"
+        icon={<TextStrikethrough size={17} />}
+        disabled={formatActionsDisabled}
+        disabledTitle={formatToolbarDisabledTitle}
+        preserveFocus
+        onClick={() => handleApplyMarkdownFormat("strikethrough")}
+      />
+      <MediaToolbarButton
+        label="Inline code"
+        icon={<Code size={17} />}
+        disabled={formatActionsDisabled}
+        disabledTitle={formatToolbarDisabledTitle}
+        preserveFocus
+        onClick={() => handleApplyMarkdownFormat("code")}
+      />
+      <MediaToolbarButton
+        label="Quote"
+        icon={<Quotes size={17} />}
+        disabled={formatActionsDisabled}
+        disabledTitle={formatToolbarDisabledTitle}
+        preserveFocus
+        onClick={() => handleApplyMarkdownFormat("quote")}
+      />
+      <MediaToolbarButton
+        label="Bulleted list"
+        icon={<ListBullets size={17} />}
+        disabled={formatActionsDisabled}
+        disabledTitle={formatToolbarDisabledTitle}
+        preserveFocus
+        onClick={() => handleApplyMarkdownFormat("bulleted-list")}
+      />
+      <MediaToolbarButton
+        label="Insert table"
+        icon={<Table size={17} />}
+        disabled={formatActionsDisabled}
+        disabledTitle={formatToolbarDisabledTitle}
+        preserveFocus
+        onClick={() => handleApplyMarkdownFormat("table")}
+      />
+    </div>
+  ) : null;
+  const recorderPanel =
+    recorderState.phase !== "closed" ? (
+      <div className="bb-panel-note">
+        <div className="bb-recorder-panel">
+          <div className="bb-recorder-panel__copy">
+            <p className="text-sm font-medium tracking-tight text-[color:var(--ink)]">
+              {getRecorderTitle(recorderState.phase)}
+            </p>
+            {recorderSummaryText ? (
+              <p className="text-sm text-[color:var(--ink-soft)]">
+                {recorderSummaryText}
+              </p>
+            ) : null}
+          </div>
+          {showRecorderProgress ? (
+            <div className="bb-recorder-progress">
+              <div className="bb-recorder-progress__meta">
+                <span className={`bb-recorder-progress__status${recorderState.phase === "paused" ? " is-paused" : ""}`}>
+                  {recorderState.phase === "paused" ? "Paused" : "Live recording"}
+                </span>
+                <span className="bb-recorder-progress__time" data-testid="recorder-progress-time">
+                  {formattedRecorderElapsed}
+                </span>
+              </div>
+              <div
+                role="progressbar"
+                aria-label="Recording progress"
+                aria-valuetext={recorderProgressValueText}
+                className={`bb-recorder-progress__track${recorderState.phase === "paused" ? " is-paused" : ""}`}
+              >
+                <span
+                  aria-hidden="true"
+                  className={`bb-recorder-progress__fill${recorderState.phase === "paused" ? " is-paused" : ""}`}
+                />
+              </div>
+            </div>
+          ) : null}
+          {recorderState.previewUrl ? (
+            <audio controls preload="metadata" src={recorderState.previewUrl} className="bb-recorder-panel__preview" />
+          ) : null}
+          <div className="bb-recorder-panel__actions">
+            {recorderState.phase === "recording" || recorderState.phase === "paused" ? (
+              <button type="button" onClick={handleStopRecording} className={buttonSecondary}>
+                Stop
+              </button>
+            ) : null}
+            {recorderState.phase === "recording" ? (
+              <button type="button" onClick={handlePauseRecording} className={buttonSecondary}>
+                Pause
+              </button>
+            ) : null}
+            {recorderState.phase === "paused" ? (
+              <button type="button" onClick={handleResumeRecording} className={buttonSecondary}>
+                Resume
+              </button>
+            ) : null}
+            {recorderState.phase === "recorded" ? (
+              <button
+                type="button"
+                onClick={() => void handleSaveRecording()}
+                disabled={savingRecording || props.uploadingAttachment}
+                className={buttonPrimary}
+              >
+                Retry save
+              </button>
+            ) : null}
+            {recorderState.phase === "error" ? (
+              <button type="button" onClick={() => void handleStartRecording()} className={buttonSecondary}>
+                Try again
+              </button>
+            ) : null}
+            {recorderState.phase === "recorded" ? (
+              <button type="button" onClick={handleDiscardRecording} className={buttonSecondary}>
+                Discard
+              </button>
+            ) : null}
+            {recorderState.phase === "error" ? (
+              <button type="button" onClick={handleDiscardRecording} className={buttonSecondary}>
+                Close
+              </button>
+            ) : null}
+          </div>
+        </div>
+      </div>
+    ) : null;
+
   return (
-    <section className="bb-editor-panel bb-editor-panel--workspace lg:flex-1">
+    <section
+      data-testid={props.panelTestId}
+      className={[
+        "bb-editor-panel bb-editor-panel--workspace lg:flex-1",
+        props.isFullscreen ? "bb-editor-panel--fullscreen" : ""
+      ]
+        .filter(Boolean)
+        .join(" ")}
+    >
       <div className="bb-editor-header">
-        <div className="flex flex-wrap items-center gap-2">
+        {props.editorNote ? (
+          <label className="bb-editor-titlebar">
+            <span className="bb-editor-titlebar__label">Title</span>
+            <input
+              value={props.editorNote.title}
+              onChange={(event) => props.onTitleChange(event.target.value)}
+              placeholder="Note title"
+              disabled={!props.editorNote}
+              className="bb-input bb-editor-titlebar__input text-lg font-medium tracking-tight"
+            />
+          </label>
+        ) : (
+          <div className="bb-editor-header__spacer" aria-hidden="true" />
+        )}
+        <div className="bb-editor-header__actions">
+          {editorMode}
+          {props.showFullscreenToggle ? (
+            <button
+              type="button"
+              onClick={props.onToggleFullscreen}
+              aria-label={props.isFullscreen ? "Exit fullscreen editor" : "Expand editor"}
+              title={props.isFullscreen ? "Exit fullscreen editor" : "Expand editor"}
+              className={`bb-icon-button bb-icon-button--toolbar bb-icon-button--accent${props.isFullscreen ? " bb-icon-button--is-active" : ""}`}
+            >
+              {props.isFullscreen ? <ArrowsInSimple size={17} /> : <ArrowsOutSimple size={17} />}
+            </button>
+          ) : null}
           <button
             type="button"
             onClick={props.onDeleteRequest}
@@ -1516,126 +1943,19 @@ function EditorPanel(props: {
       ) : null}
 
       {props.loading ? (
-        <div className="bb-empty-state bb-empty-state--center text-sm">
-          <span className="inline-flex items-center gap-2">
-            <CircleNotch size={18} className="animate-spin text-[color:var(--accent-strong)]" />
-            Loading note
-          </span>
+        <div className="bb-editor-panel__content bb-editor-panel__content--empty">
+          <div className="bb-empty-state bb-empty-state--center text-sm">
+            <span className="inline-flex items-center gap-2">
+              <CircleNotch size={18} className="animate-spin text-[color:var(--accent-strong)]" />
+              Loading note
+            </span>
+          </div>
         </div>
       ) : !props.editorNote ? (
-        <div className="bb-editor-panel__content">
-          <div className="bb-editor-body-header">
-            <div className="bb-editor-body-actions">
-              <span className="bb-field__label bb-field__label--mode">{props.editorPane === "markdown" ? "Notes" : "Preview"}</span>
-              <div className="bb-editor-media-toolbar" data-testid="editor-media-toolbar">
-                <MediaToolbarButton
-                  label="Add image"
-                  icon={<ImageSquare size={17} />}
-                  disabled={mediaActionsDisabled}
-                  disabledTitle={props.mediaActionDisabledReason}
-                  onClick={() => openFilePicker(imageInputRef)}
-                />
-                <MediaToolbarButton
-                  label="Add audio"
-                  icon={<MusicNotesSimple size={17} />}
-                  disabled={mediaActionsDisabled}
-                  disabledTitle={props.mediaActionDisabledReason}
-                  onClick={() => openFilePicker(audioInputRef)}
-                />
-                <MediaToolbarButton
-                  label="Add video"
-                  icon={<VideoCamera size={17} />}
-                  disabled={mediaActionsDisabled}
-                  disabledTitle={props.mediaActionDisabledReason}
-                  onClick={() => openFilePicker(videoInputRef)}
-                />
-                <MediaToolbarButton
-                  label="Record voice"
-                  icon={<Microphone size={17} />}
-                  disabled={mediaActionsDisabled || recorderState.phase === "starting" || recorderState.phase === "processing"}
-                  disabledTitle={props.mediaActionDisabledReason}
-                  active={recorderState.phase === "recording" || recorderState.phase === "recorded"}
-                  onClick={() => void handleStartRecording()}
-                />
-                <MediaToolbarButton
-                  label="Upload file"
-                  icon={<FileArrowUp size={17} />}
-                  disabled={mediaActionsDisabled}
-                  disabledTitle={props.mediaActionDisabledReason}
-                  onClick={() => openFilePicker(fileInputRef)}
-                />
-              </div>
-            </div>
-            <div className="bb-editor-mode">
-              <ModeButton
-                active={props.editorPane === "markdown"}
-                disabled={!props.editorNote}
-                label="Markdown"
-                icon={<PencilSimple size={17} />}
-                onClick={() => props.onEditorPaneChange("markdown")}
-              />
-              <ModeButton
-                active={props.editorPane === "preview"}
-                disabled={!props.editorNote}
-                label="Preview"
-                icon={<Eye size={17} />}
-                onClick={() => props.onEditorPaneChange("preview")}
-              />
-            </div>
-          </div>
+        <div className="bb-editor-panel__content bb-editor-panel__content--empty">
+          <div className="bb-editor-toolbar-row">{mediaToolbar}</div>
 
-          {recorderState.phase !== "closed" ? (
-            <div className="bb-panel-note">
-              <div className="bb-recorder-panel">
-                <div className="bb-recorder-panel__copy">
-                  <p className="text-sm font-medium tracking-tight text-[color:var(--ink)]">
-                    {recorderState.phase === "recording" ? "Recording voice note" : null}
-                    {recorderState.phase === "starting" ? "Preparing microphone" : null}
-                    {recorderState.phase === "processing" ? "Processing recording" : null}
-                    {recorderState.phase === "recorded" ? "Voice note ready" : null}
-                    {recorderState.phase === "error" ? "Voice recorder unavailable" : null}
-                  </p>
-                  <p className="text-sm text-[color:var(--ink-soft)]">
-                    {recorderState.phase === "recording" ? "Stop when you're ready to review or attach the clip." : null}
-                    {recorderState.phase === "starting" ? "Requesting microphone access." : null}
-                    {recorderState.phase === "processing" ? "Finishing the recorded clip." : null}
-                    {recorderState.phase === "recorded" ? "Preview the clip, then save it as an attachment." : null}
-                    {recorderState.phase === "error" ? recorderState.error : null}
-                  </p>
-                </div>
-                {recorderState.previewUrl ? (
-                  <audio controls preload="metadata" src={recorderState.previewUrl} className="bb-recorder-panel__preview" />
-                ) : null}
-                <div className="flex flex-wrap gap-2">
-                  {recorderState.phase === "recording" ? (
-                    <button type="button" onClick={handleStopRecording} className={buttonSecondary}>
-                      Stop
-                    </button>
-                  ) : null}
-                  {recorderState.phase === "recorded" ? (
-                    <button
-                      type="button"
-                      onClick={() => void handleSaveRecording()}
-                      disabled={savingRecording || props.uploadingAttachment}
-                      className={buttonPrimary}
-                    >
-                      Save
-                    </button>
-                  ) : null}
-                  {recorderState.phase === "error" ? (
-                    <button type="button" onClick={() => void handleStartRecording()} className={buttonSecondary}>
-                      Try again
-                    </button>
-                  ) : null}
-                  {recorderState.phase !== "starting" && recorderState.phase !== "processing" ? (
-                    <button type="button" onClick={handleDiscardRecording} className={buttonSecondary}>
-                      {recorderState.phase === "recorded" ? "Discard" : "Dismiss"}
-                    </button>
-                  ) : null}
-                </div>
-              </div>
-            </div>
-          ) : null}
+          {recorderPanel}
 
           <div className="bb-empty-state bb-empty-state--center px-6 py-8">
             <div className="space-y-2">
@@ -1647,155 +1967,46 @@ function EditorPanel(props: {
           </div>
         </div>
       ) : (
-        <div className="bb-editor-panel__content">
-          <label className="bb-field">
-            <span className="bb-field__label">Title</span>
-            <input
-              value={props.editorNote.title}
-              onChange={(event) => props.onTitleChange(event.target.value)}
-              placeholder="Note title"
-              disabled={!props.editorNote}
-              className="bb-input text-lg font-medium tracking-tight"
-            />
-          </label>
-
-          <div className="bb-editor-body-header">
-            <div className="bb-editor-body-actions">
-              <span className="bb-field__label bb-field__label--mode">{props.editorPane === "markdown" ? "Notes" : "Preview"}</span>
-              <div className="bb-editor-media-toolbar" data-testid="editor-media-toolbar">
-                <MediaToolbarButton
-                  label="Add image"
-                  icon={<ImageSquare size={17} />}
-                  disabled={mediaActionsDisabled}
-                  disabledTitle={props.mediaActionDisabledReason}
-                  onClick={() => openFilePicker(imageInputRef)}
-                />
-                <MediaToolbarButton
-                  label="Add audio"
-                  icon={<MusicNotesSimple size={17} />}
-                  disabled={mediaActionsDisabled}
-                  disabledTitle={props.mediaActionDisabledReason}
-                  onClick={() => openFilePicker(audioInputRef)}
-                />
-                <MediaToolbarButton
-                  label="Add video"
-                  icon={<VideoCamera size={17} />}
-                  disabled={mediaActionsDisabled}
-                  disabledTitle={props.mediaActionDisabledReason}
-                  onClick={() => openFilePicker(videoInputRef)}
-                />
-                <MediaToolbarButton
-                  label="Record voice"
-                  icon={<Microphone size={17} />}
-                  disabled={mediaActionsDisabled || recorderState.phase === "starting" || recorderState.phase === "processing"}
-                  disabledTitle={props.mediaActionDisabledReason}
-                  active={recorderState.phase === "recording" || recorderState.phase === "recorded"}
-                  onClick={() => void handleStartRecording()}
-                />
-                <MediaToolbarButton
-                  label="Upload file"
-                  icon={<FileArrowUp size={17} />}
-                  disabled={mediaActionsDisabled}
-                  disabledTitle={props.mediaActionDisabledReason}
-                  onClick={() => openFilePicker(fileInputRef)}
-                />
-              </div>
-            </div>
-            <div className="bb-editor-mode">
-              <ModeButton
-                active={props.editorPane === "markdown"}
-                label="Markdown"
-                icon={<PencilSimple size={17} />}
-                onClick={() => props.onEditorPaneChange("markdown")}
-              />
-              <ModeButton
-                active={props.editorPane === "preview"}
-                label="Preview"
-                icon={<Eye size={17} />}
-                onClick={() => props.onEditorPaneChange("preview")}
-              />
-            </div>
+        <div className="bb-editor-panel__content bb-editor-panel__content--editor">
+          <div className="bb-editor-toolbar-row">
+            {mediaToolbar}
+            {formattingToolbar ? <span className="bb-editor-toolbar-divider" aria-hidden="true" /> : null}
+            {formattingToolbar}
           </div>
 
-          {recorderState.phase !== "closed" ? (
-            <div className="bb-panel-note">
-              <div className="bb-recorder-panel">
-                <div className="bb-recorder-panel__copy">
-                  <p className="text-sm font-medium tracking-tight text-[color:var(--ink)]">
-                    {recorderState.phase === "recording" ? "Recording voice note" : null}
-                    {recorderState.phase === "starting" ? "Preparing microphone" : null}
-                    {recorderState.phase === "processing" ? "Processing recording" : null}
-                    {recorderState.phase === "recorded" ? "Voice note ready" : null}
-                    {recorderState.phase === "error" ? "Voice recorder unavailable" : null}
-                  </p>
-                  <p className="text-sm text-[color:var(--ink-soft)]">
-                    {recorderState.phase === "recording" ? "Stop when you're ready to review or attach the clip." : null}
-                    {recorderState.phase === "starting" ? "Requesting microphone access." : null}
-                    {recorderState.phase === "processing" ? "Finishing the recorded clip." : null}
-                    {recorderState.phase === "recorded" ? "Preview the clip, then save it as an attachment." : null}
-                    {recorderState.phase === "error" ? recorderState.error : null}
-                  </p>
-                </div>
-                {recorderState.previewUrl ? (
-                  <audio controls preload="metadata" src={recorderState.previewUrl} className="bb-recorder-panel__preview" />
-                ) : null}
-                <div className="flex flex-wrap gap-2">
-                  {recorderState.phase === "recording" ? (
-                    <button type="button" onClick={handleStopRecording} className={buttonSecondary}>
-                      Stop
-                    </button>
-                  ) : null}
-                  {recorderState.phase === "recorded" ? (
-                    <button
-                      type="button"
-                      onClick={() => void handleSaveRecording()}
-                      disabled={savingRecording || props.uploadingAttachment}
-                      className={buttonPrimary}
-                    >
-                      Save
-                    </button>
-                  ) : null}
-                  {recorderState.phase === "error" ? (
-                    <button type="button" onClick={() => void handleStartRecording()} className={buttonSecondary}>
-                      Try again
-                    </button>
-                  ) : null}
-                  {recorderState.phase !== "starting" && recorderState.phase !== "processing" ? (
-                    <button type="button" onClick={handleDiscardRecording} className={buttonSecondary}>
-                      {recorderState.phase === "recorded" ? "Discard" : "Dismiss"}
-                    </button>
-                  ) : null}
-                </div>
+          {recorderPanel}
+
+          <div className={`bb-editor-stack ${hasAttachments ? "" : "bb-editor-stack--fill"}`}>
+            {props.editorPane === "markdown" ? (
+              <label className={`bb-field ${hasAttachments ? "" : "bb-field--stretch"}`}>
+                <textarea
+                  ref={bodyTextareaRef}
+                  value={props.editorNote.bodyMarkdown}
+                  onChange={(event) => props.onBodyChange(event.target.value)}
+                  placeholder="Write in Markdown"
+                  disabled={!props.editorNote}
+                  className="bb-textarea bb-editor-surface bb-note-content text-sm leading-7"
+                />
+              </label>
+            ) : (
+              <div className={`bb-pane-card bb-editor-preview ${hasAttachments ? "" : "bb-editor-preview--grow"}`}>
+                <MarkdownPreview bodyMarkdown={props.editorNote.bodyMarkdown} attachments={props.editorNote.attachments} />
               </div>
-            </div>
-          ) : null}
+            )}
 
-          {props.editorPane === "markdown" ? (
-            <label className="bb-field">
-              <textarea
-                value={props.editorNote.bodyMarkdown}
-                onChange={(event) => props.onBodyChange(event.target.value)}
-                placeholder="Write in Markdown"
-                disabled={!props.editorNote}
-                className="bb-textarea bb-note-content min-h-[30rem] text-sm leading-7"
+            {hasAttachments ? (
+              <AttachmentList
+                attachments={props.editorNote.attachments}
+                disabled={!props.editorNote.noteId || props.uploadingAttachment}
+                onInsertLink={props.onInsertLink}
+                onInsertImage={props.onInsertImage}
+                onInsertAudio={props.onInsertAudio}
+                onInsertVideo={props.onInsertVideo}
+                onDelete={props.onDeleteAttachment}
+                onDownload={props.onDownloadAttachment}
               />
-            </label>
-          ) : (
-            <div className="bb-pane-card min-h-[30rem]">
-              <MarkdownPreview bodyMarkdown={props.editorNote.bodyMarkdown} attachments={props.editorNote.attachments} />
-            </div>
-          )}
-
-          <AttachmentList
-            attachments={props.editorNote.attachments}
-            disabled={!props.editorNote.noteId || props.uploadingAttachment}
-            onInsertLink={props.onInsertLink}
-            onInsertImage={props.onInsertImage}
-            onInsertAudio={props.onInsertAudio}
-            onInsertVideo={props.onInsertVideo}
-            onDelete={props.onDeleteAttachment}
-            onDownload={props.onDownloadAttachment}
-          />
+            ) : null}
+          </div>
         </div>
       )}
 
@@ -1913,16 +2124,27 @@ function MediaToolbarButton(props: {
   disabledTitle?: string;
   icon: ReactNode;
   label: string;
+  preserveFocus?: boolean;
   onClick(): void;
 }) {
   return (
     <button
       type="button"
+      onPointerDown={(event) => {
+        if (props.preserveFocus && !props.disabled) {
+          event.preventDefault();
+        }
+      }}
+      onMouseDown={(event) => {
+        if (props.preserveFocus && !props.disabled) {
+          event.preventDefault();
+        }
+      }}
       onClick={props.onClick}
       disabled={props.disabled}
       aria-label={props.label}
       title={props.disabled ? props.disabledTitle ?? props.label : props.label}
-      className={`bb-icon-button bb-icon-button--accent ${props.active ? "bb-icon-button--is-active" : ""}`}
+      className={`bb-icon-button bb-icon-button--toolbar bb-icon-button--accent ${props.active ? "bb-icon-button--is-active" : ""}`}
     >
       {props.icon}
     </button>
@@ -2005,6 +2227,81 @@ function extensionForMimeType(mimeType: string) {
   }
 
   return ".webm";
+}
+
+function getRecorderTitle(phase: RecorderPhase) {
+  if (phase === "recording") {
+    return "Recording voice note";
+  }
+
+  if (phase === "paused") {
+    return "Recording paused";
+  }
+
+  if (phase === "starting") {
+    return "Preparing microphone";
+  }
+
+  if (phase === "processing") {
+    return "Processing recording";
+  }
+
+  if (phase === "saving") {
+    return "Saving voice note";
+  }
+
+  if (phase === "recorded") {
+    return "Voice note ready";
+  }
+
+  if (phase === "error") {
+    return "Voice recorder unavailable";
+  }
+
+  return "";
+}
+
+function getRecorderSummaryText(phase: RecorderPhase, error: string | null) {
+  if (phase === "paused") {
+    return "Resume when you're ready to keep going.";
+  }
+
+  if (phase === "starting") {
+    return "Requesting microphone access.";
+  }
+
+  if (phase === "processing") {
+    return "Finishing the recorded clip.";
+  }
+
+  if (phase === "saving") {
+    return "Attaching the clip to this note.";
+  }
+
+  if (phase === "recorded") {
+    return error;
+  }
+
+  if (phase === "error") {
+    return error;
+  }
+
+  return null;
+}
+
+function getRecorderElapsedMs(recordingStartedAt: number | null, recordingElapsedOffsetMs: number) {
+  if (recordingStartedAt === null) {
+    return recordingElapsedOffsetMs;
+  }
+
+  return Math.max(0, recordingElapsedOffsetMs + (Date.now() - recordingStartedAt));
+}
+
+function formatRecorderDuration(elapsedMs: number) {
+  const totalSeconds = Math.max(0, Math.floor(elapsedMs / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
 
 function formatRecorderError(error: unknown) {

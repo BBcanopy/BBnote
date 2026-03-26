@@ -88,6 +88,28 @@ describe("attachmentController integration", () => {
     }
   });
 
+  it("accepts audio uploads above Fastify's default 1 MiB multipart limit when they are within the app limit", async () => {
+    const noteId = await createPersistedNote(app, token);
+    const payload = Buffer.alloc(2 * 1024 * 1024, 0x61);
+
+    const uploadResponse = await app.inject({
+      method: "POST",
+      url: `/api/v1/notes/${noteId}/attachments`,
+      headers: {
+        ...authHeaders(token),
+        "content-type": fixtureMultipartContentType
+      },
+      payload: createMultipartPayload("song.mp3", "audio/mpeg", payload)
+    });
+
+    expect(uploadResponse.statusCode).toBe(201);
+    expect(uploadResponse.json()).toEqual(expect.objectContaining({
+      name: "song.mp3",
+      mimeType: "audio/mpeg",
+      sizeBytes: payload.length
+    }));
+  });
+
   it("returns a friendly error for oversized uploads", async () => {
     await app.close();
 
