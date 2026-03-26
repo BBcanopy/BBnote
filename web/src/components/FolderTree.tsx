@@ -2,6 +2,7 @@ import { ArrowsInSimple, ArrowsOutSimple, CaretDown, CaretLeft, FolderSimplePlus
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent } from "react";
 import type { FolderIconId, FolderNode, NoteSummary } from "../api/types";
 import { FolderIconGlyph, folderIconOptions } from "./folderIcons";
+import { buildNotebookTestId } from "./folderTreeTestIds";
 import { getDragPayload, setDragPayload } from "../utils/dragPayload";
 import type { FolderMoveInstruction, FolderMovePosition } from "../utils/folderTree";
 
@@ -539,10 +540,6 @@ function NotebookDropZone(props: {
       style={{ marginLeft: `${14 + props.depth * 16}px` }}
     />
   );
-}
-
-function buildNotebookTestId(kind: "node" | "drag" | "before" | "after", name: string) {
-  return `notebook-${kind}-${encodeURIComponent(name)}`;
 }
 
 function formatFolderRowLabel(name: string, noteCount: number) {

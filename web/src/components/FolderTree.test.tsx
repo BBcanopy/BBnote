@@ -2,6 +2,7 @@ import type { ComponentProps } from "react";
 import { fireEvent, render, screen } from "@testing-library/react";
 import type { FolderNode } from "../api/types";
 import { FolderTree } from "./FolderTree";
+import { buildNotebookTestId } from "./folderTreeTestIds";
 
 type FolderTreeProps = ComponentProps<typeof FolderTree>;
 
@@ -211,6 +212,3 @@ function createDataTransfer(): DataTransfer {
   } as DataTransfer;
 }
 
-function buildNotebookTestId(kind: "node" | "drag" | "before" | "after", name: string) {
-  return `notebook-${kind}-${encodeURIComponent(name)}`;
-}

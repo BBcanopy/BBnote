@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { expect, test } from "@playwright/test";
 import JSZip from "jszip";
+import { buildNotebookTestId } from "../web/src/components/folderTreeTestIds";
 
 test("keeps desktop lanes viewport-height and only shows the pane grip on border hover", async ({ page }) => {
   await page.setViewportSize({ width: 1900, height: 1000 });
@@ -1222,10 +1223,6 @@ async function createNotebookAndPersistedNote(page: import("@playwright/test").P
     })
     .toMatch(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z/);
   await expect(page.getByRole("button", { name: new RegExp(`Export ready note ${suffix}`, "i") })).toBeVisible();
-}
-
-function buildNotebookTestId(kind: "node" | "drag" | "before" | "after", name: string) {
-  return `notebook-${kind}-${encodeURIComponent(name)}`;
 }
 
 function buildNoteTestId(kind: "drag" | "slot" | "before" | "after", title: string) {
