@@ -32,7 +32,7 @@ export function AppShell() {
   }
 
   return (
-    <main className="bb-page-shell">
+    <main className={`bb-page-shell ${useWorkspaceShell ? "bb-page-shell--workspace" : ""}`}>
       <div className={`bb-shell bb-shell--app ${useWorkspaceShell ? "bb-shell--workspace" : ""}`}>
         <PageNav
           user={auth.user}

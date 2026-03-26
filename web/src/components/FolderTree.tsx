@@ -482,7 +482,7 @@ export function FolderTree(props: {
         ) : null}
       </div>
 
-      <div className="space-y-1">
+      <div className="bb-tree-list space-y-1">
         <button
           type="button"
           onClick={() => props.onSelectFolder(null)}

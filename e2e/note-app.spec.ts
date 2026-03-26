@@ -83,11 +83,29 @@ test("keeps desktop lanes viewport-height and only shows the pane grip on border
     .toBeLessThan(4);
 
   await expect
+    .poll(async () => {
+      const paneBox = await notebookPane.boundingBox();
+      if (!paneBox || !viewport) {
+        return Number.POSITIVE_INFINITY;
+      }
+      return Math.abs(paneBox.y + paneBox.height - viewport.height);
+    })
+    .toBeLessThan(6);
+  await expect
     .poll(async () => (await notebookPane.boundingBox())?.height ?? 0)
-    .toBeGreaterThan((viewport?.height ?? 0) - 4);
+    .toBeGreaterThan((viewport?.height ?? 0) - 140);
+  await expect
+    .poll(async () => {
+      const paneBox = await notesPane.boundingBox();
+      if (!paneBox || !viewport) {
+        return Number.POSITIVE_INFINITY;
+      }
+      return Math.abs(paneBox.y + paneBox.height - viewport.height);
+    })
+    .toBeLessThan(6);
   await expect
     .poll(async () => (await notesPane.boundingBox())?.height ?? 0)
-    .toBeGreaterThan((viewport?.height ?? 0) - 4);
+    .toBeGreaterThan((viewport?.height ?? 0) - 140);
   await expect
     .poll(async () => {
       const notebookBox = await notebookPane.boundingBox();
@@ -143,6 +161,61 @@ test("keeps desktop lanes viewport-height and only shows the pane grip on border
   await expect
     .poll(async () => ((await notesPane.boundingBox())?.width ?? 0) - notesPaneWidthBefore)
     .toBeGreaterThan(48);
+});
+
+test("keeps the left workspace lanes screen-tall while the editor content scrolls", async ({ page }) => {
+  await page.setViewportSize({ width: 1900, height: 1000 });
+  const suffix = Date.now().toString();
+  const notebookName = `Viewport lanes ${suffix}`;
+  const noteTitle = `Overflow note ${suffix}`;
+
+  await login(page);
+  await createNotebookWithDialog(page, notebookName);
+  await notebookRow(page, notebookName).click();
+  await createNoteWithContent(page, noteTitle, "This note should make the editor stack scroll.");
+
+  for (let index = 0; index < 7; index += 1) {
+    const uploadFile = await createTempFile(`lane-overflow-${suffix}-${index}.txt`, `attachment ${index} for ${suffix}`);
+    await page.getByTestId("media-input-file").first().setInputFiles(uploadFile);
+    await expect(page.getByText(`lane-overflow-${suffix}-${index}.txt`).first()).toBeVisible();
+  }
+
+  const viewport = page.viewportSize();
+  const notebookPane = page.getByTestId("notebook-pane");
+  const notesPane = page.getByTestId("notes-pane");
+  const editorStack = page.locator(".bb-editor-stack").first();
+
+  await expect
+    .poll(async () =>
+      editorStack.evaluate((element) => element.scrollHeight - element.clientHeight)
+    )
+    .toBeGreaterThan(120);
+
+  await editorStack.evaluate((element) => {
+    element.scrollTop = element.scrollHeight;
+  });
+
+  await expect
+    .poll(async () => page.evaluate(() => window.scrollY))
+    .toBeLessThan(4);
+  await expect
+    .poll(async () => {
+      const paneBox = await notebookPane.boundingBox();
+      if (!paneBox || !viewport) {
+        return Number.POSITIVE_INFINITY;
+      }
+      return Math.abs(paneBox.y + paneBox.height - viewport.height);
+    })
+    .toBeLessThan(6);
+  await expect
+    .poll(async () => {
+      const paneBox = await notesPane.boundingBox();
+      if (!paneBox || !viewport) {
+        return Number.POSITIVE_INFINITY;
+      }
+      return Math.abs(paneBox.y + paneBox.height - viewport.height);
+    })
+    .toBeLessThan(6);
 });
 
 test("shows a branded 404 page instead of the router default error screen", async ({ page }) => {
