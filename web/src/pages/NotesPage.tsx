@@ -1090,7 +1090,7 @@ export function NotesPage() {
                     notebookName={selectedFolder?.name ?? null}
                     canCreateNote={canCreateDraft}
                     canReorder={canReorderNotes}
-                    enableCrossNotebookMove
+                    enableCrossNotebookMove={selectedFolderId !== null}
                     onMoveNote={(move) => void handleMoveNote(move)}
                   />
                 </div>

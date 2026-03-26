@@ -19,6 +19,19 @@ describe("NoteListPane", () => {
     expect(screen.getByTestId(buildNoteTestId("drag", "Quarterly review")).querySelector(".bb-note-icon")).toBeNull();
   });
 
+  it("disables note dragging when reorder and cross-notebook move are both unavailable", () => {
+    renderNoteListPane({
+      canReorder: false,
+      enableCrossNotebookMove: false
+    });
+
+    const noteCard = screen.getByTestId(buildNoteTestId("drag", "Quarterly review"));
+    expect(noteCard).not.toHaveAttribute("draggable", "true");
+    expect(noteCard).not.toHaveClass("bb-note-card--draggable");
+    expect(document.querySelector('[data-testid^="note-before-"]')).toBeNull();
+    expect(document.querySelector('[data-testid^="note-after-"]')).toBeNull();
+  });
+
   it("shows a temporary delete target during note drag and requests confirmation on drop", () => {
     const handleRequestDeleteNote = vi.fn<NoteListPaneProps["onRequestDeleteNote"]>();
     const dataTransfer = createDataTransfer();
@@ -615,6 +628,8 @@ function renderNoteListPane(overrides?: {
   onRequestDeleteNote?: ReturnType<typeof vi.fn<NoteListPaneProps["onRequestDeleteNote"]>>;
   notes?: NoteSummary[];
   onMoveNote?: ReturnType<typeof vi.fn<NoteListPaneProps["onMoveNote"]>>;
+  canReorder?: boolean;
+  enableCrossNotebookMove?: boolean;
 }) {
   render(
     <NoteListPane
@@ -630,8 +645,8 @@ function renderNoteListPane(overrides?: {
       loading={false}
       notebookName="Projects"
       canCreateNote
-      canReorder
-      enableCrossNotebookMove
+      canReorder={overrides?.canReorder ?? true}
+      enableCrossNotebookMove={overrides?.enableCrossNotebookMove ?? true}
       onMoveNote={overrides?.onMoveNote ?? vi.fn<NoteListPaneProps["onMoveNote"]>()}
     />
   );
