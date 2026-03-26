@@ -163,18 +163,20 @@ test("keeps desktop lanes viewport-height and only shows the pane grip on border
     .toBeGreaterThan(48);
 });
 
-test("keeps the left workspace lanes screen-tall while the editor content scrolls", async ({ page }) => {
+test("keeps the left workspace lanes screen-tall while the editor and preview content scroll", async ({ page }) => {
   await page.setViewportSize({ width: 1900, height: 1000 });
   const suffix = Date.now().toString();
   const notebookName = `Viewport lanes ${suffix}`;
   const noteTitle = `Overflow note ${suffix}`;
+  const previewBottomMarker = `Preview bottom marker ${suffix}`;
+  const longMarkdown = `${Array.from({ length: 18 }, (_, index) => `Paragraph ${index + 1} for ${suffix}.`).join("\n\n")}\n\n${previewBottomMarker}`;
 
   await login(page);
   await createNotebookWithDialog(page, notebookName);
   await notebookRow(page, notebookName).click();
-  await createNoteWithContent(page, noteTitle, "This note should make the editor stack scroll.");
+  await createNoteWithContent(page, noteTitle, longMarkdown);
 
-  for (let index = 0; index < 7; index += 1) {
+  for (let index = 0; index < 12; index += 1) {
     const uploadFile = await createTempFile(`lane-overflow-${suffix}-${index}.txt`, `attachment ${index} for ${suffix}`);
     await page.getByTestId("media-input-file").first().setInputFiles(uploadFile);
     await expect(page.getByText(`lane-overflow-${suffix}-${index}.txt`).first()).toBeVisible();
@@ -216,6 +218,18 @@ test("keeps the left workspace lanes screen-tall while the editor content scroll
       return Math.abs(paneBox.y + paneBox.height - viewport.height);
     })
     .toBeLessThan(6);
+
+  await page.getByRole("button", { name: /^preview$/i }).click();
+  const editorPreview = page.locator(".bb-editor-preview").first();
+  await expect
+    .poll(async () =>
+      editorPreview.evaluate((element) => element.scrollHeight - element.clientHeight)
+    )
+    .toBeGreaterThan(120);
+  await editorPreview.evaluate((element) => {
+    element.scrollTop = element.scrollHeight;
+  });
+  await expect(editorPreview.getByText(previewBottomMarker)).toBeVisible();
 });
 
 test("shows a branded 404 page instead of the router default error screen", async ({ page }) => {

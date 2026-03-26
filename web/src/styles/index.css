@@ -2083,6 +2083,8 @@ button:disabled {
 
 .bb-editor-preview {
   min-height: 30rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .bb-editor-preview--grow {
