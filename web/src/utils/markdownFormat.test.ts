@@ -49,4 +49,12 @@ describe("formatMarkdownSelection", () => {
       nextSelectionEnd: 28
     });
   });
+
+  it("builds a table using the requested rows and columns", () => {
+    expect(formatMarkdownSelection("", 0, 0, "table", { table: { columns: 3, rows: 2 } })).toEqual({
+      nextValue: "| Column 1 | Column 2 | Column 3 |\n| --- | --- | --- |\n|  |  |  |\n|  |  |  |",
+      nextSelectionStart: 2,
+      nextSelectionEnd: 32
+    });
+  });
 });

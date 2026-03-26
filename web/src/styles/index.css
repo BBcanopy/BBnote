@@ -2143,6 +2143,101 @@ button:disabled {
   justify-content: flex-start;
 }
 
+.bb-toolbar-popover-shell {
+  position: relative;
+  display: inline-flex;
+}
+
+.bb-table-picker {
+  position: absolute;
+  top: calc(100% + 0.55rem);
+  right: 0;
+  z-index: 18;
+  display: grid;
+  gap: 0.8rem;
+  width: min(18.5rem, calc(100vw - 2rem));
+  padding: 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: 1.2rem;
+  background: var(--surface-popover);
+  box-shadow:
+    inset 0 1px 0 var(--surface-highlight),
+    var(--shadow-soft);
+}
+
+.bb-table-picker__copy {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.bb-table-picker__description {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+.bb-table-picker__summary {
+  margin: 0;
+  color: var(--ink);
+  font-size: 0.86rem;
+  font-weight: 600;
+}
+
+.bb-table-picker__grid {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: 0.25rem;
+}
+
+.bb-table-picker__cell {
+  width: 1.25rem;
+  height: 1.25rem;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 0.4rem;
+  background: var(--surface-muted);
+  box-shadow: inset 0 1px 0 var(--surface-highlight);
+  transition:
+    transform 180ms var(--ease),
+    border-color 180ms var(--ease),
+    background-color 180ms var(--ease),
+    box-shadow 180ms var(--ease);
+}
+
+.bb-table-picker__cell:hover,
+.bb-table-picker__cell:focus-visible {
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--accent) 28%, var(--line));
+  outline: none;
+}
+
+.bb-table-picker__cell.is-active {
+  border-color: color-mix(in srgb, var(--accent) 30%, var(--line));
+  background: color-mix(in srgb, var(--accent-soft) 76%, var(--surface-strong));
+  box-shadow:
+    inset 0 1px 0 var(--surface-highlight-strong),
+    0 10px 20px -18px rgba(18, 34, 36, 0.26);
+}
+
+.bb-table-picker__fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.7rem;
+}
+
+.bb-table-picker__input {
+  min-height: 2.75rem;
+  padding: 0.65rem 0.8rem;
+}
+
+.bb-table-picker__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
 .bb-editor-body-header {
   display: flex;
   align-items: center;

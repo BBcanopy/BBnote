@@ -23,7 +23,7 @@ import {
   Trash,
   VideoCamera
 } from "@phosphor-icons/react";
-import { startTransition, useDeferredValue, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { startTransition, useDeferredValue, useEffect, useId, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   createFolder,
@@ -52,7 +52,16 @@ import { MarkdownPreview } from "../components/MarkdownPreview";
 import { NoteListPane } from "../components/NoteListPane";
 import { TextPromptDialog } from "../components/TextPromptDialog";
 import { buildFolderMutations, moveFolders, type FolderMoveInstruction } from "../utils/folderTree";
-import { formatMarkdownSelection, type MarkdownFormatKind } from "../utils/markdownFormat";
+import {
+  DEFAULT_MARKDOWN_TABLE_COLUMNS,
+  DEFAULT_MARKDOWN_TABLE_ROWS,
+  MAX_MARKDOWN_TABLE_DIMENSION,
+  MIN_MARKDOWN_TABLE_DIMENSION,
+  formatMarkdownSelection,
+  type MarkdownFormatKind,
+  type MarkdownFormatOptions,
+  type MarkdownTableDimensions
+} from "../utils/markdownFormat";
 import { buildNotesPath } from "../utils/noteRoute";
 import { buildNoteOrderIds, moveNotes, type NoteMoveInstruction } from "../utils/noteOrder";
 
@@ -93,6 +102,11 @@ interface PaneResizeState {
 interface PendingNoteDelete {
   id: string;
   title: string;
+}
+
+interface TextSelectionRange {
+  start: number;
+  end: number;
 }
 
 export function NotesPage() {
@@ -1303,6 +1317,10 @@ function EditorPanel(props: {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const bodyTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const formatSelectionFrameRef = useRef<number | null>(null);
+  const tablePickerId = useId();
+  const tablePickerRef = useRef<HTMLDivElement | null>(null);
+  const tableColumnsInputRef = useRef<HTMLInputElement | null>(null);
+  const tableSelectionRef = useRef<TextSelectionRange | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const recordedChunksRef = useRef<Blob[]>([]);
@@ -1322,9 +1340,16 @@ function EditorPanel(props: {
   });
   const [recordingElapsedMs, setRecordingElapsedMs] = useState(0);
   const [savingRecording, setSavingRecording] = useState(false);
+  const [tablePickerOpen, setTablePickerOpen] = useState(false);
+  const [tableDimensions, setTableDimensions] = useState<MarkdownTableDimensions>({
+    columns: DEFAULT_MARKDOWN_TABLE_COLUMNS,
+    rows: DEFAULT_MARKDOWN_TABLE_ROWS
+  });
+  const [tableHoverDimensions, setTableHoverDimensions] = useState<MarkdownTableDimensions | null>(null);
   const mediaActionsDisabled = props.loading || props.uploadingAttachment || savingRecording || !props.canUseMediaActions;
   const formatActionsDisabled = !props.editorNote || props.editorPane !== "markdown";
   const hasAttachments = (props.editorNote?.attachments.length ?? 0) > 0;
+  const activeTableDimensions = tableHoverDimensions ?? tableDimensions;
 
   useEffect(() => {
     return () => {
@@ -1350,6 +1375,47 @@ function EditorPanel(props: {
     const intervalId = window.setInterval(syncElapsed, 250);
     return () => window.clearInterval(intervalId);
   }, [recorderState.phase]);
+
+  useEffect(() => {
+    if (!tablePickerOpen) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      tableColumnsInputRef.current?.focus();
+      tableColumnsInputRef.current?.select();
+    }, 0);
+
+    function handlePointerDown(event: MouseEvent) {
+      if (!tablePickerRef.current?.contains(event.target as Node)) {
+        closeTablePicker();
+      }
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeTablePicker();
+      }
+    }
+
+    document.addEventListener("mousedown", handlePointerDown);
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      window.clearTimeout(timer);
+      document.removeEventListener("mousedown", handlePointerDown);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [tablePickerOpen]);
+
+  useEffect(() => {
+    if (props.editorPane === "markdown" && props.editorNote) {
+      return;
+    }
+
+    closeTablePicker();
+  }, [props.editorPane, props.editorNote?.noteId]);
 
   function resetRecorderProgress() {
     recordingStartedAtRef.current = null;
@@ -1617,7 +1683,62 @@ function EditorPanel(props: {
     await persistRecordingClip(recorderState.blob);
   }
 
-  function handleApplyMarkdownFormat(kind: MarkdownFormatKind) {
+  function closeTablePicker() {
+    setTableHoverDimensions(null);
+    setTablePickerOpen(false);
+  }
+
+  function handleTablePickerToggle() {
+    if (tablePickerOpen) {
+      closeTablePicker();
+      return;
+    }
+
+    const textarea = bodyTextareaRef.current;
+    if (!textarea) {
+      return;
+    }
+
+    tableSelectionRef.current = {
+      start: textarea.selectionStart,
+      end: textarea.selectionEnd
+    };
+    setTableHoverDimensions(null);
+    setTablePickerOpen(true);
+  }
+
+  function handleTableDimensionChange(key: keyof MarkdownTableDimensions, nextValue: string) {
+    const parsed = Number.parseInt(nextValue, 10);
+    setTableHoverDimensions(null);
+    setTableDimensions((current) => ({
+      ...current,
+      [key]: clampTablePickerDimension(Number.isNaN(parsed) ? current[key] : parsed)
+    }));
+  }
+
+  function handleInsertTable(dimensions: MarkdownTableDimensions) {
+    const normalized = {
+      columns: clampTablePickerDimension(dimensions.columns),
+      rows: clampTablePickerDimension(dimensions.rows)
+    };
+
+    setTableDimensions(normalized);
+    closeTablePicker();
+    handleApplyMarkdownFormat("table", {
+      format: {
+        table: normalized
+      },
+      selection: tableSelectionRef.current
+    });
+  }
+
+  function handleApplyMarkdownFormat(
+    kind: MarkdownFormatKind,
+    options?: {
+      format?: MarkdownFormatOptions;
+      selection?: TextSelectionRange | null;
+    }
+  ) {
     if (!props.editorNote || props.editorPane !== "markdown") {
       return;
     }
@@ -1627,11 +1748,16 @@ function EditorPanel(props: {
       return;
     }
 
+    const selection = options?.selection ?? {
+      start: textarea.selectionStart,
+      end: textarea.selectionEnd
+    };
     const { nextValue, nextSelectionStart, nextSelectionEnd } = formatMarkdownSelection(
       props.editorNote.bodyMarkdown,
-      textarea.selectionStart,
-      textarea.selectionEnd,
-      kind
+      selection.start,
+      selection.end,
+      kind,
+      options?.format
     );
 
     props.onBodyChange(nextValue);
@@ -1780,14 +1906,118 @@ function EditorPanel(props: {
         preserveFocus
         onClick={() => handleApplyMarkdownFormat("bulleted-list")}
       />
-      <MediaToolbarButton
-        label="Insert table"
-        icon={<Table size={17} />}
-        disabled={formatActionsDisabled}
-        disabledTitle={formatToolbarDisabledTitle}
-        preserveFocus
-        onClick={() => handleApplyMarkdownFormat("table")}
-      />
+      <div className="bb-toolbar-popover-shell" ref={tablePickerRef}>
+        <button
+          type="button"
+          aria-label="Insert table"
+          aria-controls={tablePickerOpen ? tablePickerId : undefined}
+          aria-expanded={tablePickerOpen}
+          aria-haspopup="dialog"
+          title={formatActionsDisabled ? formatToolbarDisabledTitle : "Insert table"}
+          disabled={formatActionsDisabled}
+          onPointerDown={(event) => {
+            if (!formatActionsDisabled) {
+              event.preventDefault();
+            }
+          }}
+          onMouseDown={(event) => {
+            if (!formatActionsDisabled) {
+              event.preventDefault();
+            }
+          }}
+          onClick={handleTablePickerToggle}
+          className={`bb-icon-button bb-icon-button--toolbar bb-icon-button--accent ${tablePickerOpen ? "bb-icon-button--is-active" : ""}`}
+        >
+          <Table size={17} />
+        </button>
+        {tablePickerOpen ? (
+          <div
+            id={tablePickerId}
+            role="dialog"
+            aria-label="Insert table"
+            data-testid="table-picker"
+            className="bb-table-picker"
+          >
+            <div className="bb-table-picker__copy">
+              <p className="bb-menu-section__label">Insert table</p>
+              <p className="bb-table-picker__description">Choose columns and rows. A header row is added automatically.</p>
+            </div>
+
+            <p className="bb-table-picker__summary" data-testid="table-picker-summary">
+              {formatTableDimensionsLabel(activeTableDimensions)}
+            </p>
+
+            <div
+              className="bb-table-picker__grid"
+              data-testid="table-picker-grid"
+              onMouseLeave={() => setTableHoverDimensions(null)}
+            >
+              {Array.from({ length: MAX_MARKDOWN_TABLE_DIMENSION }, (_, rowIndex) =>
+                Array.from({ length: MAX_MARKDOWN_TABLE_DIMENSION }, (_, columnIndex) => {
+                  const previewDimensions = {
+                    columns: columnIndex + 1,
+                    rows: rowIndex + 1
+                  };
+                  const isActive =
+                    columnIndex < activeTableDimensions.columns && rowIndex < activeTableDimensions.rows;
+
+                  return (
+                    <button
+                      key={`${previewDimensions.columns}-${previewDimensions.rows}`}
+                      type="button"
+                      aria-label={`Use ${formatTableDimensionsLabel(previewDimensions)}`}
+                      title={formatTableDimensionsLabel(previewDimensions)}
+                      onMouseEnter={() => setTableHoverDimensions(previewDimensions)}
+                      onFocus={() => setTableHoverDimensions(previewDimensions)}
+                      onClick={() => handleInsertTable(previewDimensions)}
+                      className={`bb-table-picker__cell ${isActive ? "is-active" : ""}`}
+                    />
+                  );
+                })
+              )}
+            </div>
+
+            <div className="bb-table-picker__fields">
+              <label className="bb-field">
+                <span className="bb-field__label">Columns</span>
+                <input
+                  ref={tableColumnsInputRef}
+                  type="number"
+                  min={MIN_MARKDOWN_TABLE_DIMENSION}
+                  max={MAX_MARKDOWN_TABLE_DIMENSION}
+                  value={tableDimensions.columns}
+                  onChange={(event) => handleTableDimensionChange("columns", event.target.value)}
+                  className="bb-input bb-table-picker__input"
+                />
+              </label>
+              <label className="bb-field">
+                <span className="bb-field__label">Rows</span>
+                <input
+                  type="number"
+                  min={MIN_MARKDOWN_TABLE_DIMENSION}
+                  max={MAX_MARKDOWN_TABLE_DIMENSION}
+                  value={tableDimensions.rows}
+                  onChange={(event) => handleTableDimensionChange("rows", event.target.value)}
+                  className="bb-input bb-table-picker__input"
+                />
+              </label>
+            </div>
+
+            <div className="bb-table-picker__actions">
+              <button type="button" onClick={closeTablePicker} className="bb-button bb-button--ghost">
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => handleInsertTable(tableDimensions)}
+                className="bb-button bb-button--primary"
+              >
+                Insert table
+              </button>
+            </div>
+          </div>
+        ) : null}
+      </div>
     </div>
   ) : null;
   const recorderPanel =
@@ -2359,4 +2589,12 @@ function getEditorStatus(props: {
 
 function clampValue(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
+}
+
+function clampTablePickerDimension(value: number) {
+  return clampValue(value, MIN_MARKDOWN_TABLE_DIMENSION, MAX_MARKDOWN_TABLE_DIMENSION);
+}
+
+function formatTableDimensionsLabel(dimensions: MarkdownTableDimensions) {
+  return `${dimensions.columns} column${dimensions.columns === 1 ? "" : "s"} x ${dimensions.rows} row${dimensions.rows === 1 ? "" : "s"}`;
 }

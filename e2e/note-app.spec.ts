@@ -922,7 +922,14 @@ test("shows the note title in the topbar, keeps folder and note drag cursors dis
 
   await textarea.fill("");
   await editorPanel.getByRole("button", { name: /^insert table$/i }).click();
-  await expect(textarea).toHaveValue("| Column 1 | Column 2 |\n| --- | --- |\n| Value 1 | Value 2 |");
+  const tablePicker = page.getByRole("dialog", { name: /^insert table$/i });
+  await expect(tablePicker).toBeVisible();
+  await expect(tablePicker.getByTestId("table-picker-grid")).toBeVisible();
+  await tablePicker.getByLabel(/^columns$/i).fill("3");
+  await tablePicker.getByLabel(/^rows$/i).fill("2");
+  await expect(tablePicker.getByTestId("table-picker-summary")).toHaveText("3 columns x 2 rows");
+  await tablePicker.getByRole("button", { name: /^insert table$/i }).click();
+  await expect(textarea).toHaveValue("| Column 1 | Column 2 | Column 3 |\n| --- | --- | --- |\n|  |  |  |\n|  |  |  |");
 
   const editorWidthBeforeFullscreen = (await editorPanel.boundingBox())?.width ?? 0;
   await expandEditorButton.click();
