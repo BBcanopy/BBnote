@@ -8,6 +8,20 @@ export type MarkdownFormatKind =
   | "bulleted-list"
   | "table";
 
+export const DEFAULT_MARKDOWN_TABLE_COLUMNS = 2;
+export const DEFAULT_MARKDOWN_TABLE_ROWS = 1;
+export const MIN_MARKDOWN_TABLE_DIMENSION = 1;
+export const MAX_MARKDOWN_TABLE_DIMENSION = 8;
+
+export interface MarkdownTableDimensions {
+  columns: number;
+  rows: number;
+}
+
+export interface MarkdownFormatOptions {
+  table?: Partial<MarkdownTableDimensions>;
+}
+
 interface MarkdownSelectionResult {
   nextValue: string;
   nextSelectionStart: number;
@@ -18,7 +32,8 @@ export function formatMarkdownSelection(
   value: string,
   selectionStart: number,
   selectionEnd: number,
-  kind: MarkdownFormatKind
+  kind: MarkdownFormatKind,
+  options?: MarkdownFormatOptions
 ): MarkdownSelectionResult {
   const safeStart = clampSelectionIndex(selectionStart, value.length);
   const safeEnd = clampSelectionIndex(selectionEnd, value.length);
@@ -32,7 +47,7 @@ export function formatMarkdownSelection(
   }
 
   if (kind === "table") {
-    return applyTableFormat(value, safeStart, safeEnd);
+    return applyTableFormat(value, safeStart, safeEnd, options?.table);
   }
 
   const wrappers = {
@@ -99,21 +114,37 @@ function applyLinePrefixFormat(
 function applyTableFormat(
   value: string,
   selectionStart: number,
-  selectionEnd: number
+  selectionEnd: number,
+  table?: Partial<MarkdownTableDimensions>
 ): MarkdownSelectionResult {
+  const columns = clampTableDimension(table?.columns ?? DEFAULT_MARKDOWN_TABLE_COLUMNS);
+  const rows = clampTableDimension(table?.rows ?? DEFAULT_MARKDOWN_TABLE_ROWS);
   const selectedText = value.slice(selectionStart, selectionEnd).trim();
-  const firstHeader = selectedText || "Column 1";
-  const secondHeader = "Column 2";
-  const firstLine = `| ${firstHeader} | ${secondHeader} |`;
-  const table = `${firstLine}\n| --- | --- |\n| Value 1 | Value 2 |`;
+  const firstHeaderCell = selectedText || "Column 1";
+  const headerRow = buildTableRow(
+    Array.from({ length: columns }, (_, index) => {
+      if (index === 0) {
+        return firstHeaderCell;
+      }
+
+      return `Column ${index + 1}`;
+    })
+  );
+  const separatorRow = buildTableRow(Array.from({ length: columns }, () => "---"));
+  const bodyRows = Array.from({ length: rows }, () => buildTableRow(Array.from({ length: columns }, () => "")));
+  const tableMarkdown = [headerRow, separatorRow, ...bodyRows].join("\n");
   const prefix = getBlockBoundaryPrefix(value.slice(0, selectionStart));
   const suffix = getBlockBoundarySuffix(value.slice(selectionEnd));
 
   return {
-    nextValue: `${value.slice(0, selectionStart)}${prefix}${table}${suffix}${value.slice(selectionEnd)}`,
+    nextValue: `${value.slice(0, selectionStart)}${prefix}${tableMarkdown}${suffix}${value.slice(selectionEnd)}`,
     nextSelectionStart: selectionStart + prefix.length + 2,
-    nextSelectionEnd: selectionStart + prefix.length + firstLine.length - 2
+    nextSelectionEnd: selectionStart + prefix.length + 2 + firstHeaderCell.length
   };
+}
+
+function buildTableRow(values: string[]) {
+  return `| ${values.join(" | ")} |`;
 }
 
 function getBlockBoundaryPrefix(valueBeforeSelection: string) {
@@ -150,4 +181,8 @@ function getBlockBoundarySuffix(valueAfterSelection: string) {
 
 function clampSelectionIndex(value: number, max: number) {
   return Math.max(0, Math.min(value, max));
+}
+
+function clampTableDimension(value: number) {
+  return Math.max(MIN_MARKDOWN_TABLE_DIMENSION, Math.min(value, MAX_MARKDOWN_TABLE_DIMENSION));
 }
