@@ -67,18 +67,23 @@ describe("NoteListPane", () => {
           id: "note-2",
           title: "Roadmap follow-up",
           sortOrder: 1
+        }),
+        buildNote({
+          id: "note-3",
+          title: "Budget wrap-up",
+          sortOrder: 2
         })
       ],
       onMoveNote: handleMoveNote
     });
 
-    const targetCard = screen.getByTestId(buildNoteTestId("drag", "Roadmap follow-up"));
+    const targetCard = screen.getByTestId(buildNoteTestId("drag", "Quarterly review"));
     mockElementRect(targetCard, {
       top: 100,
       height: 100
     });
 
-    fireEvent.dragStart(screen.getByTestId(buildNoteTestId("drag", "Quarterly review")), { dataTransfer });
+    fireEvent.dragStart(screen.getByTestId(buildNoteTestId("drag", "Budget wrap-up")), { dataTransfer });
     const dragOverEvent = createEvent.dragOver(targetCard, { dataTransfer });
     Object.defineProperty(dragOverEvent, "clientY", {
       configurable: true,
@@ -88,8 +93,8 @@ describe("NoteListPane", () => {
     fireEvent.drop(targetCard, { dataTransfer });
 
     expect(handleMoveNote).toHaveBeenCalledWith({
-      draggedId: "note-1",
-      targetId: "note-2",
+      draggedId: "note-3",
+      targetId: "note-1",
       position: "before"
     });
   });
@@ -109,18 +114,23 @@ describe("NoteListPane", () => {
           id: "note-2",
           title: "Roadmap follow-up",
           sortOrder: 1
+        }),
+        buildNote({
+          id: "note-3",
+          title: "Budget wrap-up",
+          sortOrder: 2
         })
       ],
       onMoveNote: handleMoveNote
     });
 
-    const targetCard = screen.getByTestId(buildNoteTestId("drag", "Quarterly review"));
+    const targetCard = screen.getByTestId(buildNoteTestId("drag", "Budget wrap-up"));
     mockElementRect(targetCard, {
       top: 100,
       height: 100
     });
 
-    fireEvent.dragStart(screen.getByTestId(buildNoteTestId("drag", "Roadmap follow-up")), { dataTransfer });
+    fireEvent.dragStart(screen.getByTestId(buildNoteTestId("drag", "Quarterly review")), { dataTransfer });
     const dragOverEvent = createEvent.dragOver(targetCard, { dataTransfer });
     Object.defineProperty(dragOverEvent, "clientY", {
       configurable: true,
@@ -130,13 +140,13 @@ describe("NoteListPane", () => {
     fireEvent.drop(targetCard, { dataTransfer });
 
     expect(handleMoveNote).toHaveBeenCalledWith({
-      draggedId: "note-2",
-      targetId: "note-1",
+      draggedId: "note-1",
+      targetId: "note-3",
       position: "after"
     });
   });
 
-  it("reorders a note when the drop lands on the note slot around another card", () => {
+  it("reorders an adjacent note when the drop lands on the note slot around another card", () => {
     const handleMoveNote = vi.fn();
     const dataTransfer = createDataTransfer();
 
@@ -170,11 +180,58 @@ describe("NoteListPane", () => {
       value: 188
     });
     fireEvent(targetSlot, dragOverEvent);
+    expect(targetSlot).toHaveClass("is-drop-before");
     fireEvent.drop(targetSlot, { dataTransfer });
 
     expect(handleMoveNote).toHaveBeenCalledWith({
       draggedId: "note-2",
       targetId: "note-1",
+      position: "before"
+    });
+  });
+
+  it("normalizes an adjacent card drop so it still changes the order", () => {
+    const handleMoveNote = vi.fn();
+    const dataTransfer = createDataTransfer();
+
+    renderNoteListPane({
+      notes: [
+        buildNote({
+          id: "note-1",
+          title: "Quarterly review",
+          sortOrder: 0
+        }),
+        buildNote({
+          id: "note-2",
+          title: "Roadmap follow-up",
+          sortOrder: 1
+        })
+      ],
+      onMoveNote: handleMoveNote
+    });
+
+    const targetCard = screen.getByTestId(buildNoteTestId("drag", "Roadmap follow-up"));
+    const targetSlot = screen.getByTestId(buildNoteTestId("slot", "Roadmap follow-up"));
+    mockElementRect(targetCard, {
+      top: 100,
+      height: 100
+    });
+
+    fireEvent.dragStart(screen.getByTestId(buildNoteTestId("drag", "Quarterly review")), { dataTransfer });
+    const dragOverEvent = createEvent.dragOver(targetCard, { dataTransfer });
+    Object.defineProperty(dragOverEvent, "clientY", {
+      configurable: true,
+      value: 108
+    });
+    fireEvent(targetCard, dragOverEvent);
+
+    expect(targetSlot).toHaveClass("is-drop-after");
+
+    fireEvent.drop(targetCard, { dataTransfer });
+
+    expect(handleMoveNote).toHaveBeenCalledWith({
+      draggedId: "note-1",
+      targetId: "note-2",
       position: "after"
     });
   });

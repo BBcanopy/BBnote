@@ -622,11 +622,22 @@ test("reorders notes by dropping onto note cards and persists the order", async 
   await createNoteWithContent(page, secondNoteTitle, "Second note body.");
   await expectNoteOrderInLane(page, [firstNoteTitle, secondNoteTitle]);
 
-  await dragNoteCardToNoteCard(
-    page.getByTestId(buildNoteTestId("drag", secondNoteTitle)),
-    page.getByTestId(buildNoteTestId("slot", firstNoteTitle)),
-    "top"
-  );
+  const downwardSource = page.getByTestId(buildNoteTestId("drag", firstNoteTitle));
+  const downwardTargetCard = page.getByTestId(buildNoteTestId("drag", secondNoteTitle));
+  const downwardTargetSlot = page.getByTestId(buildNoteTestId("slot", secondNoteTitle));
+  const downwardTargetBox = await downwardTargetCard.boundingBox();
+  if (!downwardTargetBox) {
+    throw new Error("Expected the lower note card to be visible.");
+  }
+
+  const downwardDrag = await startDrag(page, downwardSource);
+  await downwardTargetSlot.dispatchEvent("dragover", {
+    dataTransfer: downwardDrag,
+    clientY: downwardTargetBox.y + 10
+  });
+  await expect(downwardTargetSlot).toHaveClass(/is-drop-after/);
+  await expect(downwardTargetCard).toHaveClass(/bb-note-card--drop-after/);
+  await dropOnTarget(downwardSource, downwardTargetSlot, downwardDrag);
   await expectNoteOrderInLane(page, [secondNoteTitle, firstNoteTitle]);
 
   await page.reload();
@@ -634,9 +645,9 @@ test("reorders notes by dropping onto note cards and persists the order", async 
   await expectNoteOrderInLane(page, [secondNoteTitle, firstNoteTitle]);
 
   await dragNoteCardToNoteCard(
-    page.getByTestId(buildNoteTestId("drag", secondNoteTitle)),
-    page.getByTestId(buildNoteTestId("slot", firstNoteTitle)),
-    "bottom"
+    page.getByTestId(buildNoteTestId("drag", firstNoteTitle)),
+    page.getByTestId(buildNoteTestId("slot", secondNoteTitle)),
+    "top"
   );
   await expectNoteOrderInLane(page, [firstNoteTitle, secondNoteTitle]);
 

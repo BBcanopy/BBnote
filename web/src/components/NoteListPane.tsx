@@ -151,7 +151,7 @@ export function NoteListPane(props: {
     const fallbackPosition = resolveRelativeDropPosition(props.notes, targetId, draggedId);
     const rect = resolveNoteDropReferenceRect(event.currentTarget);
     if (rect.height <= 0) {
-      return fallbackPosition;
+      return normalizeNoteCardDropPosition(props.notes, draggedId, targetId, fallbackPosition);
     }
 
     const relativeY = event.clientY - rect.top;
@@ -159,14 +159,14 @@ export function NoteListPane(props: {
     const lowerThreshold = rect.height * 0.65;
 
     if (relativeY <= upperThreshold) {
-      return "before";
+      return normalizeNoteCardDropPosition(props.notes, draggedId, targetId, "before");
     }
 
     if (relativeY >= lowerThreshold) {
-      return "after";
+      return normalizeNoteCardDropPosition(props.notes, draggedId, targetId, "after");
     }
 
-    return fallbackPosition;
+    return normalizeNoteCardDropPosition(props.notes, draggedId, targetId, fallbackPosition);
   }
 
   return (
@@ -313,6 +313,8 @@ function renderNote(
   }
 ) {
   const selected = helpers.selectedNoteId === note.id;
+  const dropPosition = helpers.canReorder && helpers.dropTarget?.targetId === note.id ? helpers.dropTarget.position : null;
+  const draggingSource = helpers.draggedNoteId === note.id;
   const previewExcerpt = formatPreviewExcerpt(note.excerpt);
   const displayTitle = getDisplayNoteTitle(note.title);
   const noteCard = (
@@ -334,8 +336,8 @@ function renderNote(
         }
       }}
       className={`bb-note-card ${helpers.canDragNotes ? "bb-note-card--draggable" : ""} w-full text-left ${selected ? "is-active" : ""} ${
-        helpers.canReorder && helpers.dropTarget?.targetId === note.id ? "bb-tree-drop-target" : ""
-      }`}
+        dropPosition ? "bb-tree-drop-target" : ""
+      } ${dropPosition ? `bb-note-card--drop-${dropPosition}` : ""} ${draggingSource ? "bb-note-card--dragging" : ""}`}
     >
       <div className="bb-note-card__layout">
         <div className="bb-note-card__copy">
@@ -356,7 +358,7 @@ function renderNote(
     <div
       key={note.id}
       data-testid={buildNoteTestId("slot", note.title)}
-      className="bb-note-drop-slot min-w-0 space-y-0.5"
+      className={`bb-note-drop-slot min-w-0 space-y-0.5 ${dropPosition ? `is-drop-${dropPosition}` : ""}`}
       onDragEnter={helpers.canReorder ? (event) => helpers.onCardDragOver(event, note.id) : undefined}
       onDragOver={helpers.canReorder ? (event) => helpers.onCardDragOver(event, note.id) : undefined}
       onDrop={helpers.canReorder ? (event) => helpers.onCardDrop(event, note.id) : undefined}
@@ -443,6 +445,33 @@ function resolveRelativeDropPosition(notes: NoteSummary[], targetId: string, dra
   }
 
   return draggedIndex > targetIndex ? "before" : "after";
+}
+
+function normalizeNoteCardDropPosition(
+  notes: NoteSummary[],
+  draggedId: string | null,
+  targetId: string,
+  position: NoteMovePosition
+): NoteMovePosition {
+  if (!draggedId || wouldCardDropReorder(notes, draggedId, targetId, position)) {
+    return position;
+  }
+
+  return position === "before" ? "after" : "before";
+}
+
+function wouldCardDropReorder(notes: NoteSummary[], draggedId: string, targetId: string, position: NoteMovePosition) {
+  const draggedIndex = notes.findIndex((note) => note.id === draggedId);
+  const targetIndex = notes.findIndex((note) => note.id === targetId);
+  if (draggedIndex < 0 || targetIndex < 0 || draggedIndex === targetIndex) {
+    return false;
+  }
+
+  if (position === "before") {
+    return draggedIndex !== targetIndex - 1;
+  }
+
+  return draggedIndex !== targetIndex + 1;
 }
 
 const EMPTY_DOM_RECT = {
