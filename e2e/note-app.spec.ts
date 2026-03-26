@@ -142,17 +142,55 @@ test("keeps desktop lanes viewport-height and only shows the pane grip on border
     })
     .toBeGreaterThan((viewport?.width ?? 0) - 24);
   await expect
-    .poll(async () => Number.parseFloat(await notebookCard.evaluate((element) => getComputedStyle(element).borderTopRightRadius)))
-    .toBeLessThan(18);
-  await expect
-    .poll(async () => Number.parseFloat(await notesCard.evaluate((element) => getComputedStyle(element).borderTopLeftRadius)))
-    .toBeLessThan(18);
-  await expect
-    .poll(async () => Number.parseFloat(await notesCard.evaluate((element) => getComputedStyle(element).borderTopRightRadius)))
-    .toBeLessThan(18);
-  await expect
-    .poll(async () => Number.parseFloat(await editorPanel.evaluate((element) => getComputedStyle(element).borderTopLeftRadius)))
-    .toBeLessThan(18);
+    .poll(async () => ({
+      notebook: await notebookCard.evaluate((element) => {
+        const styles = getComputedStyle(element);
+        return {
+          topLeft: styles.borderTopLeftRadius,
+          topRight: styles.borderTopRightRadius,
+          bottomRight: styles.borderBottomRightRadius,
+          bottomLeft: styles.borderBottomLeftRadius
+        };
+      }),
+      notes: await notesCard.evaluate((element) => {
+        const styles = getComputedStyle(element);
+        return {
+          topLeft: styles.borderTopLeftRadius,
+          topRight: styles.borderTopRightRadius,
+          bottomRight: styles.borderBottomRightRadius,
+          bottomLeft: styles.borderBottomLeftRadius
+        };
+      }),
+      editor: await editorPanel.evaluate((element) => {
+        const styles = getComputedStyle(element);
+        return {
+          topLeft: styles.borderTopLeftRadius,
+          topRight: styles.borderTopRightRadius,
+          bottomRight: styles.borderBottomRightRadius,
+          bottomLeft: styles.borderBottomLeftRadius
+        };
+      })
+    }))
+    .toEqual({
+      notebook: {
+        topLeft: "0px",
+        topRight: "0px",
+        bottomRight: "0px",
+        bottomLeft: "0px"
+      },
+      notes: {
+        topLeft: "0px",
+        topRight: "0px",
+        bottomRight: "0px",
+        bottomLeft: "0px"
+      },
+      editor: {
+        topLeft: "0px",
+        topRight: "0px",
+        bottomRight: "0px",
+        bottomLeft: "0px"
+      }
+    });
 
   const notebookPaneWidthBefore = (await notebookPane.boundingBox())?.width ?? 0;
   const notesPaneWidthBefore = (await notesPane.boundingBox())?.width ?? 0;
