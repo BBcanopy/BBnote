@@ -39,7 +39,7 @@ describe("buildConfig", () => {
     expect(config.oidcClientSecret).toBe(REQUIRED_ENV.OIDC_CLIENT_SECRET);
     expect(config.sessionSecret).toBe(REQUIRED_ENV.SESSION_SECRET);
     expect(config.notesRoot).toBe(REQUIRED_ENV.NOTES_ROOT);
-    expect(config.attachmentMaxBytes).toBe(100 * 1024 * 1024);
+    expect(config.attachmentMaxBytes).toBe(50 * 1024 * 1024);
   });
 
   it("fails fast when a required value is missing", () => {

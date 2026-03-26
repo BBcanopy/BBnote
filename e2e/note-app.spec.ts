@@ -747,6 +747,36 @@ test("auto-saves voice notes on stop, inserts them into the editor, keeps delete
   await expect(voiceAttachment).toHaveCount(0);
 });
 
+test("uploads multi-megabyte audio attachments without proxy 413 errors", async ({ page }) => {
+  const suffix = Date.now().toString();
+  const notebookName = `Large uploads ${suffix}`;
+  const noteTitle = `Audio upload ${suffix}`;
+  const audioFileName = `song-${suffix}.mp3`;
+  const audioPayload = Buffer.alloc(2 * 1024 * 1024, 0x61);
+
+  await login(page);
+  await createNotebookWithDialog(page, notebookName);
+  await createNoteWithContent(page, noteTitle, "Ready for a larger audio attachment.");
+
+  await page.getByTestId("media-input-audio").first().setInputFiles({
+    name: audioFileName,
+    mimeType: "audio/mpeg",
+    buffer: audioPayload
+  });
+
+  const attachmentCard = page.locator(".bb-attachment-card").filter({ hasText: audioFileName }).first();
+  const bodyTextarea = page.getByPlaceholder("Write in Markdown").first();
+  await expect(attachmentCard).toBeVisible();
+  await expect(bodyTextarea).toHaveValue(new RegExp(`\\[song-${suffix}\\.mp3\\]\\(.*\\/attachments\\/.*\\)`, "i"));
+  await expect(page.locator(".bb-error-banner")).toHaveCount(0);
+
+  await page.getByRole("button", { name: /^preview$/i }).click();
+  const audioEmbed = page.locator(".bb-editor-preview .bb-markdown__audio-card").first();
+  await expect(audioEmbed).toBeVisible();
+  await expect(audioEmbed.locator(".bb-markdown__audio-title")).toHaveText(audioFileName);
+  await expect(audioEmbed.locator("audio")).toHaveCount(1);
+});
+
 test("persists empty notes immediately so repeated new-note clicks create multiple blank notes", async ({ page }) => {
   const notebookName = `Inbox ${Date.now()}`;
 

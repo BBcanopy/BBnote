@@ -17,6 +17,23 @@ export function registerAttachmentController(app: FastifyInstance, services: App
 
   app.post("/api/v1/notes/:id/attachments", {
     preHandler: guard,
+    config: {
+      multipartOptions: {
+        limits: {
+          fileSize: services.config.attachmentMaxBytes,
+          files: 1
+        }
+      }
+    },
+    errorHandler(error, _request, reply) {
+      if (error instanceof app.multipartErrors.RequestFileTooLargeError || error.code === "FST_REQ_FILE_TOO_LARGE") {
+        return reply.code(413).send({
+          message: `Attachments larger than ${uploadLimitText} are not supported.`
+        });
+      }
+
+      return reply.send(error);
+    },
     schema: {
       tags: ["Attachments"],
       summary: "Upload an attachment",

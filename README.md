@@ -29,4 +29,4 @@ The app is available at `http://localhost:8082` by default.
 
 ## Configuration note
 
-- `ATTACHMENT_MAX_BYTES` controls the maximum attachment upload size in bytes and defaults to `104857600` (`100 MiB`).
+- `ATTACHMENT_MAX_BYTES` controls the maximum attachment upload size in bytes and defaults to `52428800` (`50 MiB`).
