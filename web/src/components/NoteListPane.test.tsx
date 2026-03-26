@@ -136,6 +136,49 @@ describe("NoteListPane", () => {
     });
   });
 
+  it("reorders a note when the drop lands on the note slot around another card", () => {
+    const handleMoveNote = vi.fn();
+    const dataTransfer = createDataTransfer();
+
+    renderNoteListPane({
+      notes: [
+        buildNote({
+          id: "note-1",
+          title: "Quarterly review",
+          sortOrder: 0
+        }),
+        buildNote({
+          id: "note-2",
+          title: "Roadmap follow-up",
+          sortOrder: 1
+        })
+      ],
+      onMoveNote: handleMoveNote
+    });
+
+    const targetSlot = screen.getByTestId(buildNoteTestId("slot", "Quarterly review"));
+    const targetCard = screen.getByTestId(buildNoteTestId("drag", "Quarterly review"));
+    mockElementRect(targetCard, {
+      top: 100,
+      height: 100
+    });
+
+    fireEvent.dragStart(screen.getByTestId(buildNoteTestId("drag", "Roadmap follow-up")), { dataTransfer });
+    const dragOverEvent = createEvent.dragOver(targetSlot, { dataTransfer });
+    Object.defineProperty(dragOverEvent, "clientY", {
+      configurable: true,
+      value: 188
+    });
+    fireEvent(targetSlot, dragOverEvent);
+    fireEvent.drop(targetSlot, { dataTransfer });
+
+    expect(handleMoveNote).toHaveBeenCalledWith({
+      draggedId: "note-2",
+      targetId: "note-1",
+      position: "after"
+    });
+  });
+
   it("marks before and after note drop targets as move destinations during reorder", () => {
     const dataTransfer = createDataTransfer();
 
@@ -377,6 +420,6 @@ function createDataTransfer(): DataTransfer {
   } as DataTransfer;
 }
 
-function buildNoteTestId(kind: "drag" | "before" | "after", title: string) {
+function buildNoteTestId(kind: "drag" | "slot" | "before" | "after", title: string) {
   return `note-${kind}-${encodeURIComponent(title)}`;
 }

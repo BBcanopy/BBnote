@@ -624,7 +624,7 @@ test("reorders notes by dropping onto note cards and persists the order", async 
 
   await dragNoteCardToNoteCard(
     page.getByTestId(buildNoteTestId("drag", secondNoteTitle)),
-    page.getByTestId(buildNoteTestId("drag", firstNoteTitle)),
+    page.getByTestId(buildNoteTestId("slot", firstNoteTitle)),
     "top"
   );
   await expectNoteOrderInLane(page, [secondNoteTitle, firstNoteTitle]);
@@ -635,7 +635,7 @@ test("reorders notes by dropping onto note cards and persists the order", async 
 
   await dragNoteCardToNoteCard(
     page.getByTestId(buildNoteTestId("drag", secondNoteTitle)),
-    page.getByTestId(buildNoteTestId("drag", firstNoteTitle)),
+    page.getByTestId(buildNoteTestId("slot", firstNoteTitle)),
     "bottom"
   );
   await expectNoteOrderInLane(page, [firstNoteTitle, secondNoteTitle]);
@@ -896,7 +896,7 @@ function buildNotebookTestId(kind: "drag" | "before" | "after", name: string) {
   return `notebook-${kind}-${encodeURIComponent(name)}`;
 }
 
-function buildNoteTestId(kind: "drag" | "before" | "after", title: string) {
+function buildNoteTestId(kind: "drag" | "slot" | "before" | "after", title: string) {
   return `note-${kind}-${encodeURIComponent(title)}`;
 }
 

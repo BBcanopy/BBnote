@@ -149,7 +149,7 @@ export function NoteListPane(props: {
 
   function resolveNoteCardDropPosition(event: DragEvent<HTMLElement>, targetId: string, draggedId: string | null): NoteMovePosition {
     const fallbackPosition = resolveRelativeDropPosition(props.notes, targetId, draggedId);
-    const rect = event.currentTarget.getBoundingClientRect();
+    const rect = resolveNoteDropReferenceRect(event.currentTarget);
     if (rect.height <= 0) {
       return fallbackPosition;
     }
@@ -355,7 +355,11 @@ function renderNote(
   return (
     <div
       key={note.id}
+      data-testid={buildNoteTestId("slot", note.title)}
       className="bb-note-drop-slot min-w-0 space-y-0.5"
+      onDragEnter={helpers.canReorder ? (event) => helpers.onCardDragOver(event, note.id) : undefined}
+      onDragOver={helpers.canReorder ? (event) => helpers.onCardDragOver(event, note.id) : undefined}
+      onDrop={helpers.canReorder ? (event) => helpers.onCardDrop(event, note.id) : undefined}
     >
       {helpers.canReorder ? (
         <NoteDropZone
@@ -406,8 +410,23 @@ function NoteDropZone(props: {
   );
 }
 
-function buildNoteTestId(kind: "drag" | "before" | "after", title: string) {
+function buildNoteTestId(kind: "drag" | "slot" | "before" | "after", title: string) {
   return `note-${kind}-${encodeURIComponent(title)}`;
+}
+
+function resolveNoteDropReferenceRect(currentTarget: EventTarget | null) {
+  if (!(currentTarget instanceof HTMLElement)) {
+    return EMPTY_DOM_RECT;
+  }
+
+  if (currentTarget.classList.contains("bb-note-drop-slot")) {
+    const card = currentTarget.querySelector<HTMLElement>(".bb-note-card");
+    if (card) {
+      return card.getBoundingClientRect();
+    }
+  }
+
+  return currentTarget.getBoundingClientRect();
 }
 
 function getDisplayNoteTitle(title: string) {
@@ -425,3 +444,17 @@ function resolveRelativeDropPosition(notes: NoteSummary[], targetId: string, dra
 
   return draggedIndex > targetIndex ? "before" : "after";
 }
+
+const EMPTY_DOM_RECT = {
+  x: 0,
+  y: 0,
+  width: 0,
+  height: 0,
+  top: 0,
+  right: 0,
+  bottom: 0,
+  left: 0,
+  toJSON() {
+    return {};
+  }
+} as DOMRect;
