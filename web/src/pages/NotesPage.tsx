@@ -1386,7 +1386,7 @@ function EditorPanel(props: {
       tableColumnsInputRef.current?.select();
     }, 0);
 
-    function handlePointerDown(event: MouseEvent) {
+    function handlePointerDown(event: PointerEvent) {
       if (!tablePickerRef.current?.contains(event.target as Node)) {
         closeTablePicker();
       }
@@ -1399,12 +1399,12 @@ function EditorPanel(props: {
       }
     }
 
-    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("pointerdown", handlePointerDown);
     window.addEventListener("keydown", handleKeyDown);
 
     return () => {
       window.clearTimeout(timer);
-      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("pointerdown", handlePointerDown);
       window.removeEventListener("keydown", handleKeyDown);
     };
   }, [tablePickerOpen]);
@@ -1920,11 +1920,6 @@ function EditorPanel(props: {
               event.preventDefault();
             }
           }}
-          onMouseDown={(event) => {
-            if (!formatActionsDisabled) {
-              event.preventDefault();
-            }
-          }}
           onClick={handleTablePickerToggle}
           className={`bb-icon-button bb-icon-button--toolbar bb-icon-button--accent ${tablePickerOpen ? "bb-icon-button--is-active" : ""}`}
         >
@@ -2214,9 +2209,9 @@ function EditorPanel(props: {
 
           {recorderPanel}
 
-          <div className={`bb-editor-stack ${hasAttachments ? "" : "bb-editor-stack--fill"}`}>
+          <div className="bb-editor-stack bb-editor-stack--fill">
             {props.editorPane === "markdown" ? (
-              <label className={`bb-field ${hasAttachments ? "" : "bb-field--stretch"}`}>
+              <label className="bb-field bb-field--stretch">
                 <textarea
                   ref={bodyTextareaRef}
                   value={props.editorNote.bodyMarkdown}
@@ -2227,7 +2222,7 @@ function EditorPanel(props: {
                 />
               </label>
             ) : (
-              <div className={`bb-pane-card bb-editor-preview ${hasAttachments ? "" : "bb-editor-preview--grow"}`}>
+              <div className="bb-pane-card bb-editor-preview bb-editor-preview--grow">
                 <MarkdownPreview bodyMarkdown={props.editorNote.bodyMarkdown} attachments={props.editorNote.attachments} />
               </div>
             )}
@@ -2369,11 +2364,6 @@ function MediaToolbarButton(props: {
     <button
       type="button"
       onPointerDown={(event) => {
-        if (props.preserveFocus && !props.disabled) {
-          event.preventDefault();
-        }
-      }}
-      onMouseDown={(event) => {
         if (props.preserveFocus && !props.disabled) {
           event.preventDefault();
         }

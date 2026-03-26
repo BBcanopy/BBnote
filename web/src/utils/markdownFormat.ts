@@ -120,20 +120,18 @@ function applyTableFormat(
   const columns = clampTableDimension(table?.columns ?? DEFAULT_MARKDOWN_TABLE_COLUMNS);
   const rows = clampTableDimension(table?.rows ?? DEFAULT_MARKDOWN_TABLE_ROWS);
   const selectedText = value.slice(selectionStart, selectionEnd).trim();
+  const firstHeaderCell = selectedText || "Column 1";
   const headerRow = buildTableRow(
     Array.from({ length: columns }, (_, index) => {
       if (index === 0) {
-        return selectedText || "Column 1";
+        return firstHeaderCell;
       }
 
       return `Column ${index + 1}`;
     })
   );
   const separatorRow = buildTableRow(Array.from({ length: columns }, () => "---"));
-  const bodyRows =
-    columns === DEFAULT_MARKDOWN_TABLE_COLUMNS && rows === DEFAULT_MARKDOWN_TABLE_ROWS
-      ? [buildTableRow(["Value 1", "Value 2"])]
-      : Array.from({ length: rows }, () => buildTableRow(Array.from({ length: columns }, () => "")));
+  const bodyRows = Array.from({ length: rows }, () => buildTableRow(Array.from({ length: columns }, () => "")));
   const tableMarkdown = [headerRow, separatorRow, ...bodyRows].join("\n");
   const prefix = getBlockBoundaryPrefix(value.slice(0, selectionStart));
   const suffix = getBlockBoundarySuffix(value.slice(selectionEnd));
@@ -141,7 +139,7 @@ function applyTableFormat(
   return {
     nextValue: `${value.slice(0, selectionStart)}${prefix}${tableMarkdown}${suffix}${value.slice(selectionEnd)}`,
     nextSelectionStart: selectionStart + prefix.length + 2,
-    nextSelectionEnd: selectionStart + prefix.length + headerRow.length - 2
+    nextSelectionEnd: selectionStart + prefix.length + 2 + firstHeaderCell.length
   };
 }
 

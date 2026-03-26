@@ -44,9 +44,9 @@ describe("formatMarkdownSelection", () => {
 
   it("inserts a markdown table template at the cursor", () => {
     expect(formatMarkdownSelection("alpha", 5, 5, "table")).toEqual({
-      nextValue: "alpha\n\n| Column 1 | Column 2 |\n| --- | --- |\n| Value 1 | Value 2 |",
+      nextValue: "alpha\n\n| Column 1 | Column 2 |\n| --- | --- |\n|  |  |",
       nextSelectionStart: 9,
-      nextSelectionEnd: 28
+      nextSelectionEnd: 17
     });
   });
 
@@ -54,7 +54,15 @@ describe("formatMarkdownSelection", () => {
     expect(formatMarkdownSelection("", 0, 0, "table", { table: { columns: 3, rows: 2 } })).toEqual({
       nextValue: "| Column 1 | Column 2 | Column 3 |\n| --- | --- | --- |\n|  |  |  |\n|  |  |  |",
       nextSelectionStart: 2,
-      nextSelectionEnd: 32
+      nextSelectionEnd: 10
+    });
+  });
+
+  it("reuses selected text for the first table header and selects only that header cell", () => {
+    expect(formatMarkdownSelection("alpha", 0, 5, "table")).toEqual({
+      nextValue: "| alpha | Column 2 |\n| --- | --- |\n|  |  |",
+      nextSelectionStart: 2,
+      nextSelectionEnd: 7
     });
   });
 });

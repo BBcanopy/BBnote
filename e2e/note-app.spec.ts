@@ -862,6 +862,7 @@ test("shows the note title in the topbar, keeps folder and note drag cursors dis
   const topbar = page.locator(".bb-topbar");
   const editorPanel = page.getByTestId("editor-panel-desktop");
   const editorHeader = editorPanel.locator(".bb-editor-header");
+  const editorStack = editorPanel.locator(".bb-editor-stack");
   const titleLabel = topbar.getByText(/^title$/i);
   const titleInput = topbar.getByRole("textbox", { name: "Title" });
   const expandEditorButton = editorHeader.getByRole("button", { name: /^expand editor$/i });
@@ -876,18 +877,23 @@ test("shows the note title in the topbar, keeps folder and note drag cursors dis
   await expect(page.getByTestId("editor-format-toolbar").first()).toBeVisible();
 
   const topbarBox = await topbar.boundingBox();
+  const editorStackBox = await editorStack.boundingBox();
   const titleInputBox = await titleInput.boundingBox();
+  const textareaBox = await textarea.boundingBox();
   const deleteButtonBox = await deleteButton.boundingBox();
   expect(topbarBox).not.toBeNull();
+  expect(editorStackBox).not.toBeNull();
   expect(titleInputBox).not.toBeNull();
+  expect(textareaBox).not.toBeNull();
   expect(deleteButtonBox).not.toBeNull();
-  if (!topbarBox || !titleInputBox || !deleteButtonBox) {
+  if (!topbarBox || !editorStackBox || !titleInputBox || !textareaBox || !deleteButtonBox) {
     throw new Error("Expected the topbar title input and editor actions layout to be visible.");
   }
   expect(titleInputBox.y).toBeGreaterThanOrEqual(topbarBox.y - 1);
   expect(titleInputBox.y + titleInputBox.height).toBeLessThanOrEqual(topbarBox.y + topbarBox.height + 1);
   expect(Math.abs(titleInputBox.x + titleInputBox.width / 2 - (topbarBox.x + topbarBox.width / 2))).toBeLessThan(24);
   expect(titleInputBox.width).toBeGreaterThan(topbarBox.width * 0.45);
+  expect(textareaBox.height / editorStackBox.height).toBeGreaterThan(0.72);
 
   await expect
     .poll(async () => notebookRow(page, notebookName).evaluate((element) => getComputedStyle(element).cursor))
@@ -925,11 +931,50 @@ test("shows the note title in the topbar, keeps folder and note drag cursors dis
   const tablePicker = page.getByRole("dialog", { name: /^insert table$/i });
   await expect(tablePicker).toBeVisible();
   await expect(tablePicker.getByTestId("table-picker-grid")).toBeVisible();
+  await expect(tablePicker.getByTestId("table-picker-summary")).toHaveText("2 columns x 1 row");
+  await tablePicker.getByRole("button", { name: /^insert table$/i }).click();
+  await expect(textarea).toHaveValue("| Column 1 | Column 2 |\n| --- | --- |\n|  |  |");
+  await expect
+    .poll(async () =>
+      textarea.evaluate((element) => {
+        const textareaElement = element as HTMLTextAreaElement;
+        return {
+          selectionStart: textareaElement.selectionStart,
+          selectionEnd: textareaElement.selectionEnd,
+          selectedText: textareaElement.value.slice(textareaElement.selectionStart, textareaElement.selectionEnd)
+        };
+      })
+    )
+    .toEqual({
+      selectionStart: 2,
+      selectionEnd: 10,
+      selectedText: "Column 1"
+    });
+
+  await textarea.fill("");
+  await editorPanel.getByRole("button", { name: /^insert table$/i }).click();
+  await expect(tablePicker).toBeVisible();
   await tablePicker.getByLabel(/^columns$/i).fill("3");
   await tablePicker.getByLabel(/^rows$/i).fill("2");
   await expect(tablePicker.getByTestId("table-picker-summary")).toHaveText("3 columns x 2 rows");
   await tablePicker.getByRole("button", { name: /^insert table$/i }).click();
   await expect(textarea).toHaveValue("| Column 1 | Column 2 | Column 3 |\n| --- | --- | --- |\n|  |  |  |\n|  |  |  |");
+  await expect
+    .poll(async () =>
+      textarea.evaluate((element) => {
+        const textareaElement = element as HTMLTextAreaElement;
+        return {
+          selectionStart: textareaElement.selectionStart,
+          selectionEnd: textareaElement.selectionEnd,
+          selectedText: textareaElement.value.slice(textareaElement.selectionStart, textareaElement.selectionEnd)
+        };
+      })
+    )
+    .toEqual({
+      selectionStart: 2,
+      selectionEnd: 10,
+      selectedText: "Column 1"
+    });
 
   const editorWidthBeforeFullscreen = (await editorPanel.boundingBox())?.width ?? 0;
   await expandEditorButton.click();
