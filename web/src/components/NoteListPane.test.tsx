@@ -123,6 +123,78 @@ describe("NoteListPane", () => {
     });
   });
 
+  it("uses the explicit before drop zone position for downward moves", () => {
+    const handleMoveNote = vi.fn<NoteListPaneProps["onMoveNote"]>();
+    const dataTransfer = createDataTransfer();
+
+    renderNoteListPane({
+      notes: [
+        buildNote({
+          id: "note-1",
+          title: "Quarterly review",
+          sortOrder: 0
+        }),
+        buildNote({
+          id: "note-2",
+          title: "Roadmap follow-up",
+          sortOrder: 1
+        }),
+        buildNote({
+          id: "note-3",
+          title: "Budget wrap-up",
+          sortOrder: 2
+        })
+      ],
+      onMoveNote: handleMoveNote
+    });
+
+    fireEvent.dragStart(screen.getByTestId(buildNoteTestId("drag", "Quarterly review")), { dataTransfer });
+    fireEvent.dragOver(screen.getByTestId(buildNoteTestId("before", "Budget wrap-up")), { dataTransfer });
+    fireEvent.drop(screen.getByTestId(buildNoteTestId("before", "Budget wrap-up")), { dataTransfer });
+
+    expect(handleMoveNote).toHaveBeenCalledWith({
+      draggedId: "note-1",
+      targetId: "note-3",
+      position: "before"
+    });
+  });
+
+  it("uses the explicit after drop zone position for upward moves", () => {
+    const handleMoveNote = vi.fn<NoteListPaneProps["onMoveNote"]>();
+    const dataTransfer = createDataTransfer();
+
+    renderNoteListPane({
+      notes: [
+        buildNote({
+          id: "note-1",
+          title: "Quarterly review",
+          sortOrder: 0
+        }),
+        buildNote({
+          id: "note-2",
+          title: "Roadmap follow-up",
+          sortOrder: 1
+        }),
+        buildNote({
+          id: "note-3",
+          title: "Budget wrap-up",
+          sortOrder: 2
+        })
+      ],
+      onMoveNote: handleMoveNote
+    });
+
+    fireEvent.dragStart(screen.getByTestId(buildNoteTestId("drag", "Budget wrap-up")), { dataTransfer });
+    fireEvent.dragOver(screen.getByTestId(buildNoteTestId("after", "Quarterly review")), { dataTransfer });
+    fireEvent.drop(screen.getByTestId(buildNoteTestId("after", "Quarterly review")), { dataTransfer });
+
+    expect(handleMoveNote).toHaveBeenCalledWith({
+      draggedId: "note-3",
+      targetId: "note-1",
+      position: "after"
+    });
+  });
+
   it("reorders a note before another card when dropped near the top of the target", () => {
     const handleMoveNote = vi.fn<NoteListPaneProps["onMoveNote"]>();
     const dataTransfer = createDataTransfer();

@@ -89,13 +89,20 @@ export function NoteListPane(props: {
     return payload?.kind === "note" ? payload.id : draggedNoteIdRef.current ?? draggedNoteId;
   }
 
-  function handleDragOver(event: DragEvent<HTMLElement>, targetId: string, position: NoteMovePosition) {
+  function handleDragOver(
+    event: DragEvent<HTMLElement>,
+    targetId: string,
+    position: NoteMovePosition,
+    options?: {
+      normalize?: boolean;
+    }
+  ) {
     const draggedId = resolveDraggedNoteId(event);
     if (!props.canReorder || !draggedId || draggedId === targetId) {
       return;
     }
 
-    const nextPosition = normalizeNoteCardDropPosition(props.notes, draggedId, targetId, position);
+    const nextPosition = options?.normalize === false ? position : normalizeNoteCardDropPosition(props.notes, draggedId, targetId, position);
 
     event.preventDefault();
     event.stopPropagation();
@@ -127,7 +134,20 @@ export function NoteListPane(props: {
     handleDragOver(event, nextDropTarget.targetId, nextDropTarget.position);
   }
 
-  function handleDrop(event: DragEvent<HTMLElement>, targetId: string, position: NoteMovePosition) {
+  function handleNoteDropZoneDragOver(event: DragEvent<HTMLElement>, targetId: string, position: NoteMovePosition) {
+    handleDragOver(event, targetId, position, {
+      normalize: false
+    });
+  }
+
+  function handleDrop(
+    event: DragEvent<HTMLElement>,
+    targetId: string,
+    position: NoteMovePosition,
+    options?: {
+      normalize?: boolean;
+    }
+  ) {
     const draggedId = resolveDraggedNoteId(event);
 
     if (!props.canReorder || !draggedId || draggedId === targetId) {
@@ -135,7 +155,7 @@ export function NoteListPane(props: {
       return;
     }
 
-    const nextPosition = normalizeNoteCardDropPosition(props.notes, draggedId, targetId, position);
+    const nextPosition = options?.normalize === false ? position : normalizeNoteCardDropPosition(props.notes, draggedId, targetId, position);
 
     event.preventDefault();
     event.stopPropagation();
@@ -155,6 +175,12 @@ export function NoteListPane(props: {
     }
 
     handleDrop(event, nextDropTarget.targetId, nextDropTarget.position);
+  }
+
+  function handleNoteDropZoneDrop(event: DragEvent<HTMLElement>, targetId: string, position: NoteMovePosition) {
+    handleDrop(event, targetId, position, {
+      normalize: false
+    });
   }
 
   function resolveNoteListDropTargetFromEvent(event: DragEvent<HTMLElement>) {
@@ -310,6 +336,8 @@ export function NoteListPane(props: {
               onDragEnd: clearDragState,
               onCardDragOver: handleNoteCardDragOver,
               onCardDrop: handleNoteCardDrop,
+              onDropZoneDragOver: handleNoteDropZoneDragOver,
+              onDropZoneDrop: handleNoteDropZoneDrop,
               onDragStart: handleDragStart,
               onSelectNote: props.onSelectNote,
               selectedNoteId: props.selectedNoteId
@@ -344,6 +372,8 @@ function renderNote(
     onDragEnd(): void;
     onCardDragOver(event: DragEvent<HTMLElement>, targetId: string): void;
     onCardDrop(event: DragEvent<HTMLElement>, targetId: string): void;
+    onDropZoneDragOver(event: DragEvent<HTMLElement>, targetId: string, position: NoteMovePosition): void;
+    onDropZoneDrop(event: DragEvent<HTMLElement>, targetId: string, position: NoteMovePosition): void;
     onDragStart(event: DragEvent<HTMLElement>, note: NoteSummary): void;
     onSelectNote(noteId: string): void;
     selectedNoteId: string | null;
@@ -407,8 +437,8 @@ function renderNote(
           testId={buildNoteTestId("before", note.title)}
           active={helpers.dropTarget?.targetId === note.id && helpers.dropTarget.position === "before"}
           dragging={dragTargetVisible}
-          onDragOver={(event) => helpers.onCardDragOver(event, note.id)}
-          onDrop={(event) => helpers.onCardDrop(event, note.id)}
+          onDragOver={(event) => helpers.onDropZoneDragOver(event, note.id, "before")}
+          onDrop={(event) => helpers.onDropZoneDrop(event, note.id, "before")}
         />
       ) : null}
       <div className="min-w-0 rounded-[1.15rem]">
@@ -419,8 +449,8 @@ function renderNote(
           testId={buildNoteTestId("after", note.title)}
           active={helpers.dropTarget?.targetId === note.id && helpers.dropTarget.position === "after"}
           dragging={dragTargetVisible}
-          onDragOver={(event) => helpers.onCardDragOver(event, note.id)}
-          onDrop={(event) => helpers.onCardDrop(event, note.id)}
+          onDragOver={(event) => helpers.onDropZoneDragOver(event, note.id, "after")}
+          onDrop={(event) => helpers.onDropZoneDrop(event, note.id, "after")}
         />
       ) : null}
     </div>
