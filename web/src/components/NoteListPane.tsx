@@ -385,6 +385,7 @@ function renderNote(
   const dropPosition = helpers.canReorder && helpers.dropTarget?.targetId === note.id ? helpers.dropTarget.position : null;
   const draggingSource = helpers.draggedNoteId === note.id;
   const dragTargetVisible = helpers.dragging && !draggingSource;
+  const dropShiftClass = dropPosition === "before" ? "bb-note-card--shift-down" : dropPosition === "after" ? "bb-note-card--shift-up" : "";
   const previewExcerpt = formatPreviewExcerpt(note.excerpt);
   const displayTitle = getDisplayNoteTitle(note.title);
   const noteCard = (
@@ -407,7 +408,7 @@ function renderNote(
       }}
       className={`bb-note-card ${helpers.canDragNotes ? "bb-note-card--draggable" : ""} w-full text-left ${selected ? "is-active" : ""} ${
         dropPosition ? "bb-tree-drop-target" : ""
-      } ${dropPosition ? `bb-note-card--drop-${dropPosition}` : ""} ${draggingSource ? "bb-note-card--dragging" : ""}`}
+      } ${dropPosition ? `bb-note-card--drop-${dropPosition}` : ""} ${dropShiftClass} ${draggingSource ? "bb-note-card--dragging" : ""}`}
     >
       <div className="bb-note-card__layout">
         <div className="bb-note-card__copy">

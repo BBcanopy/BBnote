@@ -413,11 +413,16 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
 
   const archiveNotebookRow = page.getByTestId(buildNotebookTestId("drag", archiveNotebookName));
   const archiveNotebookDragRow = notebookRow(page, archiveNotebookName);
+  const notebookBeforeDropZone = page.getByTestId(buildNotebookTestId("before", notebookName));
   await expect(archiveNotebookRow).toBeVisible();
+  const folderSpacingPreview = await startDrag(page, archiveNotebookDragRow);
+  await notebookBeforeDropZone.dispatchEvent("dragover", { dataTransfer: folderSpacingPreview });
+  await expect(page.getByTestId(buildNotebookTestId("node", notebookName))).toHaveClass(/bb-tree-node--drop-before/);
+  await endDrag(archiveNotebookDragRow, folderSpacingPreview);
   await dragLocatorToLocator(
     page,
     archiveNotebookDragRow,
-    page.getByTestId(buildNotebookTestId("before", notebookName))
+    notebookBeforeDropZone
   );
   await expect
     .poll(async () => {
@@ -740,6 +745,7 @@ test("reorders notes by dropping onto note cards and persists the order", async 
   });
   await expect(downwardTargetSlot).toHaveClass(/is-drop-after/);
   await expect(downwardTargetCard).toHaveClass(/bb-note-card--drop-after/);
+  await expect(downwardTargetCard).toHaveClass(/bb-note-card--shift-up/);
   await endDrag(downwardSource, downwardIndicatorDrag);
 
   await dragNoteCardToNoteCard(downwardSource, downwardTargetSlot, "bottom");
@@ -1218,7 +1224,7 @@ async function createNotebookAndPersistedNote(page: import("@playwright/test").P
   await expect(page.getByRole("button", { name: new RegExp(`Export ready note ${suffix}`, "i") })).toBeVisible();
 }
 
-function buildNotebookTestId(kind: "drag" | "before" | "after", name: string) {
+function buildNotebookTestId(kind: "node" | "drag" | "before" | "after", name: string) {
   return `notebook-${kind}-${encodeURIComponent(name)}`;
 }
 

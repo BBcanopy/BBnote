@@ -260,11 +260,19 @@ export function FolderTree(props: {
     const hasChildren = children.length > 0;
     const expanded = hasChildren ? expandedFolderIds.has(folder.id) : false;
     const selected = props.selectedFolderId === folder.id;
-    const activeFolderDrop = folderDropTarget?.targetId === folder.id && folderDropTarget.position === "inside";
+    const folderDropPosition = folderDropTarget?.targetId === folder.id ? folderDropTarget.position : null;
+    const activeFolderDrop = folderDropPosition === "inside";
     const activeNoteDrop = noteDropFolderId === folder.id;
+    const draggingSource = draggedFolderId === folder.id;
 
     return (
-      <div key={folder.id} className="bb-tree-node">
+      <div
+        key={folder.id}
+        data-testid={buildNotebookTestId("node", folder.name)}
+        className={`bb-tree-node ${folderDropPosition === "before" ? "bb-tree-node--drop-before" : ""} ${
+          folderDropPosition === "after" ? "bb-tree-node--drop-after" : ""
+        }`}
+      >
         {props.enableFolderDragAndDrop === false ? null : (
           <NotebookDropZone
             testId={buildNotebookTestId("before", folder.name)}
@@ -278,88 +286,91 @@ export function FolderTree(props: {
           />
         )}
 
-        <div className={`bb-tree-branch ${activeFolderDrop || activeNoteDrop ? "is-drop-active" : ""}`}>
-          <div
-            data-testid={buildNotebookTestId("drag", folder.name)}
-            onDragOver={(event) => handleFolderDragOver(event, folder.id, "inside")}
-            onDrop={(event) => handleFolderDrop(event, folder.id, "inside")}
-            className="bb-tree-branch__body"
-          >
+        <div className="bb-tree-node__content">
+          <div className={`bb-tree-branch ${activeFolderDrop || activeNoteDrop ? "is-drop-active" : ""}`}>
             <div
-              className={`bb-tree-row ${selected ? "is-active" : ""} ${activeNoteDrop ? "is-note-target" : ""}`}
-              style={{ "--tree-depth": depth } as CSSProperties}
+              data-testid={buildNotebookTestId("drag", folder.name)}
+              onDragOver={(event) => handleFolderDragOver(event, folder.id, "inside")}
+              onDrop={(event) => handleFolderDrop(event, folder.id, "inside")}
+              className="bb-tree-branch__body"
             >
-              {hasChildren ? (
-                <button
-                  type="button"
-                  aria-label={`${expanded ? "Collapse" : "Expand"} notebook ${folder.name}`}
-                  onClick={() => toggleFolder(folder.id)}
-                  className="bb-tree-toggle shrink-0"
-                >
-                  <CaretDown size={12} weight="bold" className={`transition-transform duration-300 ${expanded ? "rotate-0" : "-rotate-90"}`} />
-                </button>
-              ) : (
-                <span className="bb-tree-toggle-placeholder" aria-hidden="true" />
-              )}
-
-              <div className="bb-tree-icon-shell">
-                <button
-                  type="button"
-                  aria-label={`Choose icon for ${folder.name}`}
-                  title={`Choose icon for ${folder.name}`}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    setIconPickerFolderId((current) => (current === folder.id ? null : folder.id));
-                  }}
-                  className="bb-tree-icon-button"
-                >
-                  <FolderIconGlyph icon={folder.icon} size={16} className="bb-tree-icon-glyph" />
-                </button>
-                {iconPickerFolderId === folder.id ? (
-                  <div role="menu" className="bb-icon-picker">
-                    {folderIconOptions.map((option) => (
-                      <button
-                        key={option.id}
-                        type="button"
-                        role="menuitem"
-                        aria-label={`Use ${option.label} icon`}
-                        title={option.label}
-                        disabled={iconSavingFolderId === folder.id}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          void handleIconSelection(folder, option.id);
-                        }}
-                        className={`bb-icon-picker__option ${folder.icon === option.id ? "is-active" : ""}`}
-                      >
-                        <FolderIconGlyph icon={option.id} size={16} />
-                      </button>
-                    ))}
-                  </div>
-                ) : null}
-              </div>
-
-              <button
-                type="button"
-                aria-label={formatFolderRowLabel(folder.name, folder.noteCount)}
-                onClick={() => props.onSelectFolder(folder.id)}
-                onDoubleClick={() => props.onRenameNotebook(folder)}
-                draggable={props.enableFolderDragAndDrop !== false}
-                onDragStart={(event) => handleFolderDragStart(event, folder.id)}
-                onDragEnd={clearDragState}
-                className={`bb-tree-row__content ${props.enableFolderDragAndDrop !== false ? "bb-tree-row__content--draggable" : ""}`}
+              <div
+                className={`bb-tree-row ${selected ? "is-active" : ""} ${activeNoteDrop ? "is-note-target" : ""} ${
+                  activeFolderDrop || activeNoteDrop ? "bb-tree-row--drop-inside" : ""
+                } ${draggingSource ? "bb-tree-row--dragging" : ""}`}
+                style={{ "--tree-depth": depth } as CSSProperties}
               >
-                <span className="bb-tree-row__label">{folder.name}</span>
-                <span className="bb-count-pill shrink-0">{folder.noteCount}</span>
-              </button>
+                {hasChildren ? (
+                  <button
+                    type="button"
+                    aria-label={`${expanded ? "Collapse" : "Expand"} notebook ${folder.name}`}
+                    onClick={() => toggleFolder(folder.id)}
+                    className="bb-tree-toggle shrink-0"
+                  >
+                    <CaretDown size={12} weight="bold" className={`transition-transform duration-300 ${expanded ? "rotate-0" : "-rotate-90"}`} />
+                  </button>
+                ) : (
+                  <span className="bb-tree-toggle-placeholder" aria-hidden="true" />
+                )}
+
+                <div className="bb-tree-icon-shell">
+                  <button
+                    type="button"
+                    aria-label={`Choose icon for ${folder.name}`}
+                    title={`Choose icon for ${folder.name}`}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setIconPickerFolderId((current) => (current === folder.id ? null : folder.id));
+                    }}
+                    className="bb-tree-icon-button"
+                  >
+                    <FolderIconGlyph icon={folder.icon} size={16} className="bb-tree-icon-glyph" />
+                  </button>
+                  {iconPickerFolderId === folder.id ? (
+                    <div role="menu" className="bb-icon-picker">
+                      {folderIconOptions.map((option) => (
+                        <button
+                          key={option.id}
+                          type="button"
+                          role="menuitem"
+                          aria-label={`Use ${option.label} icon`}
+                          title={option.label}
+                          disabled={iconSavingFolderId === folder.id}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            void handleIconSelection(folder, option.id);
+                          }}
+                          className={`bb-icon-picker__option ${folder.icon === option.id ? "is-active" : ""}`}
+                        >
+                          <FolderIconGlyph icon={option.id} size={16} />
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+
+                <button
+                  type="button"
+                  aria-label={formatFolderRowLabel(folder.name, folder.noteCount)}
+                  onClick={() => props.onSelectFolder(folder.id)}
+                  onDoubleClick={() => props.onRenameNotebook(folder)}
+                  draggable={props.enableFolderDragAndDrop !== false}
+                  onDragStart={(event) => handleFolderDragStart(event, folder.id)}
+                  onDragEnd={clearDragState}
+                  className={`bb-tree-row__content ${props.enableFolderDragAndDrop !== false ? "bb-tree-row__content--draggable" : ""}`}
+                >
+                  <span className="bb-tree-row__label">{folder.name}</span>
+                  <span className="bb-count-pill shrink-0">{folder.noteCount}</span>
+                </button>
+              </div>
             </div>
           </div>
+          {hasChildren && expanded ? (
+            <div className="bb-tree-children">
+              {children.map((child) => renderNotebook(child, depth + 1))}
+            </div>
+          ) : null}
         </div>
-
-        {hasChildren && expanded ? (
-          <div className="bb-tree-children">
-            {children.map((child) => renderNotebook(child, depth + 1))}
-          </div>
-        ) : null}
 
         {props.enableFolderDragAndDrop === false ? null : (
           <NotebookDropZone
@@ -530,7 +541,7 @@ function NotebookDropZone(props: {
   );
 }
 
-function buildNotebookTestId(kind: "drag" | "before" | "after", name: string) {
+function buildNotebookTestId(kind: "node" | "drag" | "before" | "after", name: string) {
   return `notebook-${kind}-${encodeURIComponent(name)}`;
 }
 
