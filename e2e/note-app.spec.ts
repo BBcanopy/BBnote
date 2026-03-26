@@ -645,7 +645,9 @@ test("reorders notes by dropping onto note cards and persists the order", async 
   await expectNoteOrderInLane(page, [firstNoteTitle, secondNoteTitle]);
 });
 
-test("shows pause controls and tighter recorder panel spacing for voice notes", async ({ page }) => {
+test("shows pause controls, live recorder progress, and tighter recorder panel spacing for voice notes", async ({
+  page
+}) => {
   await page.setViewportSize({ width: 1900, height: 1000 });
   await installMockVoiceRecorder(page);
   const notebookName = `Recorder ${Date.now()}`;
@@ -658,10 +660,14 @@ test("shows pause controls and tighter recorder panel spacing for voice notes", 
   await recordVoiceButton.click();
 
   const recorderPanel = page.locator(".bb-recorder-panel").first();
+  const recorderProgress = recorderPanel.getByRole("progressbar", { name: /^recording progress$/i });
+  const recorderProgressTime = recorderPanel.getByTestId("recorder-progress-time");
   await expect(recorderPanel).toBeVisible();
   await expect(recorderPanel.getByText("Recording voice note")).toBeVisible();
   await expect(recorderPanel.getByRole("button", { name: /^pause$/i })).toBeVisible();
   await expect(recorderPanel.getByRole("button", { name: /^dismiss$/i })).toHaveCount(0);
+  await expect(recorderProgress).toBeVisible();
+  await expect(recorderProgressTime).toHaveText(/\d{2}:\d{2}/);
   await expect
     .poll(async () =>
       recorderPanel
@@ -671,17 +677,46 @@ test("shows pause controls and tighter recorder panel spacing for voice notes", 
         )
     )
     .toBe("0px/0px|0px/0px");
+  const initialRecorderProgressValue = (await recorderProgress.getAttribute("aria-valuetext")) ?? "";
+  await expect
+    .poll(
+      async () => {
+        const currentValue = await recorderProgress.getAttribute("aria-valuetext");
+        return currentValue !== null && currentValue !== initialRecorderProgressValue;
+      },
+      {
+        timeout: 4000
+      }
+    )
+    .toBe(true);
 
   await recorderPanel.getByRole("button", { name: /^pause$/i }).click();
   await expect(recorderPanel.getByText("Recording paused")).toBeVisible();
   await expect(recorderPanel.getByRole("button", { name: /^resume$/i })).toBeVisible();
+  await expect(recorderProgress).toHaveAttribute("aria-valuetext", /recording paused at \d{2}:\d{2}/i);
+  const pausedRecorderProgressValue = (await recorderProgress.getAttribute("aria-valuetext")) ?? "";
+  await page.waitForTimeout(900);
+  await expect(recorderProgress).toHaveAttribute("aria-valuetext", pausedRecorderProgressValue);
 
   await recorderPanel.getByRole("button", { name: /^resume$/i }).click();
   await expect(recorderPanel.getByRole("button", { name: /^pause$/i })).toBeVisible();
+  await expect(recorderProgress).toHaveAttribute("aria-valuetext", /recording for \d{2}:\d{2}/i);
+  await expect
+    .poll(
+      async () => {
+        const currentValue = await recorderProgress.getAttribute("aria-valuetext");
+        return currentValue !== null && currentValue !== pausedRecorderProgressValue;
+      },
+      {
+        timeout: 4000
+      }
+    )
+    .toBe(true);
 
   await recorderPanel.getByRole("button", { name: /^stop$/i }).click();
   await expect(recorderPanel.getByText("Voice note ready")).toBeVisible();
   await expect(recorderPanel.getByText("Preview the clip, then save it as an attachment.")).toHaveCount(0);
+  await expect(recorderProgress).toHaveCount(0);
   await expect(recorderPanel.getByRole("button", { name: /^save$/i })).toBeVisible();
   await expect(recorderPanel.getByRole("button", { name: /^discard$/i })).toBeVisible();
 });

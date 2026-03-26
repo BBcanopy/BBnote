@@ -1255,6 +1255,8 @@ function EditorPanel(props: {
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const recordedChunksRef = useRef<Blob[]>([]);
   const discardRecordingRef = useRef(false);
+  const recordingStartedAtRef = useRef<number | null>(null);
+  const recordingElapsedOffsetRef = useRef(0);
   const [recorderState, setRecorderState] = useState<{
     phase: RecorderPhase;
     blob: Blob | null;
@@ -1266,6 +1268,7 @@ function EditorPanel(props: {
     error: null,
     previewUrl: null
   });
+  const [recordingElapsedMs, setRecordingElapsedMs] = useState(0);
   const [savingRecording, setSavingRecording] = useState(false);
   const mediaActionsDisabled = props.loading || props.uploadingAttachment || savingRecording || !props.canUseMediaActions;
   const hasAttachments = (props.editorNote?.attachments.length ?? 0) > 0;
@@ -1278,7 +1281,32 @@ function EditorPanel(props: {
     };
   }, []);
 
+  useEffect(() => {
+    if (recorderState.phase !== "recording") {
+      return;
+    }
+
+    const syncElapsed = () => {
+      setRecordingElapsedMs(getRecorderElapsedMs(recordingStartedAtRef.current, recordingElapsedOffsetRef.current));
+    };
+
+    syncElapsed();
+    const intervalId = window.setInterval(syncElapsed, 250);
+    return () => window.clearInterval(intervalId);
+  }, [recorderState.phase]);
+
+  function resetRecorderProgress() {
+    recordingStartedAtRef.current = null;
+    recordingElapsedOffsetRef.current = 0;
+    setRecordingElapsedMs(0);
+  }
+
+  function captureRecorderElapsedMs() {
+    return getRecorderElapsedMs(recordingStartedAtRef.current, recordingElapsedOffsetRef.current);
+  }
+
   function clearRecorderClip() {
+    resetRecorderProgress();
     setRecorderState((current) => {
       if (current.previewUrl) {
         URL.revokeObjectURL(current.previewUrl);
@@ -1329,6 +1357,7 @@ function EditorPanel(props: {
     }
 
     if (!navigator.mediaDevices?.getUserMedia || typeof window.MediaRecorder === "undefined") {
+      resetRecorderProgress();
       setRecorderState({
         phase: "error",
         blob: null,
@@ -1393,6 +1422,9 @@ function EditorPanel(props: {
       });
 
       recorder.start();
+      recordingStartedAtRef.current = Date.now();
+      recordingElapsedOffsetRef.current = 0;
+      setRecordingElapsedMs(0);
       setRecorderState({
         phase: "recording",
         blob: null,
@@ -1402,6 +1434,7 @@ function EditorPanel(props: {
     } catch (error) {
       stopRecorderStream();
       mediaRecorderRef.current = null;
+      resetRecorderProgress();
       setRecorderState({
         phase: "error",
         blob: null,
@@ -1417,6 +1450,10 @@ function EditorPanel(props: {
       return;
     }
 
+    const elapsedMs = captureRecorderElapsedMs();
+    recordingStartedAtRef.current = null;
+    recordingElapsedOffsetRef.current = elapsedMs;
+    setRecordingElapsedMs(elapsedMs);
     setRecorderState((current) => ({
       ...current,
       phase: "processing"
@@ -1430,6 +1467,10 @@ function EditorPanel(props: {
       return;
     }
 
+    const elapsedMs = captureRecorderElapsedMs();
+    recordingStartedAtRef.current = null;
+    recordingElapsedOffsetRef.current = elapsedMs;
+    setRecordingElapsedMs(elapsedMs);
     recorder.pause();
     setRecorderState((current) => ({
       ...current,
@@ -1443,6 +1484,8 @@ function EditorPanel(props: {
       return;
     }
 
+    recordingStartedAtRef.current = Date.now();
+    setRecordingElapsedMs(recordingElapsedOffsetRef.current);
     recorder.resume();
     setRecorderState((current) => ({
       ...current,
@@ -1454,6 +1497,10 @@ function EditorPanel(props: {
     const recorder = mediaRecorderRef.current;
     if (recorder && (recorder.state === "recording" || recorder.state === "paused")) {
       discardRecordingRef.current = true;
+      const elapsedMs = captureRecorderElapsedMs();
+      recordingStartedAtRef.current = null;
+      recordingElapsedOffsetRef.current = elapsedMs;
+      setRecordingElapsedMs(elapsedMs);
       setRecorderState((current) => ({
         ...current,
         phase: "processing"
@@ -1491,6 +1538,12 @@ function EditorPanel(props: {
   }
 
   const recorderSummaryText = getRecorderSummaryText(recorderState.phase, recorderState.error);
+  const showRecorderProgress = recorderState.phase === "recording" || recorderState.phase === "paused";
+  const formattedRecorderElapsed = formatRecorderDuration(recordingElapsedMs);
+  const recorderProgressValueText =
+    recorderState.phase === "paused"
+      ? `Recording paused at ${formattedRecorderElapsed}`
+      : `Recording for ${formattedRecorderElapsed}`;
   const recorderPanel =
     recorderState.phase !== "closed" ? (
       <div className="bb-panel-note">
@@ -1505,6 +1558,29 @@ function EditorPanel(props: {
               </p>
             ) : null}
           </div>
+          {showRecorderProgress ? (
+            <div className="bb-recorder-progress">
+              <div className="bb-recorder-progress__meta">
+                <span className={`bb-recorder-progress__status${recorderState.phase === "paused" ? " is-paused" : ""}`}>
+                  {recorderState.phase === "paused" ? "Paused" : "Live recording"}
+                </span>
+                <span className="bb-recorder-progress__time" data-testid="recorder-progress-time">
+                  {formattedRecorderElapsed}
+                </span>
+              </div>
+              <div
+                role="progressbar"
+                aria-label="Recording progress"
+                aria-valuetext={recorderProgressValueText}
+                className={`bb-recorder-progress__track${recorderState.phase === "paused" ? " is-paused" : ""}`}
+              >
+                <span
+                  aria-hidden="true"
+                  className={`bb-recorder-progress__fill${recorderState.phase === "paused" ? " is-paused" : ""}`}
+                />
+              </div>
+            </div>
+          ) : null}
           {recorderState.previewUrl ? (
             <audio controls preload="metadata" src={recorderState.previewUrl} className="bb-recorder-panel__preview" />
           ) : null}
@@ -2053,6 +2129,21 @@ function getRecorderSummaryText(phase: RecorderPhase, error: string | null) {
   }
 
   return null;
+}
+
+function getRecorderElapsedMs(recordingStartedAt: number | null, recordingElapsedOffsetMs: number) {
+  if (recordingStartedAt === null) {
+    return recordingElapsedOffsetMs;
+  }
+
+  return Math.max(0, recordingElapsedOffsetMs + (Date.now() - recordingStartedAt));
+}
+
+function formatRecorderDuration(elapsedMs: number) {
+  const totalSeconds = Math.max(0, Math.floor(elapsedMs / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
 
 function formatRecorderError(error: unknown) {

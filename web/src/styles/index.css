@@ -1738,6 +1738,75 @@ button:disabled {
   margin: 0;
 }
 
+.bb-recorder-progress {
+  display: grid;
+  gap: 0.42rem;
+  width: 100%;
+  max-width: 22rem;
+}
+
+.bb-recorder-progress__meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.7rem;
+}
+
+.bb-recorder-progress__status {
+  color: color-mix(in srgb, var(--accent-strong) 72%, var(--ink));
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.bb-recorder-progress__status.is-paused {
+  color: color-mix(in srgb, var(--ink-soft) 82%, var(--ink));
+}
+
+.bb-recorder-progress__time {
+  color: var(--ink-soft);
+  font-family: "IBM Plex Mono", "SFMono-Regular", Consolas, monospace;
+  font-size: 0.78rem;
+}
+
+.bb-recorder-progress__track {
+  position: relative;
+  overflow: hidden;
+  height: 0.62rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent-soft) 74%, var(--surface-strong));
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--accent) 18%, transparent),
+    inset 0 1px 0 var(--surface-highlight);
+}
+
+.bb-recorder-progress__track.is-paused {
+  background: color-mix(in srgb, var(--line) 82%, var(--surface-strong));
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--line-strong) 65%, transparent),
+    inset 0 1px 0 var(--surface-highlight);
+}
+
+.bb-recorder-progress__fill {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--accent) 34%, transparent) 0%,
+    color-mix(in srgb, var(--accent) 88%, var(--accent-strong)) 42%,
+    color-mix(in srgb, white 24%, var(--accent)) 100%
+  );
+  background-size: 190% 100%;
+  animation: bb-recorder-progress-sweep 1400ms linear infinite;
+}
+
+.bb-recorder-progress__fill.is-paused {
+  animation-play-state: paused;
+  filter: saturate(0.45);
+  opacity: 0.72;
+}
+
 .bb-recorder-panel__actions {
   display: flex;
   flex-wrap: wrap;
@@ -1747,6 +1816,16 @@ button:disabled {
 .bb-recorder-panel__preview {
   width: 100%;
   max-width: 22rem;
+}
+
+@keyframes bb-recorder-progress-sweep {
+  0% {
+    background-position: 200% 0;
+  }
+
+  100% {
+    background-position: -20% 0;
+  }
 }
 
 .bb-editor-panel {
