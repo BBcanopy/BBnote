@@ -645,7 +645,7 @@ test("reorders notes by dropping onto note cards and persists the order", async 
   await expectNoteOrderInLane(page, [firstNoteTitle, secondNoteTitle]);
 });
 
-test("auto-saves voice notes on stop, keeps delete available, and shows live recorder progress", async ({
+test("auto-saves voice notes on stop, inserts them into the editor, keeps delete available, and shows live recorder progress", async ({
   page
 }) => {
   await page.setViewportSize({ width: 1900, height: 1000 });
@@ -717,12 +717,12 @@ test("auto-saves voice notes on stop, keeps delete available, and shows live rec
 
   await recorderPanel.getByRole("button", { name: /^stop$/i }).click();
   const voiceAttachment = page.locator(".bb-attachment-card").filter({ hasText: /voice-note-\d{14}\.webm/i }).first();
+  const bodyTextarea = page.getByPlaceholder("Write in Markdown").first();
   await expect(page.getByText("Attachments").first()).toBeVisible();
   await expect(voiceAttachment).toBeVisible();
   await expect(recorderPanels).toHaveCount(0);
-  await expect(page.getByPlaceholder("Write in Markdown").first()).toHaveValue("");
+  await expect(bodyTextarea).toHaveValue(/\[voice-note-\d{14}\.webm\]\(.*\/attachments\/.*\)/i);
   await expect(page.getByRole("button", { name: /^retry save$/i })).toHaveCount(0);
-  await voiceAttachment.getByRole("button", { name: /^audio$/i }).click();
   await page.getByRole("button", { name: /^preview$/i }).click();
   const audioEmbed = page.locator(".bb-editor-preview .bb-markdown__audio-card").first();
   await expect(audioEmbed).toBeVisible();

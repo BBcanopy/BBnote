@@ -1523,7 +1523,7 @@ function EditorPanel(props: {
         new File([clip], fileName, {
           type: clip.type || "audio/webm"
         }),
-        "none"
+        "link"
       );
 
       if (uploaded) {
