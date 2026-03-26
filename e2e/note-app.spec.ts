@@ -868,7 +868,7 @@ test("shows the note title in the topbar, keeps folder and note drag cursors dis
   const deleteButton = editorHeader.getByRole("button", { name: /delete note/i });
   const textarea = editorPanel.getByPlaceholder("Write in Markdown");
 
-  await expect(titleLabel).toBeVisible();
+  await expect(titleLabel).toHaveCount(0);
   await expect(titleInput).toBeVisible();
   await expect(editorHeader.getByRole("textbox", { name: "Title" })).toHaveCount(0);
   await expect(expandEditorButton).toBeVisible();
@@ -886,6 +886,8 @@ test("shows the note title in the topbar, keeps folder and note drag cursors dis
   }
   expect(titleInputBox.y).toBeGreaterThanOrEqual(topbarBox.y - 1);
   expect(titleInputBox.y + titleInputBox.height).toBeLessThanOrEqual(topbarBox.y + topbarBox.height + 1);
+  expect(Math.abs(titleInputBox.x + titleInputBox.width / 2 - (topbarBox.x + topbarBox.width / 2))).toBeLessThan(24);
+  expect(titleInputBox.width).toBeGreaterThan(topbarBox.width * 0.45);
 
   await expect
     .poll(async () => notebookRow(page, notebookName).evaluate((element) => getComputedStyle(element).cursor))
