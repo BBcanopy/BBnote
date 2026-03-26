@@ -159,7 +159,7 @@ describe("NoteListPane", () => {
     });
   });
 
-  it("uses the explicit after drop zone position for upward moves", () => {
+  it("uses the explicit before drop zone position for upward seam moves", () => {
     const handleMoveNote = vi.fn<NoteListPaneProps["onMoveNote"]>();
     const dataTransfer = createDataTransfer();
 
@@ -185,13 +185,13 @@ describe("NoteListPane", () => {
     });
 
     fireEvent.dragStart(screen.getByTestId(buildNoteTestId("drag", "Budget wrap-up")), { dataTransfer });
-    fireEvent.dragOver(screen.getByTestId(buildNoteTestId("after", "Quarterly review")), { dataTransfer });
-    fireEvent.drop(screen.getByTestId(buildNoteTestId("after", "Quarterly review")), { dataTransfer });
+    fireEvent.dragOver(screen.getByTestId(buildNoteTestId("before", "Roadmap follow-up")), { dataTransfer });
+    fireEvent.drop(screen.getByTestId(buildNoteTestId("before", "Roadmap follow-up")), { dataTransfer });
 
     expect(handleMoveNote).toHaveBeenCalledWith({
       draggedId: "note-3",
-      targetId: "note-1",
-      position: "after"
+      targetId: "note-2",
+      position: "before"
     });
   });
 

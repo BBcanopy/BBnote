@@ -1099,6 +1099,8 @@ button:disabled {
 
 .bb-note-drop-slot {
   position: relative;
+  isolation: isolate;
+  overflow: visible;
   padding-block: 0.18rem;
   margin-block: -0.18rem;
   transition:
@@ -1107,8 +1109,8 @@ button:disabled {
 }
 
 .bb-note-drop-slot.is-drag-ready {
-  padding-block: 0.28rem;
-  margin-block: -0.1rem;
+  padding-block: 0.95rem;
+  margin-block: 0.14rem;
 }
 
 .bb-note-drop-slot::before,
@@ -1451,6 +1453,8 @@ button:disabled {
 }
 
 .bb-note-card {
+  position: relative;
+  z-index: 1;
   overflow: hidden;
   padding: 0.66rem 0.76rem;
 }
@@ -1732,9 +1736,21 @@ button:disabled {
 }
 
 .bb-dropzone--note {
+  position: absolute;
+  left: 0.42rem;
+  right: 0.42rem;
   height: 0.22rem;
   opacity: 0.001;
   pointer-events: none;
+  z-index: 4;
+}
+
+.bb-dropzone--note-before {
+  top: 0.08rem;
+}
+
+.bb-dropzone--note-after {
+  bottom: 0.08rem;
 }
 
 .bb-dropzone--tree {

@@ -761,7 +761,7 @@ test("reorders notes by dropping onto note cards and persists the order", async 
   await expectNoteOrderInLane(page, [firstNoteTitle, secondNoteTitle]);
 });
 
-test("reorders notes when dropped on the explicit before and after lanes", async ({ page }) => {
+test("reorders notes when dropped on the explicit seam lanes", async ({ page }) => {
   await page.setViewportSize({ width: 1900, height: 1000 });
   const suffix = Date.now().toString();
   const notebookName = `Lane reorder ${suffix}`;
@@ -778,22 +778,22 @@ test("reorders notes when dropped on the explicit before and after lanes", async
   await createNoteWithContent(page, thirdNoteTitle, "Third note body.");
   await expectNoteOrderInLane(page, [firstNoteTitle, secondNoteTitle, thirdNoteTitle]);
 
-  const upwardSource = page.getByTestId(buildNoteTestId("drag", thirdNoteTitle));
-  const upwardAfterLane = page.getByTestId(buildNoteTestId("after", firstNoteTitle));
-  const upwardLaneDrag = await startDrag(page, upwardSource);
-  await expect(upwardAfterLane).toHaveClass(/is-visible/);
-  await dropOnTarget(upwardSource, upwardAfterLane, upwardLaneDrag);
+  await dragNoteCardToNoteCard(
+    page.getByTestId(buildNoteTestId("drag", thirdNoteTitle)),
+    page.getByTestId(buildNoteTestId("slot", secondNoteTitle)),
+    "top"
+  );
   await expectNoteOrderInLane(page, [firstNoteTitle, thirdNoteTitle, secondNoteTitle]);
 
   await page.reload();
   await notebookRow(page, notebookName).click();
   await expectNoteOrderInLane(page, [firstNoteTitle, thirdNoteTitle, secondNoteTitle]);
 
-  const downwardSource = page.getByTestId(buildNoteTestId("drag", firstNoteTitle));
-  const downwardBeforeLane = page.getByTestId(buildNoteTestId("before", secondNoteTitle));
-  const downwardLaneDrag = await startDrag(page, downwardSource);
-  await expect(downwardBeforeLane).toHaveClass(/is-visible/);
-  await dropOnTarget(downwardSource, downwardBeforeLane, downwardLaneDrag);
+  await dragNoteCardToNoteCard(
+    page.getByTestId(buildNoteTestId("drag", firstNoteTitle)),
+    page.getByTestId(buildNoteTestId("slot", secondNoteTitle)),
+    "top"
+  );
   await expectNoteOrderInLane(page, [thirdNoteTitle, firstNoteTitle, secondNoteTitle]);
 
   await page.reload();

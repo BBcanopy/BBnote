@@ -326,13 +326,14 @@ export function NoteListPane(props: {
             {props.notebookName ? "No notes yet." : "No notes match this view."}
           </div>
         ) : (
-          props.notes.map((note) =>
+          props.notes.map((note, index) =>
             renderNote(note, {
               canDragNotes,
               canReorder: props.canReorder,
               draggedNoteId,
               dragging,
               dropTarget,
+              showAfterDropZone: index === props.notes.length - 1,
               onDragEnd: clearDragState,
               onCardDragOver: handleNoteCardDragOver,
               onCardDrop: handleNoteCardDrop,
@@ -369,6 +370,7 @@ function renderNote(
     draggedNoteId: string | null;
     dragging: boolean;
     dropTarget: NoteDropTarget | null;
+    showAfterDropZone: boolean;
     onDragEnd(): void;
     onCardDragOver(event: DragEvent<HTMLElement>, targetId: string): void;
     onCardDrop(event: DragEvent<HTMLElement>, targetId: string): void;
@@ -435,6 +437,7 @@ function renderNote(
       {helpers.canReorder ? (
         <NoteDropZone
           testId={buildNoteTestId("before", note.title)}
+          position="before"
           active={helpers.dropTarget?.targetId === note.id && helpers.dropTarget.position === "before"}
           dragging={dragTargetVisible}
           onDragOver={(event) => helpers.onDropZoneDragOver(event, note.id, "before")}
@@ -444,9 +447,10 @@ function renderNote(
       <div className="min-w-0 rounded-[1.15rem]">
         {noteCard}
       </div>
-      {helpers.canReorder ? (
+      {helpers.canReorder && helpers.showAfterDropZone ? (
         <NoteDropZone
           testId={buildNoteTestId("after", note.title)}
+          position="after"
           active={helpers.dropTarget?.targetId === note.id && helpers.dropTarget.position === "after"}
           dragging={dragTargetVisible}
           onDragOver={(event) => helpers.onDropZoneDragOver(event, note.id, "after")}
@@ -459,6 +463,7 @@ function renderNote(
 
 function NoteDropZone(props: {
   testId: string;
+  position: NoteMovePosition;
   active: boolean;
   dragging: boolean;
   onDragOver(event: DragEvent<HTMLDivElement>): void;
@@ -470,7 +475,7 @@ function NoteDropZone(props: {
       aria-hidden="true"
       onDragOver={props.dragging ? props.onDragOver : undefined}
       onDrop={props.dragging ? props.onDrop : undefined}
-      className={`bb-dropzone bb-dropzone--note ${props.dragging ? "is-visible" : ""} ${props.active ? "is-active" : ""}`}
+      className={`bb-dropzone bb-dropzone--note bb-dropzone--note-${props.position} ${props.dragging ? "is-visible" : ""} ${props.active ? "is-active" : ""}`}
     />
   );
 }
