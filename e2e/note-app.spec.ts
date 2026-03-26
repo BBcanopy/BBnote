@@ -664,6 +664,7 @@ test("shows pause controls, live recorder progress, and tighter recorder panel s
   const recorderProgressTime = recorderPanel.getByTestId("recorder-progress-time");
   await expect(recorderPanel).toBeVisible();
   await expect(recorderPanel.getByText("Recording voice note")).toBeVisible();
+  await expect(recorderPanel.getByText("Stop when you're ready to review or attach the clip.")).toHaveCount(0);
   await expect(recorderPanel.getByRole("button", { name: /^pause$/i })).toBeVisible();
   await expect(recorderPanel.getByRole("button", { name: /^dismiss$/i })).toHaveCount(0);
   await expect(recorderProgress).toBeVisible();
@@ -676,7 +677,7 @@ test("shows pause controls, live recorder progress, and tighter recorder panel s
           elements.map((element) => `${getComputedStyle(element).marginTop}/${getComputedStyle(element).marginBottom}`).join("|")
         )
     )
-    .toBe("0px/0px|0px/0px");
+    .toBe("0px/0px");
   const initialRecorderProgressValue = (await recorderProgress.getAttribute("aria-valuetext")) ?? "";
   await expect
     .poll(

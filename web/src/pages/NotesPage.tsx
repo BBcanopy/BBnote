@@ -2108,10 +2108,6 @@ function getRecorderTitle(phase: RecorderPhase) {
 }
 
 function getRecorderSummaryText(phase: RecorderPhase, error: string | null) {
-  if (phase === "recording") {
-    return "Stop when you're ready to review or attach the clip.";
-  }
-
   if (phase === "paused") {
     return "Resume when you're ready to keep going.";
   }
