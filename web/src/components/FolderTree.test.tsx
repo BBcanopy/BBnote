@@ -2,6 +2,7 @@ import type { ComponentProps } from "react";
 import { fireEvent, render, screen } from "@testing-library/react";
 import type { FolderNode } from "../api/types";
 import { FolderTree } from "./FolderTree";
+import { buildNotebookTestId } from "./folderTreeTestIds";
 
 type FolderTreeProps = ComponentProps<typeof FolderTree>;
 
@@ -16,6 +17,7 @@ describe("FolderTree", () => {
 
     fireEvent.dragStart(screen.getByRole("button", { name: /archive 0/i }), { dataTransfer });
     fireEvent.dragOver(screen.getByTestId(buildNotebookTestId("drag", "Projects")), { dataTransfer });
+    expect(screen.getByTestId(buildNotebookTestId("drag", "Projects")).querySelector(".bb-tree-row")).toHaveClass("bb-tree-row--drop-inside");
     fireEvent.drop(screen.getByTestId(buildNotebookTestId("drag", "Projects")), { dataTransfer });
 
     expect(handleMoveNotebook).toHaveBeenCalledWith({
@@ -35,6 +37,7 @@ describe("FolderTree", () => {
 
     fireEvent.dragStart(screen.getByRole("button", { name: /archive 0/i }), { dataTransfer });
     fireEvent.dragOver(screen.getByTestId(buildNotebookTestId("before", "Roadmaps")), { dataTransfer });
+    expect(screen.getByTestId(buildNotebookTestId("node", "Roadmaps"))).toHaveClass("bb-tree-node--drop-before");
     fireEvent.drop(screen.getByTestId(buildNotebookTestId("before", "Roadmaps")), { dataTransfer });
 
     expect(handleMoveNotebook).toHaveBeenCalledWith({
@@ -209,6 +212,3 @@ function createDataTransfer(): DataTransfer {
   } as DataTransfer;
 }
 
-function buildNotebookTestId(kind: "drag" | "before" | "after", name: string) {
-  return `notebook-${kind}-${encodeURIComponent(name)}`;
-}

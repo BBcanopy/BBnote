@@ -382,6 +382,7 @@ describe("NoteListPane", () => {
     fireEvent(targetCard, dragOverEvent);
 
     expect(targetSlot).toHaveClass("is-drop-after");
+    expect(targetCard).toHaveClass("bb-note-card--shift-up");
 
     fireEvent.drop(targetCard, { dataTransfer });
 
@@ -493,6 +494,7 @@ describe("NoteListPane", () => {
 
     expect(dataTransfer.dropEffect).toBe("move");
     expect(targetSlot).toHaveClass("is-drop-before");
+    expect(targetCard).toHaveClass("bb-note-card--shift-down");
   });
 
   it("shows untitled note placeholder text for blank titles", () => {

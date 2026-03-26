@@ -1128,8 +1128,18 @@ button:disabled {
 }
 
 .bb-note-drop-slot.is-drag-ready {
-  padding-block: 0.95rem;
-  margin-block: 0.14rem;
+  padding-block: 0.28rem;
+  margin-block: 0;
+}
+
+.bb-note-drop-slot.is-drop-before {
+  padding-top: 1rem;
+  margin-top: 0.18rem;
+}
+
+.bb-note-drop-slot.is-drop-after {
+  padding-bottom: 1rem;
+  margin-bottom: 0.18rem;
 }
 
 .bb-note-drop-slot::before,
@@ -1500,6 +1510,14 @@ button:disabled {
     0 14px 26px -22px color-mix(in srgb, var(--accent) 58%, transparent);
 }
 
+.bb-note-drop-slot.is-drop-before .bb-note-card--shift-down {
+  transform: translateY(0.58rem);
+}
+
+.bb-note-drop-slot.is-drop-after .bb-note-card--shift-up {
+  transform: translateY(-0.58rem);
+}
+
 .bb-tree-drop-target {
   border-radius: 1.15rem;
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
@@ -1575,6 +1593,7 @@ button:disabled {
   box-shadow: none;
   text-align: left;
   transition:
+    transform 220ms var(--ease),
     background-color 180ms var(--ease),
     color 180ms var(--ease);
 }
@@ -1593,6 +1612,14 @@ button:disabled {
 .bb-tree-row.is-note-target {
   background: color-mix(in srgb, var(--accent-soft) 72%, transparent);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 28%, var(--line));
+}
+
+.bb-tree-row--dragging {
+  opacity: 0.54;
+}
+
+.bb-tree-row--drop-inside {
+  transform: translateX(0.2rem);
 }
 
 .bb-tree-row--all {
@@ -1685,6 +1712,33 @@ button:disabled {
 .bb-tree-node {
   display: grid;
   gap: 0.1rem;
+  transition:
+    padding-block 180ms var(--ease),
+    margin-block 180ms var(--ease);
+}
+
+.bb-tree-node--drop-before {
+  padding-top: 0.9rem;
+  margin-top: 0.14rem;
+}
+
+.bb-tree-node--drop-after {
+  padding-bottom: 0.9rem;
+  margin-bottom: 0.14rem;
+}
+
+.bb-tree-node__content {
+  display: grid;
+  gap: 0.1rem;
+  transition: transform 220ms var(--ease);
+}
+
+.bb-tree-node--drop-before > .bb-tree-node__content {
+  transform: translateY(0.52rem);
+}
+
+.bb-tree-node--drop-after > .bb-tree-node__content {
+  transform: translateY(-0.52rem);
 }
 
 .bb-tree-branch {
