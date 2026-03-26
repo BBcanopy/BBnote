@@ -15,11 +15,6 @@ export function AttachmentList(props: {
 }) {
   return (
     <section className="bb-pane-card">
-      <div className="bb-pane-card__header">
-        <div className="bb-panel-header__copy">
-          <p className="bb-eyebrow">Attachments</p>
-        </div>
-      </div>
       <div className="space-y-3">
         {props.attachments.length === 0 ? (
           <div className="bb-empty-state text-sm">

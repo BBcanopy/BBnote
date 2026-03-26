@@ -624,7 +624,7 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
 
   const uploadFile = await createTempFile("budget.txt", "budget attachment");
   await page.locator('input[type="file"]').first().setInputFiles(uploadFile);
-  await expect(page.getByText("Attachments").first()).toBeVisible();
+  await expect(page.getByText("Attachments")).toHaveCount(0);
   await expect(page.getByText("Linked files and embeds")).toHaveCount(0);
   await expect(page.getByText("budget.txt").first()).toBeVisible();
 
@@ -1081,7 +1081,7 @@ test("auto-saves voice notes on stop, inserts them into the editor, keeps delete
   await recorderPanel.getByRole("button", { name: /^stop$/i }).click();
   const voiceAttachment = page.locator(".bb-attachment-card").filter({ hasText: /voice-note-\d{14}\.webm/i }).first();
   const bodyTextarea = page.getByPlaceholder("Write in Markdown").first();
-  await expect(page.getByText("Attachments").first()).toBeVisible();
+  await expect(page.getByText("Attachments")).toHaveCount(0);
   await expect(voiceAttachment).toBeVisible();
   await expect(recorderPanels).toHaveCount(0);
   await expect(bodyTextarea).toHaveValue(/\[voice-note-\d{14}\.webm\]\(.*\/attachments\/.*\)/i);
