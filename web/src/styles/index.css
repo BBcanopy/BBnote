@@ -282,9 +282,9 @@ button:disabled {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: 1rem;
-  padding: 0.5rem 0.2rem 0.8rem;
-  border-radius: 1.8rem;
+  gap: 0.8rem;
+  padding: 0.2rem 0.1rem 0.45rem;
+  border-radius: 1.35rem;
   position: sticky;
   top: 0.75rem;
   z-index: 10;
@@ -298,7 +298,7 @@ button:disabled {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
-  gap: 1rem;
+  gap: 0.8rem;
   min-width: 0;
 }
 
@@ -311,7 +311,7 @@ button:disabled {
   display: inline-grid;
   grid-template-columns: auto auto;
   align-items: center;
-  gap: 0.68rem;
+  gap: 0.58rem;
   min-width: fit-content;
   transition:
     transform 220ms var(--ease),
@@ -325,18 +325,22 @@ button:disabled {
 .bb-brand-mark__pill {
   display: inline-grid;
   place-items: center;
-  width: 2.2rem;
-  height: 2.2rem;
-  border-radius: 0.8rem;
-  background: linear-gradient(145deg, var(--brand-start) 0%, var(--brand-end) 100%);
+  width: 2rem;
+  height: 2rem;
+  border-radius: 0.72rem;
+  background: linear-gradient(
+    145deg,
+    color-mix(in srgb, #5d94d1 36%, var(--brand-start)) 0%,
+    color-mix(in srgb, #4b78bf 42%, var(--brand-end)) 100%
+  );
   color: #f5fffe;
   box-shadow:
     inset 0 1px 0 var(--surface-highlight-strong),
     0 16px 28px -22px rgba(18, 34, 36, 0.42);
   font-family: "IBM Plex Mono", "SFMono-Regular", Consolas, monospace;
-  font-size: 0.82rem;
+  font-size: 0.78rem;
   font-weight: 500;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
 }
 
@@ -346,7 +350,7 @@ button:disabled {
 }
 
 .bb-brand-mark__title {
-  font-size: 1rem;
+  font-size: 0.96rem;
   font-weight: 700;
   line-height: 1;
   letter-spacing: -0.03em;
@@ -409,9 +413,9 @@ button:disabled {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 3.15rem;
-  height: 3.15rem;
-  padding: 0.45rem;
+  width: 2.82rem;
+  height: 2.82rem;
+  padding: 0.32rem;
   border: none;
   border-radius: 999px;
   background: var(--surface-input);
@@ -430,12 +434,12 @@ button:disabled {
 .bb-avatar-button__letter {
   display: inline-grid;
   place-items: center;
-  width: 2.2rem;
-  height: 2.2rem;
+  width: 2rem;
+  height: 2rem;
   border-radius: 999px;
   background: linear-gradient(145deg, var(--brand-start) 0%, var(--brand-end) 100%);
   color: #f5fffe;
-  font-size: 0.9rem;
+  font-size: 0.84rem;
   font-weight: 700;
 }
 
@@ -2033,9 +2037,71 @@ button:disabled {
 .bb-editor-header {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
-  gap: 0.75rem;
+  justify-content: space-between;
+  gap: 0.9rem;
   flex-wrap: wrap;
+}
+
+.bb-editor-header__spacer {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.bb-editor-header__actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.35rem;
+  margin-left: auto;
+}
+
+.bb-editor-titlebar {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  flex: 1 1 20rem;
+  min-width: min(100%, 18rem);
+}
+
+.bb-editor-titlebar__label {
+  flex: 0 0 auto;
+  color: var(--ink-soft);
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.bb-editor-titlebar__input {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 2.7rem;
+  padding-block: 0.55rem;
+}
+
+.bb-editor-toolbar-row {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+}
+
+.bb-editor-toolbar-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  flex-wrap: wrap;
+}
+
+.bb-editor-toolbar-divider {
+  width: 1px;
+  align-self: stretch;
+  min-height: 2rem;
+  background: color-mix(in srgb, var(--line) 82%, transparent);
+}
+
+.bb-editor-format-toolbar {
+  justify-content: flex-start;
 }
 
 .bb-editor-body-header {
@@ -2061,8 +2127,8 @@ button:disabled {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 2.45rem;
-  height: 2.45rem;
+  width: 2.3rem;
+  height: 2.3rem;
   border: none;
   border-radius: 999px;
   background: transparent;
@@ -2565,9 +2631,23 @@ button:disabled {
   .bb-panel-header,
   .bb-migration-card__header,
   .bb-editor-header,
+  .bb-editor-toolbar-row,
   .bb-editor-body-header,
   .bb-attachment-card {
     align-items: stretch;
+  }
+
+  .bb-editor-header__actions,
+  .bb-editor-titlebar {
+    width: 100%;
+  }
+
+  .bb-editor-titlebar {
+    flex-wrap: wrap;
+  }
+
+  .bb-editor-toolbar-divider {
+    display: none;
   }
 
   .bb-avatar-dropdown {

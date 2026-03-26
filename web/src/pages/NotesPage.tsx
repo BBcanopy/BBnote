@@ -2,6 +2,7 @@ import {
   CaretLeft,
   CaretRight,
   CircleNotch,
+  Code,
   Eye,
   FileArrowUp,
   FolderSimple,
@@ -11,6 +12,11 @@ import {
   MusicNotesSimple,
   PencilSimple,
   Plus,
+  Quotes,
+  TextB,
+  TextItalic,
+  TextStrikethrough,
+  TextUnderline,
   Trash,
   VideoCamera
 } from "@phosphor-icons/react";
@@ -42,6 +48,7 @@ import { MarkdownPreview } from "../components/MarkdownPreview";
 import { NoteListPane } from "../components/NoteListPane";
 import { TextPromptDialog } from "../components/TextPromptDialog";
 import { buildFolderMutations, moveFolders, type FolderMoveInstruction } from "../utils/folderTree";
+import { formatMarkdownSelection, type MarkdownFormatKind } from "../utils/markdownFormat";
 import { buildNotesPath } from "../utils/noteRoute";
 import { buildNoteOrderIds, moveNotes, type NoteMoveInstruction } from "../utils/noteOrder";
 
@@ -1251,6 +1258,7 @@ function EditorPanel(props: {
   const audioInputRef = useRef<HTMLInputElement | null>(null);
   const videoInputRef = useRef<HTMLInputElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const bodyTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const recordedChunksRef = useRef<Blob[]>([]);
@@ -1271,6 +1279,7 @@ function EditorPanel(props: {
   const [recordingElapsedMs, setRecordingElapsedMs] = useState(0);
   const [savingRecording, setSavingRecording] = useState(false);
   const mediaActionsDisabled = props.loading || props.uploadingAttachment || savingRecording || !props.canUseMediaActions;
+  const formatActionsDisabled = !props.editorNote || props.editorPane !== "markdown";
   const hasAttachments = (props.editorNote?.attachments.length ?? 0) > 0;
 
   useEffect(() => {
@@ -1561,6 +1570,35 @@ function EditorPanel(props: {
     await persistRecordingClip(recorderState.blob);
   }
 
+  function handleApplyMarkdownFormat(kind: MarkdownFormatKind) {
+    if (!props.editorNote || props.editorPane !== "markdown") {
+      return;
+    }
+
+    const textarea = bodyTextareaRef.current;
+    if (!textarea) {
+      return;
+    }
+
+    const { nextValue, nextSelectionStart, nextSelectionEnd } = formatMarkdownSelection(
+      props.editorNote.bodyMarkdown,
+      textarea.selectionStart,
+      textarea.selectionEnd,
+      kind
+    );
+
+    props.onBodyChange(nextValue);
+    window.requestAnimationFrame(() => {
+      const nextTextarea = bodyTextareaRef.current;
+      if (!nextTextarea) {
+        return;
+      }
+
+      nextTextarea.focus();
+      nextTextarea.setSelectionRange(nextSelectionStart, nextSelectionEnd);
+    });
+  }
+
   const recorderSummaryText = getRecorderSummaryText(recorderState.phase, recorderState.error);
   const showRecorderProgress = recorderState.phase === "recording" || recorderState.phase === "paused";
   const formattedRecorderElapsed = formatRecorderDuration(recordingElapsedMs);
@@ -1568,6 +1606,123 @@ function EditorPanel(props: {
     recorderState.phase === "paused"
       ? `Recording paused at ${formattedRecorderElapsed}`
       : `Recording for ${formattedRecorderElapsed}`;
+  const formatToolbarDisabledTitle = !props.editorNote ? "Select a note to format text." : "Switch to Markdown to format text.";
+  const editorMode = (
+    <div className="bb-editor-mode">
+      <ModeButton
+        active={props.editorPane === "markdown"}
+        disabled={!props.editorNote}
+        label="Markdown"
+        icon={<PencilSimple size={17} />}
+        onClick={() => props.onEditorPaneChange("markdown")}
+      />
+      <ModeButton
+        active={props.editorPane === "preview"}
+        disabled={!props.editorNote}
+        label="Preview"
+        icon={<Eye size={17} />}
+        onClick={() => props.onEditorPaneChange("preview")}
+      />
+    </div>
+  );
+  const mediaToolbar = (
+    <div className="bb-editor-toolbar-group bb-editor-media-toolbar" data-testid="editor-media-toolbar">
+      <MediaToolbarButton
+        label="Add image"
+        icon={<ImageSquare size={17} />}
+        disabled={mediaActionsDisabled}
+        disabledTitle={props.mediaActionDisabledReason}
+        onClick={() => openFilePicker(imageInputRef)}
+      />
+      <MediaToolbarButton
+        label="Add audio"
+        icon={<MusicNotesSimple size={17} />}
+        disabled={mediaActionsDisabled}
+        disabledTitle={props.mediaActionDisabledReason}
+        onClick={() => openFilePicker(audioInputRef)}
+      />
+      <MediaToolbarButton
+        label="Add video"
+        icon={<VideoCamera size={17} />}
+        disabled={mediaActionsDisabled}
+        disabledTitle={props.mediaActionDisabledReason}
+        onClick={() => openFilePicker(videoInputRef)}
+      />
+      <MediaToolbarButton
+        label="Record voice"
+        icon={<Microphone size={17} />}
+        disabled={mediaActionsDisabled || recorderState.phase === "starting" || recorderState.phase === "processing"}
+        disabledTitle={props.mediaActionDisabledReason}
+        active={
+          recorderState.phase === "recording" ||
+          recorderState.phase === "paused" ||
+          recorderState.phase === "saving" ||
+          recorderState.phase === "recorded"
+        }
+        onClick={() => void handleStartRecording()}
+      />
+      <MediaToolbarButton
+        label="Upload file"
+        icon={<FileArrowUp size={17} />}
+        disabled={mediaActionsDisabled}
+        disabledTitle={props.mediaActionDisabledReason}
+        onClick={() => openFilePicker(fileInputRef)}
+      />
+    </div>
+  );
+  const formattingToolbar = props.editorNote ? (
+    <div className="bb-editor-toolbar-group bb-editor-format-toolbar" data-testid="editor-format-toolbar">
+      <MediaToolbarButton
+        label="Bold"
+        icon={<TextB size={17} />}
+        disabled={formatActionsDisabled}
+        disabledTitle={formatToolbarDisabledTitle}
+        onClick={() => handleApplyMarkdownFormat("bold")}
+      />
+      <MediaToolbarButton
+        label="Italic"
+        icon={<TextItalic size={17} />}
+        disabled={formatActionsDisabled}
+        disabledTitle={formatToolbarDisabledTitle}
+        onClick={() => handleApplyMarkdownFormat("italic")}
+      />
+      <MediaToolbarButton
+        label="Underline"
+        icon={<TextUnderline size={17} />}
+        disabled={formatActionsDisabled}
+        disabledTitle={formatToolbarDisabledTitle}
+        onClick={() => handleApplyMarkdownFormat("underline")}
+      />
+      <MediaToolbarButton
+        label="Strikethrough"
+        icon={<TextStrikethrough size={17} />}
+        disabled={formatActionsDisabled}
+        disabledTitle={formatToolbarDisabledTitle}
+        onClick={() => handleApplyMarkdownFormat("strikethrough")}
+      />
+      <MediaToolbarButton
+        label="Inline code"
+        icon={<Code size={17} />}
+        disabled={formatActionsDisabled}
+        disabledTitle={formatToolbarDisabledTitle}
+        onClick={() => handleApplyMarkdownFormat("code")}
+      />
+      <MediaToolbarButton
+        label="Quote"
+        icon={<Quotes size={17} />}
+        disabled={formatActionsDisabled}
+        disabledTitle={formatToolbarDisabledTitle}
+        onClick={() => handleApplyMarkdownFormat("quote")}
+      />
+      <MediaToolbarButton
+        label="Bulleted list"
+        icon={<ListBullets size={17} />}
+        disabled={formatActionsDisabled}
+        disabledTitle={formatToolbarDisabledTitle}
+        onClick={() => handleApplyMarkdownFormat("bulleted-list")}
+      />
+    </div>
+  ) : null;
   const recorderPanel =
     recorderState.phase !== "closed" ? (
       <div className="bb-panel-note">
@@ -1657,7 +1812,22 @@ function EditorPanel(props: {
   return (
     <section className="bb-editor-panel bb-editor-panel--workspace lg:flex-1">
       <div className="bb-editor-header">
-        <div className="flex flex-wrap items-center gap-2">
+        {props.editorNote ? (
+          <label className="bb-editor-titlebar">
+            <span className="bb-editor-titlebar__label">Title</span>
+            <input
+              value={props.editorNote.title}
+              onChange={(event) => props.onTitleChange(event.target.value)}
+              placeholder="Note title"
+              disabled={!props.editorNote}
+              className="bb-input bb-editor-titlebar__input text-lg font-medium tracking-tight"
+            />
+          </label>
+        ) : (
+          <div className="bb-editor-header__spacer" aria-hidden="true" />
+        )}
+        <div className="bb-editor-header__actions">
+          {editorMode}
           <button
             type="button"
             onClick={props.onDeleteRequest}
@@ -1718,70 +1888,7 @@ function EditorPanel(props: {
         </div>
       ) : !props.editorNote ? (
         <div className="bb-editor-panel__content bb-editor-panel__content--empty">
-          <div className="bb-editor-body-header">
-            <div className="bb-editor-body-actions">
-              <span className="bb-field__label bb-field__label--mode">{props.editorPane === "markdown" ? "Notes" : "Preview"}</span>
-              <div className="bb-editor-media-toolbar" data-testid="editor-media-toolbar">
-                <MediaToolbarButton
-                  label="Add image"
-                  icon={<ImageSquare size={17} />}
-                  disabled={mediaActionsDisabled}
-                  disabledTitle={props.mediaActionDisabledReason}
-                  onClick={() => openFilePicker(imageInputRef)}
-                />
-                <MediaToolbarButton
-                  label="Add audio"
-                  icon={<MusicNotesSimple size={17} />}
-                  disabled={mediaActionsDisabled}
-                  disabledTitle={props.mediaActionDisabledReason}
-                  onClick={() => openFilePicker(audioInputRef)}
-                />
-                <MediaToolbarButton
-                  label="Add video"
-                  icon={<VideoCamera size={17} />}
-                  disabled={mediaActionsDisabled}
-                  disabledTitle={props.mediaActionDisabledReason}
-                  onClick={() => openFilePicker(videoInputRef)}
-                />
-                <MediaToolbarButton
-                  label="Record voice"
-                  icon={<Microphone size={17} />}
-                  disabled={mediaActionsDisabled || recorderState.phase === "starting" || recorderState.phase === "processing"}
-                  disabledTitle={props.mediaActionDisabledReason}
-                  active={
-                    recorderState.phase === "recording" ||
-                    recorderState.phase === "paused" ||
-                    recorderState.phase === "saving" ||
-                    recorderState.phase === "recorded"
-                  }
-                  onClick={() => void handleStartRecording()}
-                />
-                <MediaToolbarButton
-                  label="Upload file"
-                  icon={<FileArrowUp size={17} />}
-                  disabled={mediaActionsDisabled}
-                  disabledTitle={props.mediaActionDisabledReason}
-                  onClick={() => openFilePicker(fileInputRef)}
-                />
-              </div>
-            </div>
-            <div className="bb-editor-mode">
-              <ModeButton
-                active={props.editorPane === "markdown"}
-                disabled={!props.editorNote}
-                label="Markdown"
-                icon={<PencilSimple size={17} />}
-                onClick={() => props.onEditorPaneChange("markdown")}
-              />
-              <ModeButton
-                active={props.editorPane === "preview"}
-                disabled={!props.editorNote}
-                label="Preview"
-                icon={<Eye size={17} />}
-                onClick={() => props.onEditorPaneChange("preview")}
-              />
-            </div>
-          </div>
+          <div className="bb-editor-toolbar-row">{mediaToolbar}</div>
 
           {recorderPanel}
 
@@ -1796,78 +1903,10 @@ function EditorPanel(props: {
         </div>
       ) : (
         <div className="bb-editor-panel__content bb-editor-panel__content--editor">
-          <label className="bb-field">
-            <span className="bb-field__label">Title</span>
-            <input
-              value={props.editorNote.title}
-              onChange={(event) => props.onTitleChange(event.target.value)}
-              placeholder="Note title"
-              disabled={!props.editorNote}
-              className="bb-input text-lg font-medium tracking-tight"
-            />
-          </label>
-
-          <div className="bb-editor-body-header">
-            <div className="bb-editor-body-actions">
-              <span className="bb-field__label bb-field__label--mode">{props.editorPane === "markdown" ? "Notes" : "Preview"}</span>
-              <div className="bb-editor-media-toolbar" data-testid="editor-media-toolbar">
-                <MediaToolbarButton
-                  label="Add image"
-                  icon={<ImageSquare size={17} />}
-                  disabled={mediaActionsDisabled}
-                  disabledTitle={props.mediaActionDisabledReason}
-                  onClick={() => openFilePicker(imageInputRef)}
-                />
-                <MediaToolbarButton
-                  label="Add audio"
-                  icon={<MusicNotesSimple size={17} />}
-                  disabled={mediaActionsDisabled}
-                  disabledTitle={props.mediaActionDisabledReason}
-                  onClick={() => openFilePicker(audioInputRef)}
-                />
-                <MediaToolbarButton
-                  label="Add video"
-                  icon={<VideoCamera size={17} />}
-                  disabled={mediaActionsDisabled}
-                  disabledTitle={props.mediaActionDisabledReason}
-                  onClick={() => openFilePicker(videoInputRef)}
-                />
-                <MediaToolbarButton
-                  label="Record voice"
-                  icon={<Microphone size={17} />}
-                  disabled={mediaActionsDisabled || recorderState.phase === "starting" || recorderState.phase === "processing"}
-                  disabledTitle={props.mediaActionDisabledReason}
-                  active={
-                    recorderState.phase === "recording" ||
-                    recorderState.phase === "paused" ||
-                    recorderState.phase === "saving" ||
-                    recorderState.phase === "recorded"
-                  }
-                  onClick={() => void handleStartRecording()}
-                />
-                <MediaToolbarButton
-                  label="Upload file"
-                  icon={<FileArrowUp size={17} />}
-                  disabled={mediaActionsDisabled}
-                  disabledTitle={props.mediaActionDisabledReason}
-                  onClick={() => openFilePicker(fileInputRef)}
-                />
-              </div>
-            </div>
-            <div className="bb-editor-mode">
-              <ModeButton
-                active={props.editorPane === "markdown"}
-                label="Markdown"
-                icon={<PencilSimple size={17} />}
-                onClick={() => props.onEditorPaneChange("markdown")}
-              />
-              <ModeButton
-                active={props.editorPane === "preview"}
-                label="Preview"
-                icon={<Eye size={17} />}
-                onClick={() => props.onEditorPaneChange("preview")}
-              />
-            </div>
+          <div className="bb-editor-toolbar-row">
+            {mediaToolbar}
+            {formattingToolbar ? <span className="bb-editor-toolbar-divider" aria-hidden="true" /> : null}
+            {formattingToolbar}
           </div>
 
           {recorderPanel}
@@ -1876,6 +1915,7 @@ function EditorPanel(props: {
             {props.editorPane === "markdown" ? (
               <label className={`bb-field ${hasAttachments ? "" : "bb-field--stretch"}`}>
                 <textarea
+                  ref={bodyTextareaRef}
                   value={props.editorNote.bodyMarkdown}
                   onChange={(event) => props.onBodyChange(event.target.value)}
                   placeholder="Write in Markdown"

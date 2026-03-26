@@ -251,6 +251,7 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
   const topbarBox = await topbar.boundingBox();
   const viewport = page.viewportSize();
   expect(topbarBox?.width ?? 0).toBeGreaterThan(((viewport?.width ?? 0) * 0.95));
+  expect(topbarBox?.height ?? 0).toBeLessThan(62);
   const topbarStyles = await topbar.evaluate((element) => {
     const styles = getComputedStyle(element);
     return {
@@ -267,8 +268,16 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
   const brandMark = page.getByRole("link", { name: /bbnote home/i }).first();
   const brandPill = brandMark.locator(".bb-brand-mark__pill");
   const brandTitle = brandMark.locator(".bb-brand-mark__title");
+  await expect(brandPill).toHaveText("BB");
   const brandPillBox = await brandPill.boundingBox();
   const brandTitleBox = await brandTitle.boundingBox();
+  const expectedBrandPillBackground = await resolveBackgroundImage(
+    page,
+    "linear-gradient(145deg, color-mix(in srgb, #5d94d1 36%, var(--brand-start)) 0%, color-mix(in srgb, #4b78bf 42%, var(--brand-end)) 100%)"
+  );
+  await expect
+    .poll(async () => brandPill.evaluate((element) => getComputedStyle(element).backgroundImage))
+    .toBe(expectedBrandPillBackground);
   expect(brandPillBox).not.toBeNull();
   expect(brandTitleBox).not.toBeNull();
   if (!brandPillBox || !brandTitleBox) {
@@ -455,8 +464,8 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
     .toBeLessThan(56);
   await bodyTextarea.fill(`# Budget\n\nalpha launch ${searchTerm}`);
   await expect(page.getByText(/^Saved /)).toHaveCount(0);
-  await expect(page.locator(".bb-editor-header .bb-editor-mode")).toHaveCount(0);
-  await expect(page.locator(".bb-editor-body-header .bb-editor-mode").first()).toBeVisible();
+  await expect(page.locator(".bb-editor-body-header")).toHaveCount(0);
+  await expect(page.locator(".bb-editor-header .bb-editor-mode").first()).toBeVisible();
   await expect
     .poll(async () => ((await page.locator(".bb-editor-footer").first().textContent()) ?? "").trim())
     .toMatch(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z/);
@@ -773,6 +782,63 @@ test("reorders notes when the drop lands in the note-lane gap", async ({ page })
   await page.reload();
   await notebookRow(page, notebookName).click();
   await expectNoteOrderInLane(page, [secondNoteTitle, firstNoteTitle, thirdNoteTitle]);
+});
+
+test("shows a compact editor header and wraps selections with markdown formatting tools", async ({ page }) => {
+  await page.setViewportSize({ width: 1900, height: 1000 });
+  const suffix = Date.now().toString();
+  const notebookName = `Formatting ${suffix}`;
+  const noteTitle = `Toolbar ${suffix}`;
+
+  await login(page);
+  await createNotebookWithDialog(page, notebookName);
+  await notebookRow(page, notebookName).click();
+  await createNoteWithContent(page, noteTitle, "alpha\nbeta\ngamma");
+
+  const editorHeader = page.locator(".bb-editor-header").first();
+  const titleLabel = editorHeader.getByText(/^title$/i);
+  const titleInput = editorHeader.getByRole("textbox", { name: "Title" });
+  const deleteButton = editorHeader.getByRole("button", { name: /delete note/i });
+  const textarea = page.getByPlaceholder("Write in Markdown").first();
+
+  await expect(titleLabel).toBeVisible();
+  await expect(titleInput).toBeVisible();
+  await expect(deleteButton).toBeVisible();
+  await expect(page.getByTestId("editor-format-toolbar").first()).toBeVisible();
+
+  const headerBox = await editorHeader.boundingBox();
+  const titleInputBox = await titleInput.boundingBox();
+  const deleteButtonBox = await deleteButton.boundingBox();
+  expect(headerBox).not.toBeNull();
+  expect(titleInputBox).not.toBeNull();
+  expect(deleteButtonBox).not.toBeNull();
+  if (!headerBox || !titleInputBox || !deleteButtonBox) {
+    throw new Error("Expected the compact editor header layout to be visible.");
+  }
+  expect(titleInputBox.y).toBeGreaterThanOrEqual(headerBox.y - 1);
+  expect(titleInputBox.y + titleInputBox.height).toBeLessThanOrEqual(headerBox.y + headerBox.height + 1);
+  expect(deleteButtonBox.y).toBeGreaterThanOrEqual(headerBox.y - 1);
+  expect(deleteButtonBox.y + deleteButtonBox.height).toBeLessThanOrEqual(headerBox.y + headerBox.height + 1);
+
+  await textarea.fill("alpha");
+  await selectTextRange(textarea, 0, 5);
+  await page.getByRole("button", { name: /^bold$/i }).click();
+  await expect(textarea).toHaveValue("**alpha**");
+
+  await textarea.fill("beta");
+  await selectTextRange(textarea, 0, 4);
+  await page.getByRole("button", { name: /^italic$/i }).click();
+  await expect(textarea).toHaveValue("*beta*");
+
+  await textarea.fill("gamma");
+  await selectTextRange(textarea, 0, 5);
+  await page.getByRole("button", { name: /^underline$/i }).click();
+  await expect(textarea).toHaveValue("<u>gamma</u>");
+
+  await textarea.fill("line one\nline two");
+  await selectTextRange(textarea, 0, 17);
+  await page.getByRole("button", { name: /^quote$/i }).click();
+  await expect(textarea).toHaveValue("> line one\n> line two");
 });
 
 test("auto-saves voice notes on stop, inserts them into the editor, keeps delete available, and shows live recorder progress", async ({
@@ -1199,6 +1265,20 @@ async function createTempFile(name: string, contents: string) {
   const filePath = path.join(directory, name);
   await fs.writeFile(filePath, contents, "utf8");
   return filePath;
+}
+
+async function selectTextRange(locator: import("@playwright/test").Locator, selectionStart: number, selectionEnd: number) {
+  await locator.evaluate(
+    (element, range) => {
+      const textarea = element as HTMLTextAreaElement;
+      textarea.focus();
+      textarea.setSelectionRange(range.selectionStart, range.selectionEnd);
+    },
+    {
+      selectionStart,
+      selectionEnd
+    }
+  );
 }
 
 async function createImportArchive() {

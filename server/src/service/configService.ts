@@ -29,7 +29,7 @@ export function buildConfig(): AppConfig {
     sqlitePath: requireEnv("SQLITE_PATH"),
     notesRoot: requireEnv("NOTES_ROOT"),
     attachmentsRoot: requireEnv("ATTACHMENTS_ROOT"),
-    attachmentMaxBytes: parseOptionalPositiveInteger("ATTACHMENT_MAX_BYTES", 50 * 1024 * 1024),
+    attachmentMaxBytes: parseOptionalPositiveInteger("ATTACHMENT_MAX_BYTES", 100 * 1024 * 1024),
     exportsRoot: requireEnv("EXPORTS_ROOT")
   };
 }
