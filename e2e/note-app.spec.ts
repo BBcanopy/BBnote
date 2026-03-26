@@ -645,7 +645,7 @@ test("reorders notes by dropping onto note cards and persists the order", async 
   await expectNoteOrderInLane(page, [firstNoteTitle, secondNoteTitle]);
 });
 
-test("shows pause controls, live recorder progress, and tighter recorder panel spacing for voice notes", async ({
+test("auto-saves voice notes on stop, keeps delete available, and shows live recorder progress", async ({
   page
 }) => {
   await page.setViewportSize({ width: 1900, height: 1000 });
@@ -659,7 +659,8 @@ test("shows pause controls, live recorder progress, and tighter recorder panel s
   await expect(recordVoiceButton).toBeEnabled();
   await recordVoiceButton.click();
 
-  const recorderPanel = page.locator(".bb-recorder-panel").first();
+  const recorderPanels = page.locator(".bb-recorder-panel");
+  const recorderPanel = recorderPanels.first();
   const recorderProgress = recorderPanel.getByRole("progressbar", { name: /^recording progress$/i });
   const recorderProgressTime = recorderPanel.getByTestId("recorder-progress-time");
   await expect(recorderPanel).toBeVisible();
@@ -715,11 +716,15 @@ test("shows pause controls, live recorder progress, and tighter recorder panel s
     .toBe(true);
 
   await recorderPanel.getByRole("button", { name: /^stop$/i }).click();
-  await expect(recorderPanel.getByText("Voice note ready")).toBeVisible();
-  await expect(recorderPanel.getByText("Preview the clip, then save it as an attachment.")).toHaveCount(0);
-  await expect(recorderProgress).toHaveCount(0);
-  await expect(recorderPanel.getByRole("button", { name: /^save$/i })).toBeVisible();
-  await expect(recorderPanel.getByRole("button", { name: /^discard$/i })).toBeVisible();
+  const voiceAttachment = page.locator(".bb-attachment-card").filter({ hasText: /voice-note-\d{14}\.webm/i }).first();
+  await expect(page.getByText("Attachments").first()).toBeVisible();
+  await expect(voiceAttachment).toBeVisible();
+  await expect(recorderPanels).toHaveCount(0);
+  await expect(page.getByPlaceholder("Write in Markdown").first()).toHaveValue("");
+  await expect(page.getByRole("button", { name: /^retry save$/i })).toHaveCount(0);
+  await voiceAttachment.getByRole("button", { name: /^remove$/i }).click();
+  await expect(voiceAttachment).toHaveCount(0);
+  await expect(page.getByText("Attachments").first()).toHaveCount(0);
 });
 
 test("persists empty notes immediately so repeated new-note clicks create multiple blank notes", async ({ page }) => {

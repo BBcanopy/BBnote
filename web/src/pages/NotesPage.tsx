@@ -69,7 +69,7 @@ const KEYBOARD_RESIZE_STEP = 24;
 const MEDIA_PLACEHOLDER_TITLE = "Untitled note";
 
 type MediaInsertBehavior = "image" | "link" | "none";
-type RecorderPhase = "closed" | "starting" | "recording" | "paused" | "processing" | "recorded" | "error";
+type RecorderPhase = "closed" | "starting" | "recording" | "paused" | "processing" | "saving" | "recorded" | "error";
 
 type PaneResizeTarget = "folders" | "notes";
 
@@ -1406,19 +1406,7 @@ function EditorPanel(props: {
           return;
         }
 
-        const previewUrl = URL.createObjectURL(clip);
-        setRecorderState((current) => {
-          if (current.previewUrl) {
-            URL.revokeObjectURL(current.previewUrl);
-          }
-
-          return {
-            phase: "recorded",
-            blob: clip,
-            error: null,
-            previewUrl
-          };
-        });
+        void persistRecordingClip(clip);
       });
 
       recorder.start();
@@ -1513,28 +1501,64 @@ function EditorPanel(props: {
     clearRecorderClip();
   }
 
+  async function persistRecordingClip(clip: Blob) {
+    setSavingRecording(true);
+    setRecorderState((current) => {
+      if (current.previewUrl) {
+        URL.revokeObjectURL(current.previewUrl);
+      }
+
+      return {
+        phase: "saving",
+        blob: clip,
+        error: null,
+        previewUrl: null
+      };
+    });
+
+    const fileName = `voice-note-${new Date().toISOString().replace(/[^\d]/g, "").slice(0, 14)}${extensionForMimeType(clip.type)}`;
+
+    try {
+      const uploaded = await props.onUploadSelectedFile(
+        new File([clip], fileName, {
+          type: clip.type || "audio/webm"
+        }),
+        "none"
+      );
+
+      if (uploaded) {
+        clearRecorderClip();
+        return true;
+      }
+
+      const previewUrl = URL.createObjectURL(clip);
+      setRecorderState({
+        phase: "recorded",
+        blob: clip,
+        error: "Voice note could not be attached. Try again or discard it.",
+        previewUrl
+      });
+      return false;
+    } catch (error) {
+      const previewUrl = URL.createObjectURL(clip);
+      setRecorderState({
+        phase: "recorded",
+        blob: clip,
+        error: formatRecorderError(error),
+        previewUrl
+      });
+      return false;
+    } finally {
+      setSavingRecording(false);
+    }
+  }
+
   async function handleSaveRecording() {
     if (!recorderState.blob) {
       return;
     }
 
-    setSavingRecording(true);
-    const fileName = `voice-note-${new Date().toISOString().replace(/[^\d]/g, "").slice(0, 14)}${extensionForMimeType(recorderState.blob.type)}`;
-
-    try {
-      const uploaded = await props.onUploadSelectedFile(
-        new File([recorderState.blob], fileName, {
-          type: recorderState.blob.type || "audio/webm"
-        }),
-        "link"
-      );
-
-      if (uploaded) {
-        handleDiscardRecording();
-      }
-    } finally {
-      setSavingRecording(false);
-    }
+    await persistRecordingClip(recorderState.blob);
   }
 
   const recorderSummaryText = getRecorderSummaryText(recorderState.phase, recorderState.error);
@@ -1607,7 +1631,7 @@ function EditorPanel(props: {
                 disabled={savingRecording || props.uploadingAttachment}
                 className={buttonPrimary}
               >
-                Save
+                Retry save
               </button>
             ) : null}
             {recorderState.phase === "error" ? (
@@ -1724,7 +1748,12 @@ function EditorPanel(props: {
                   icon={<Microphone size={17} />}
                   disabled={mediaActionsDisabled || recorderState.phase === "starting" || recorderState.phase === "processing"}
                   disabledTitle={props.mediaActionDisabledReason}
-                  active={recorderState.phase === "recording" || recorderState.phase === "paused" || recorderState.phase === "recorded"}
+                  active={
+                    recorderState.phase === "recording" ||
+                    recorderState.phase === "paused" ||
+                    recorderState.phase === "saving" ||
+                    recorderState.phase === "recorded"
+                  }
                   onClick={() => void handleStartRecording()}
                 />
                 <MediaToolbarButton
@@ -1808,7 +1837,12 @@ function EditorPanel(props: {
                   icon={<Microphone size={17} />}
                   disabled={mediaActionsDisabled || recorderState.phase === "starting" || recorderState.phase === "processing"}
                   disabledTitle={props.mediaActionDisabledReason}
-                  active={recorderState.phase === "recording" || recorderState.phase === "paused" || recorderState.phase === "recorded"}
+                  active={
+                    recorderState.phase === "recording" ||
+                    recorderState.phase === "paused" ||
+                    recorderState.phase === "saving" ||
+                    recorderState.phase === "recorded"
+                  }
                   onClick={() => void handleStartRecording()}
                 />
                 <MediaToolbarButton
@@ -2096,6 +2130,10 @@ function getRecorderTitle(phase: RecorderPhase) {
     return "Processing recording";
   }
 
+  if (phase === "saving") {
+    return "Saving voice note";
+  }
+
   if (phase === "recorded") {
     return "Voice note ready";
   }
@@ -2118,6 +2156,14 @@ function getRecorderSummaryText(phase: RecorderPhase, error: string | null) {
 
   if (phase === "processing") {
     return "Finishing the recorded clip.";
+  }
+
+  if (phase === "saving") {
+    return "Attaching the clip to this note.";
+  }
+
+  if (phase === "recorded") {
+    return error;
   }
 
   if (phase === "error") {
