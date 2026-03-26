@@ -1209,6 +1209,24 @@ test("opens migration from the avatar menu and runs both export and import flows
   await expect
     .poll(async () => userMenuButton.evaluate((element) => getComputedStyle(element).borderTopWidth))
     .toBe("0px");
+  await expect
+    .poll(async () =>
+      userMenuButton.locator(".bb-avatar-button__letter").evaluate((element) => {
+        const glyph = element.querySelector(".bb-avatar-button__glyph");
+        if (!(glyph instanceof HTMLElement)) {
+          return Number.POSITIVE_INFINITY;
+        }
+
+        const circleRect = element.getBoundingClientRect();
+        const glyphRect = glyph.getBoundingClientRect();
+        const circleCenterX = circleRect.left + circleRect.width / 2;
+        const circleCenterY = circleRect.top + circleRect.height / 2;
+        const glyphCenterX = glyphRect.left + glyphRect.width / 2;
+        const glyphCenterY = glyphRect.top + glyphRect.height / 2;
+        return Math.max(Math.abs(glyphCenterX - circleCenterX), Math.abs(glyphCenterY - circleCenterY));
+      })
+    )
+    .toBeLessThan(1.4);
 
   await userMenuButton.click();
   const userMenu = page.getByRole("menu");
