@@ -966,10 +966,11 @@ test("shows the note title in the topbar above the editor lane, keeps folder and
   expect(Math.abs(titleLabelBox.y + titleLabelBox.height / 2 - (titleInputBox.y + titleInputBox.height / 2))).toBeLessThan(10);
   expect(Math.abs(topbarTitleFieldBox.x - editorPanelBox.x)).toBeLessThan(12);
   expect(topbarTitleFieldBox.y).toBeGreaterThanOrEqual(topbarBox.y - 1);
+  expect(topbarTitleFieldBox.y + topbarTitleFieldBox.height).toBeLessThanOrEqual(topbarBox.y + topbarBox.height + 1);
   expect(titleInputBox.y).toBeLessThan(editorPanelBox.y - 8);
-  expect(titleInputBox.height).toBeLessThan(40);
+  expect(titleInputBox.height).toBeLessThan(36);
   expect(titleInputBox.width).toBeGreaterThan(editorPanelBox.width * 0.3);
-  expect(topbarBox.height).toBeGreaterThan(54);
+  expect(topbarBox.height).toBeLessThan(38);
   expect(textareaBox.height / editorStackBox.height).toBeGreaterThan(0.72);
   expect(updatedAtStatusBox.x + updatedAtStatusBox.width).toBeLessThanOrEqual(editorHeaderActionsBox.x + 8);
   await titleInput.click();

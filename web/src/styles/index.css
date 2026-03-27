@@ -299,8 +299,7 @@ button:disabled {
 }
 
 .bb-topbar--with-title {
-  min-height: 4.15rem;
-  align-items: start;
+  align-items: center;
 }
 
 .bb-topbar__nav {
@@ -319,17 +318,18 @@ button:disabled {
 
 .bb-topbar__titlebar {
   position: absolute;
-  top: 0;
+  top: 50%;
   left: var(--bb-topbar-title-left);
   width: var(--bb-topbar-title-width);
   min-width: 0;
   max-width: calc(100% - var(--bb-topbar-title-left));
+  transform: translateY(-50%);
 }
 
 .bb-topbar__titlebar-field {
   width: 100%;
   min-width: 0;
-  min-height: 2.35rem;
+  min-height: 2.1rem;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
@@ -347,8 +347,8 @@ button:disabled {
 }
 
 .bb-topbar__titlebar-input.bb-input {
-  min-height: 2.35rem;
-  padding: 0.42rem 0.58rem;
+  min-height: 2.1rem;
+  padding: 0.32rem 0.52rem;
   border-radius: 0;
   border-color: transparent;
   background: transparent;
@@ -2954,6 +2954,7 @@ button:disabled {
     position: static;
     width: 100%;
     max-width: none;
+    transform: none;
   }
 
   .bb-topbar--with-title .bb-topbar__titlebar {
