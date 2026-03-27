@@ -1,3 +1,4 @@
+import type { Dispatch, SetStateAction } from "react";
 import { useOutletContext } from "react-router-dom";
 
 export interface PageNavTitleControl {
@@ -5,11 +6,18 @@ export interface PageNavTitleControl {
   value: string;
   placeholder: string;
   disabled?: boolean;
+  focusRequestKey?: number;
   onChange(value: string): void;
 }
 
+export interface PageNavTitleLayout {
+  leftOffset: number;
+  width: number;
+}
+
 export interface AppShellOutletContext {
-  setPageNavTitleControl(control: PageNavTitleControl | null): void;
+  setPageNavTitleControl: Dispatch<SetStateAction<PageNavTitleControl | null>>;
+  setPageNavTitleLayout: Dispatch<SetStateAction<PageNavTitleLayout | null>>;
 }
 
 export function useAppShellOutletContext() {

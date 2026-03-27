@@ -142,17 +142,55 @@ test("keeps desktop lanes viewport-height and only shows the pane grip on border
     })
     .toBeGreaterThan((viewport?.width ?? 0) - 24);
   await expect
-    .poll(async () => Number.parseFloat(await notebookCard.evaluate((element) => getComputedStyle(element).borderTopRightRadius)))
-    .toBeLessThan(18);
-  await expect
-    .poll(async () => Number.parseFloat(await notesCard.evaluate((element) => getComputedStyle(element).borderTopLeftRadius)))
-    .toBeLessThan(18);
-  await expect
-    .poll(async () => Number.parseFloat(await notesCard.evaluate((element) => getComputedStyle(element).borderTopRightRadius)))
-    .toBeLessThan(18);
-  await expect
-    .poll(async () => Number.parseFloat(await editorPanel.evaluate((element) => getComputedStyle(element).borderTopLeftRadius)))
-    .toBeLessThan(18);
+    .poll(async () => ({
+      notebook: await notebookCard.evaluate((element) => {
+        const styles = getComputedStyle(element);
+        return {
+          topLeft: styles.borderTopLeftRadius,
+          topRight: styles.borderTopRightRadius,
+          bottomRight: styles.borderBottomRightRadius,
+          bottomLeft: styles.borderBottomLeftRadius
+        };
+      }),
+      notes: await notesCard.evaluate((element) => {
+        const styles = getComputedStyle(element);
+        return {
+          topLeft: styles.borderTopLeftRadius,
+          topRight: styles.borderTopRightRadius,
+          bottomRight: styles.borderBottomRightRadius,
+          bottomLeft: styles.borderBottomLeftRadius
+        };
+      }),
+      editor: await editorPanel.evaluate((element) => {
+        const styles = getComputedStyle(element);
+        return {
+          topLeft: styles.borderTopLeftRadius,
+          topRight: styles.borderTopRightRadius,
+          bottomRight: styles.borderBottomRightRadius,
+          bottomLeft: styles.borderBottomLeftRadius
+        };
+      })
+    }))
+    .toEqual({
+      notebook: {
+        topLeft: "0px",
+        topRight: "0px",
+        bottomRight: "0px",
+        bottomLeft: "0px"
+      },
+      notes: {
+        topLeft: "0px",
+        topRight: "0px",
+        bottomRight: "0px",
+        bottomLeft: "0px"
+      },
+      editor: {
+        topLeft: "0px",
+        topRight: "0px",
+        bottomRight: "0px",
+        bottomLeft: "0px"
+      }
+    });
 
   const notebookPaneWidthBefore = (await notebookPane.boundingBox())?.width ?? 0;
   const notesPaneWidthBefore = (await notesPane.boundingBox())?.width ?? 0;
@@ -188,15 +226,16 @@ test("keeps the left workspace lanes screen-tall while the editor and preview co
   const viewport = page.viewportSize();
   const notebookPane = page.getByTestId("notebook-pane");
   const notesPane = page.getByTestId("notes-pane");
-  const editorStack = page.locator(".bb-editor-stack").first();
+  const editorPanel = page.getByTestId("editor-panel-desktop");
+  const editorTextarea = editorPanel.getByPlaceholder("Write in Markdown");
 
   await expect
     .poll(async () =>
-      editorStack.evaluate((element) => element.scrollHeight - element.clientHeight)
+      editorTextarea.evaluate((element) => element.scrollHeight - element.clientHeight)
     )
     .toBeGreaterThan(120);
 
-  await editorStack.evaluate((element) => {
+  await editorTextarea.evaluate((element) => {
     element.scrollTop = element.scrollHeight;
   });
 
@@ -223,7 +262,7 @@ test("keeps the left workspace lanes screen-tall while the editor and preview co
     .toBeLessThan(6);
 
   await page.getByRole("button", { name: /^preview$/i }).click();
-  const editorPreview = page.locator(".bb-editor-preview").first();
+  const editorPreview = editorPanel.locator(".bb-editor-preview");
   await expect
     .poll(async () =>
       editorPreview.evaluate((element) => element.scrollHeight - element.clientHeight)
@@ -267,7 +306,7 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
   const topbarBox = await topbar.boundingBox();
   const viewport = page.viewportSize();
   expect(topbarBox?.width ?? 0).toBeGreaterThan(((viewport?.width ?? 0) * 0.95));
-  expect(topbarBox?.height ?? 0).toBeLessThan(62);
+  expect(topbarBox?.height ?? 0).toBeLessThan(38);
   const topbarStyles = await topbar.evaluate((element) => {
     const styles = getComputedStyle(element);
     return {
@@ -493,26 +532,15 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
   await expect(page.getByText(/^Saved /)).toHaveCount(0);
   await expect(page.locator(".bb-editor-body-header")).toHaveCount(0);
   await expect(page.locator(".bb-editor-header .bb-editor-mode").first()).toBeVisible();
-  await expect
-    .poll(async () => ((await page.locator(".bb-editor-footer").first().textContent()) ?? "").trim())
-    .toMatch(UPDATED_AT_STATUS_PATTERN);
+  await waitForUpdatedStatus(page);
 
   await page.getByRole("button", { name: /^new note$/i }).click();
   await expect(page).toHaveURL(/\/folders\/[^/]+\/notes\/[^/]+$/);
   await expect(page.getByRole("textbox", { name: "Title" }).first()).toHaveValue("");
-  const followUpFooter = page.locator(".bb-editor-footer").first();
-  await expect
-    .poll(async () => ((await followUpFooter.textContent()) ?? "").trim())
-    .toMatch(UPDATED_AT_STATUS_PATTERN);
-  const followUpInitialFooterText = ((await followUpFooter.textContent()) ?? "").trim();
+  const followUpInitialStatusText = await waitForUpdatedStatus(page);
   await page.getByRole("textbox", { name: "Title" }).first().fill(followUpNoteTitle);
   await page.getByPlaceholder("Write in Markdown").first().fill("Second note to test manual priority.");
-  await expect
-    .poll(async () => {
-      const footerText = ((await followUpFooter.textContent()) ?? "").trim();
-      return footerText !== followUpInitialFooterText ? footerText : "";
-    })
-    .toMatch(UPDATED_AT_STATUS_PATTERN);
+  await waitForUpdatedStatus(page, followUpInitialStatusText);
 
   await expect.poll(async () => page.locator('[data-testid^="note-drag-"]').count()).toBe(2);
   await expect(page.locator('[data-testid^="note-drag-"] .bb-note-icon')).toHaveCount(0);
@@ -552,26 +580,18 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
 
   await page.getByRole("button", { name: new RegExp(followUpNoteTitle, "i") }).click();
   const followUpBody = page.getByPlaceholder("Write in Markdown").first();
-  const followUpEditorFooter = page.locator(".bb-editor-footer").first();
   await expect(page.getByRole("textbox", { name: "Title" }).first()).toHaveValue(followUpNoteTitle);
   await expect(followUpBody).toHaveValue("Second note to test manual priority.");
-  const previousFollowUpFooterText = ((await followUpEditorFooter.textContent()) ?? "").trim();
+  const previousFollowUpStatusText = await waitForUpdatedStatus(page);
   await followUpBody.click();
   await followUpBody.press("Control+A");
   await followUpBody.press("Delete");
   await followUpBody.pressSequentially("Second note to test manual priority and autosave list refresh.");
   await expect(followUpBody).toHaveValue("Second note to test manual priority and autosave list refresh.");
-  await expect
-    .poll(async () => {
-      const footerText = ((await followUpEditorFooter.textContent()) ?? "").trim();
-      return footerText !== previousFollowUpFooterText ? footerText : "";
-    })
-    .toMatch(UPDATED_AT_STATUS_PATTERN);
+  await waitForUpdatedStatus(page, previousFollowUpStatusText);
   await expect(page.locator(".bb-skeleton-card")).toHaveCount(0);
   await expect(page.getByTestId(buildNoteTestId("drag", followUpNoteTitle))).toBeVisible();
-  await expect
-    .poll(async () => ((await page.locator(".bb-editor-footer").first().textContent()) ?? "").trim())
-    .toMatch(UPDATED_AT_STATUS_PATTERN);
+  await waitForUpdatedStatus(page);
 
   await page.getByPlaceholder("Search notes").fill("priority");
   await expect(page.locator('[data-testid^="note-before-"]')).toHaveCount(0);
@@ -632,8 +652,7 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
 
   const uploadFile = await createTempFile("budget.txt", "budget attachment");
   await page.locator('input[type="file"]').first().setInputFiles(uploadFile);
-  await expect(page.getByText("Attachments")).toHaveCount(0);
-  await expect(page.getByText("Linked files and embeds")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /attachments/i }).first()).toBeVisible();
   await expect(page.getByText("budget.txt").first()).toBeVisible();
 
   await page.getByRole("button", { name: /^link$/i }).click();
@@ -869,7 +888,7 @@ test("reorders notes when the drop lands in the note-lane gap", async ({ page })
   await expectNoteOrderInLane(page, [secondNoteTitle, firstNoteTitle, thirdNoteTitle]);
 });
 
-test("shows the note title in the topbar, keeps folder and note drag cursors distinct, and supports table insertion, fullscreen editing, and markdown formatting tools", async ({
+test("shows the note title in the topbar above the editor lane, keeps folder and note drag cursors distinct, and supports table insertion, fullscreen editing, and markdown formatting tools", async ({
   page
 }) => {
   await page.setViewportSize({ width: 1900, height: 1000 });
@@ -884,39 +903,201 @@ test("shows the note title in the topbar, keeps folder and note drag cursors dis
 
   const topbar = page.locator(".bb-topbar");
   const editorPanel = page.getByTestId("editor-panel-desktop");
+  const topbarTitleField = topbar.getByTestId("page-nav-title-input");
   const editorHeader = editorPanel.locator(".bb-editor-header");
   const editorStack = editorPanel.locator(".bb-editor-stack");
-  const titleLabel = topbar.getByText(/^title$/i);
+  const titleIcon = topbarTitleField.getByTestId("page-nav-title-icon");
   const titleInput = topbar.getByRole("textbox", { name: "Title" });
   const expandEditorButton = editorHeader.getByRole("button", { name: /^expand editor$/i });
   const deleteButton = editorHeader.getByRole("button", { name: /delete note/i });
+  const updatedAtStatus = editorPanel.getByTestId("editor-updated-at");
+  const editorHeaderActions = editorHeader.locator(".bb-editor-header__actions");
   const textarea = editorPanel.getByPlaceholder("Write in Markdown");
 
-  await expect(titleLabel).toHaveCount(0);
+  await expect(titleIcon).toBeVisible();
+  await expect(titleIcon).toHaveAttribute("data-icon", "document");
   await expect(titleInput).toBeVisible();
-  await expect(editorHeader.getByRole("textbox", { name: "Title" })).toHaveCount(0);
+  await expect(titleInput).toHaveAttribute("placeholder", "Untitled note");
+  await expect(editorPanel.getByRole("textbox", { name: "Title" })).toHaveCount(0);
   await expect(expandEditorButton).toBeVisible();
   await expect(deleteButton).toBeVisible();
   await expect(page.getByTestId("editor-format-toolbar").first()).toBeVisible();
+  await expect(updatedAtStatus).toBeVisible();
+  await textarea.click();
+  await expect
+    .poll(async () =>
+      titleInput.evaluate((element) => {
+        const styles = getComputedStyle(element);
+        return {
+          backgroundColor: styles.backgroundColor,
+          boxShadow: styles.boxShadow
+        };
+      })
+    )
+    .toEqual({
+      backgroundColor: "rgba(0, 0, 0, 0)",
+      boxShadow: "none"
+    });
 
   const topbarBox = await topbar.boundingBox();
+  const editorPanelBox = await editorPanel.boundingBox();
+  const topbarTitleFieldBox = await topbarTitleField.boundingBox();
   const editorStackBox = await editorStack.boundingBox();
+  const titleIconBox = await titleIcon.boundingBox();
   const titleInputBox = await titleInput.boundingBox();
   const textareaBox = await textarea.boundingBox();
   const deleteButtonBox = await deleteButton.boundingBox();
+  const updatedAtStatusBox = await updatedAtStatus.boundingBox();
+  const editorHeaderActionsBox = await editorHeaderActions.boundingBox();
   expect(topbarBox).not.toBeNull();
+  expect(editorPanelBox).not.toBeNull();
+  expect(topbarTitleFieldBox).not.toBeNull();
   expect(editorStackBox).not.toBeNull();
+  expect(titleIconBox).not.toBeNull();
   expect(titleInputBox).not.toBeNull();
   expect(textareaBox).not.toBeNull();
   expect(deleteButtonBox).not.toBeNull();
-  if (!topbarBox || !editorStackBox || !titleInputBox || !textareaBox || !deleteButtonBox) {
+  expect(updatedAtStatusBox).not.toBeNull();
+  expect(editorHeaderActionsBox).not.toBeNull();
+  if (!topbarBox || !editorPanelBox || !topbarTitleFieldBox || !editorStackBox || !titleIconBox || !titleInputBox || !textareaBox || !deleteButtonBox || !updatedAtStatusBox || !editorHeaderActionsBox) {
     throw new Error("Expected the topbar title input and editor actions layout to be visible.");
   }
-  expect(titleInputBox.y).toBeGreaterThanOrEqual(topbarBox.y - 1);
-  expect(titleInputBox.y + titleInputBox.height).toBeLessThanOrEqual(topbarBox.y + topbarBox.height + 1);
-  expect(Math.abs(titleInputBox.x + titleInputBox.width / 2 - (topbarBox.x + topbarBox.width / 2))).toBeLessThan(24);
-  expect(titleInputBox.width).toBeGreaterThan(topbarBox.width * 0.45);
+  const titleGap = titleInputBox.x - (titleIconBox.x + titleIconBox.width);
+  expect(topbarTitleFieldBox.x).toBeGreaterThanOrEqual(editorPanelBox.x - 4);
+  expect(topbarTitleFieldBox.x + topbarTitleFieldBox.width).toBeLessThanOrEqual(editorPanelBox.x + editorPanelBox.width + 4);
+  expect(titleGap).toBeGreaterThan(1);
+  expect(titleGap).toBeLessThan(10);
+  expect(Math.abs(titleIconBox.y + titleIconBox.height / 2 - (titleInputBox.y + titleInputBox.height / 2))).toBeLessThan(2);
+  expect(titleIconBox.width).toBeLessThan(18);
+  expect(Math.abs(topbarTitleFieldBox.x - editorPanelBox.x)).toBeLessThan(12);
+  expect(topbarTitleFieldBox.y).toBeGreaterThanOrEqual(topbarBox.y - 1);
+  expect(topbarTitleFieldBox.y + topbarTitleFieldBox.height).toBeLessThanOrEqual(topbarBox.y + topbarBox.height + 1);
+  expect(titleInputBox.y).toBeLessThan(editorPanelBox.y - 8);
+  expect(titleInputBox.height).toBeLessThan(34);
+  expect(titleInputBox.width).toBeGreaterThan(editorPanelBox.width * 0.3);
+  expect(topbarBox.height).toBeLessThan(38);
   expect(textareaBox.height / editorStackBox.height).toBeGreaterThan(0.72);
+  expect(updatedAtStatusBox.x + updatedAtStatusBox.width).toBeLessThanOrEqual(editorHeaderActionsBox.x + 8);
+  await titleInput.click();
+  await expect
+    .poll(async () =>
+      titleInput.evaluate((element) => {
+        const styles = getComputedStyle(element);
+        return {
+          backgroundColor: styles.backgroundColor,
+          borderColor: styles.borderTopColor,
+          boxShadow: styles.boxShadow,
+          topLeft: styles.borderTopLeftRadius,
+          topRight: styles.borderTopRightRadius,
+          bottomRight: styles.borderBottomRightRadius,
+          bottomLeft: styles.borderBottomLeftRadius,
+          fontWeight: styles.fontWeight
+        };
+      })
+    )
+    .toEqual({
+      backgroundColor: expect.not.stringMatching(/^rgba\(0,\s0,\s0,\s0\)$/),
+      borderColor: expect.not.stringMatching(/^rgba\(0,\s0,\s0,\s0\)$/),
+      boxShadow: expect.not.stringMatching(/^none$/),
+      topLeft: "0px",
+      topRight: "0px",
+      bottomRight: "0px",
+      bottomLeft: "0px",
+      fontWeight: "600"
+    });
+  await expect
+    .poll(async () =>
+      textarea.evaluate((element) => {
+        const styles = getComputedStyle(element);
+        return {
+          topLeft: styles.borderTopLeftRadius,
+          topRight: styles.borderTopRightRadius,
+          bottomRight: styles.borderBottomRightRadius,
+          bottomLeft: styles.borderBottomLeftRadius
+        };
+      })
+    )
+    .toEqual({
+      topLeft: "0px",
+      topRight: "0px",
+      bottomRight: "0px",
+      bottomLeft: "0px"
+    });
+
+  const uploadFile = await createTempFile(`toolbar-attachment-${suffix}.txt`, "budget attachment");
+  await page.getByTestId("media-input-file").first().setInputFiles(uploadFile);
+  const attachmentList = editorPanel.getByTestId("attachment-list").first();
+  const attachmentCard = attachmentList.locator(".bb-attachment-card").first();
+  const attachmentIcon = attachmentCard.locator(".bb-attachment-card__icon").first();
+  const attachmentToggle = attachmentList.locator(".bb-attachment-list__toggle");
+  const attachmentActionButton = attachmentCard.locator(".bb-attachment-card__button").first();
+  await expect(attachmentList).toBeVisible();
+  await expect(attachmentList.getByText(`toolbar-attachment-${suffix}.txt`)).toBeVisible();
+  await expect(attachmentIcon).toBeVisible();
+  await expect
+    .poll(async () => ({
+      list: await attachmentList.evaluate((element) => {
+        const styles = getComputedStyle(element);
+        return {
+          topLeft: styles.borderTopLeftRadius,
+          topRight: styles.borderTopRightRadius,
+          bottomRight: styles.borderBottomRightRadius,
+          bottomLeft: styles.borderBottomLeftRadius
+        };
+      }),
+      card: await attachmentCard.evaluate((element) => {
+        const styles = getComputedStyle(element);
+        return {
+          topLeft: styles.borderTopLeftRadius,
+          topRight: styles.borderTopRightRadius,
+          bottomRight: styles.borderBottomRightRadius,
+          bottomLeft: styles.borderBottomLeftRadius,
+          backgroundColor: styles.backgroundColor,
+          borderTopWidth: styles.borderTopWidth,
+          boxShadow: styles.boxShadow
+        };
+      }),
+      button: await attachmentActionButton.evaluate((element) => {
+        const styles = getComputedStyle(element);
+        return {
+          backgroundColor: styles.backgroundColor,
+          borderTopWidth: styles.borderTopWidth
+        };
+      }),
+      cardHeight: (await attachmentCard.boundingBox())?.height ?? Number.POSITIVE_INFINITY,
+      iconWidth: (await attachmentIcon.boundingBox())?.width ?? Number.POSITIVE_INFINITY,
+      toggleHeight: await attachmentToggle.evaluate((element) => element.getBoundingClientRect().height),
+      buttonHeight: await attachmentActionButton.evaluate((element) => element.getBoundingClientRect().height)
+    }))
+    .toEqual({
+      list: {
+        topLeft: "0px",
+        topRight: "0px",
+        bottomRight: "0px",
+        bottomLeft: "0px"
+      },
+      card: {
+        topLeft: "0px",
+        topRight: "0px",
+        bottomRight: "0px",
+        bottomLeft: "0px",
+        backgroundColor: "rgba(0, 0, 0, 0)",
+        borderTopWidth: "0px",
+        boxShadow: "none"
+      },
+      button: {
+        backgroundColor: "rgba(0, 0, 0, 0)",
+        borderTopWidth: "0px"
+      },
+      cardHeight: expect.any(Number),
+      iconWidth: expect.any(Number),
+      toggleHeight: expect.any(Number),
+      buttonHeight: expect.any(Number)
+    });
+  expect((await attachmentIcon.boundingBox())?.width ?? Number.POSITIVE_INFINITY).toBeLessThan(20);
+  expect((await attachmentCard.boundingBox())?.height ?? Number.POSITIVE_INFINITY).toBeLessThan(74);
+  expect(await attachmentToggle.evaluate((element) => element.getBoundingClientRect().height)).toBeLessThan(50);
+  expect(await attachmentActionButton.evaluate((element) => element.getBoundingClientRect().height)).toBeLessThan(32);
 
   await expect
     .poll(async () => notebookRow(page, notebookName).evaluate((element) => getComputedStyle(element).cursor))
@@ -1090,7 +1271,7 @@ test("auto-saves voice notes on stop, inserts them into the editor, keeps delete
   await recorderPanel.getByRole("button", { name: /^stop$/i }).click();
   const voiceAttachment = page.locator(".bb-attachment-card").filter({ hasText: /voice-note-\d{14}\.webm/i }).first();
   const bodyTextarea = page.getByPlaceholder("Write in Markdown").first();
-  await expect(page.getByText("Attachments")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /attachments/i }).first()).toBeVisible();
   await expect(voiceAttachment).toBeVisible();
   await expect(recorderPanels).toHaveCount(0);
   await expect(bodyTextarea).toHaveValue(/\[voice-note-\d{14}\.webm\]\(.*\/attachments\/.*\)/i);
@@ -1124,11 +1305,22 @@ test("uploads multi-megabyte audio attachments without proxy 413 errors", async 
     buffer: audioPayload
   });
 
-  const attachmentCard = page.locator(".bb-attachment-card").filter({ hasText: audioFileName }).first();
-  const bodyTextarea = page.getByPlaceholder("Write in Markdown").first();
+  const editorPanel = page.getByTestId("editor-panel-desktop");
+  const attachmentCards = editorPanel.locator(".bb-attachment-card").filter({ hasText: audioFileName });
+  const attachmentCard = attachmentCards.first();
+  const bodyTextarea = editorPanel.getByPlaceholder("Write in Markdown");
+  const attachmentToggle = editorPanel.getByRole("button", { name: /attachments/i });
+  await expect(attachmentToggle).toBeVisible();
   await expect(attachmentCard).toBeVisible();
   await expect(bodyTextarea).toHaveValue(new RegExp(`\\[song-${suffix}\\.mp3\\]\\(.*\\/attachments\\/.*\\)`, "i"));
   await expect(page.locator(".bb-error-banner")).toHaveCount(0);
+  await expect(attachmentToggle).toHaveAttribute("aria-expanded", "true");
+  await attachmentToggle.click();
+  await expect(attachmentToggle).toHaveAttribute("aria-expanded", "false");
+  await expect(attachmentCards).toHaveCount(0);
+  await attachmentToggle.click();
+  await expect(attachmentToggle).toHaveAttribute("aria-expanded", "true");
+  await expect(attachmentCard).toBeVisible();
 
   await page.getByRole("button", { name: /^preview$/i }).click();
   const audioEmbed = page.locator(".bb-editor-preview .bb-markdown__audio-card").first();
@@ -1145,11 +1337,13 @@ test("persists empty notes immediately so repeated new-note clicks create multip
 
   await page.getByRole("button", { name: /^new note$/i }).click();
   await expect(page.getByRole("textbox", { name: "Title" }).first()).toHaveValue("");
+  await expect(page.getByRole("textbox", { name: "Title" }).first()).toBeFocused();
   await expect.poll(async () => page.locator(".bb-note-card__title").count()).toBe(1);
   await expect(page.locator(".bb-note-card__title").first()).toHaveText("Untitled note");
 
   await page.getByRole("button", { name: /^new note$/i }).click();
   await expect(page.getByRole("textbox", { name: "Title" }).first()).toHaveValue("");
+  await expect(page.getByRole("textbox", { name: "Title" }).first()).toBeFocused();
   await expect.poll(async () => page.locator(".bb-note-card__title").count()).toBe(2);
   await expect(page.locator(".bb-note-card__title")).toHaveText(["Untitled note", "Untitled note"]);
   await expect(page.locator(".bb-note-card__excerpt")).toHaveText(["Empty note", "Empty note"]);
@@ -1176,9 +1370,7 @@ test("syncs notebook and note selection into the URL and restores deep links on 
 
   await page.getByRole("textbox", { name: "Title" }).first().fill(noteTitle);
   await page.getByPlaceholder("Write in Markdown").first().fill("Route this note back in.");
-  await expect
-    .poll(async () => ((await page.locator(".bb-editor-footer").first().textContent()) ?? "").trim())
-    .toMatch(UPDATED_AT_STATUS_PATTERN);
+  await waitForUpdatedStatus(page);
   await expect(page.getByRole("button", { name: new RegExp(noteTitle, "i") }).first()).toBeVisible();
 
   await page.goto(folderUrl);
@@ -1198,11 +1390,14 @@ test("syncs notebook and note selection into the URL and restores deep links on 
 test("opens migration from the avatar menu and runs both export and import flows", async ({ page }) => {
   await page.setViewportSize({ width: 1900, height: 1000 });
   await login(page);
+  const rootTopbarBox = await page.locator(".bb-topbar").boundingBox();
+  const rootTopbarWidth = rootTopbarBox?.width ?? 0;
+  const rootTopbarHeight = rootTopbarBox?.height ?? 0;
   await createNotebookAndPersistedNote(page);
   const userMenuButton = page.getByRole("button", { name: /open user menu/i });
-  const notesTopbarWidth = (await page.locator(".bb-topbar").boundingBox())?.width ?? 0;
   const viewport = page.viewportSize();
-  expect(notesTopbarWidth).toBeGreaterThan(((viewport?.width ?? 0) * 0.95));
+  expect(rootTopbarWidth).toBeGreaterThan(((viewport?.width ?? 0) * 0.95));
+  expect(rootTopbarHeight).toBeLessThan(38);
 
   await expect(page.getByRole("navigation", { name: /primary navigation/i })).toHaveCount(0);
   await expect(page.getByRole("link", { name: /bbnote home/i })).toHaveAttribute("href", "/");
@@ -1212,6 +1407,24 @@ test("opens migration from the avatar menu and runs both export and import flows
   await expect
     .poll(async () => userMenuButton.evaluate((element) => getComputedStyle(element).borderTopWidth))
     .toBe("0px");
+  await expect
+    .poll(async () =>
+      userMenuButton.locator(".bb-avatar-button__letter").evaluate((element) => {
+        const glyph = element.querySelector(".bb-avatar-button__glyph");
+        if (!(glyph instanceof HTMLElement)) {
+          return Number.POSITIVE_INFINITY;
+        }
+
+        const circleRect = element.getBoundingClientRect();
+        const glyphRect = glyph.getBoundingClientRect();
+        const circleCenterX = circleRect.left + circleRect.width / 2;
+        const circleCenterY = circleRect.top + circleRect.height / 2;
+        const glyphCenterX = glyphRect.left + glyphRect.width / 2;
+        const glyphCenterY = glyphRect.top + glyphRect.height / 2;
+        return Math.max(Math.abs(glyphCenterX - circleCenterX), Math.abs(glyphCenterY - circleCenterY));
+      })
+    )
+    .toBeLessThan(1.4);
 
   await userMenuButton.click();
   const userMenu = page.getByRole("menu");
@@ -1228,10 +1441,13 @@ test("opens migration from the avatar menu and runs both export and import flows
   await expect(page).toHaveURL(/\/migration$/);
   await expect(page.locator(".bb-shell").first()).not.toHaveClass(/bb-shell--workspace/);
   await expect(page.getByRole("heading", { name: /bring in an archive/i })).toBeVisible();
-  const migrationTopbarWidth = (await page.locator(".bb-topbar").boundingBox())?.width ?? 0;
+  const migrationTopbarBox = await page.locator(".bb-topbar").boundingBox();
+  const migrationTopbarWidth = migrationTopbarBox?.width ?? 0;
+  const migrationTopbarHeight = migrationTopbarBox?.height ?? 0;
   expect(migrationTopbarWidth).toBeLessThan(((viewport?.width ?? 0) * 0.9));
   expect(migrationTopbarWidth).toBeGreaterThan(((viewport?.width ?? 0) * 0.75));
-  expect(migrationTopbarWidth).toBeLessThan(notesTopbarWidth - 150);
+  expect(migrationTopbarWidth).toBeLessThan(rootTopbarWidth - 150);
+  expect(Math.abs(migrationTopbarHeight - rootTopbarHeight)).toBeLessThan(2);
   await expect(page.getByRole("heading", { name: /bring notes in, package everything out/i })).toHaveCount(0);
   await expect(page.getByRole("heading", { name: /create a markdown bundle/i })).toBeVisible();
   await page.getByRole("button", { name: /export all notes/i }).click();
@@ -1277,19 +1493,10 @@ async function createNotebookAndPersistedNote(page: import("@playwright/test").P
   await page.getByRole("button", { name: /^new note$/i }).click();
   await expect(page).toHaveURL(/\/folders\/[^/]+\/notes\/[^/]+$/);
   await expect(page.getByRole("textbox", { name: "Title" }).first()).toHaveValue("");
-  const editorFooter = page.locator(".bb-editor-footer").first();
-  await expect
-    .poll(async () => ((await editorFooter.textContent()) ?? "").trim())
-    .toMatch(UPDATED_AT_STATUS_PATTERN);
-  const initialFooterText = ((await editorFooter.textContent()) ?? "").trim();
+  const initialUpdatedStatusText = await waitForUpdatedStatus(page);
   await page.getByRole("textbox", { name: "Title" }).first().fill(`Export ready note ${suffix}`);
   await page.getByPlaceholder("Write in Markdown").first().fill("This note should travel well.");
-  await expect
-    .poll(async () => {
-      const footerText = ((await editorFooter.textContent()) ?? "").trim();
-      return footerText !== initialFooterText ? footerText : "";
-    })
-    .toMatch(UPDATED_AT_STATUS_PATTERN);
+  await waitForUpdatedStatus(page, initialUpdatedStatusText);
   await expect(page.getByRole("button", { name: new RegExp(`Export ready note ${suffix}`, "i") })).toBeVisible();
 }
 
@@ -1401,23 +1608,41 @@ async function installMockVoiceRecorder(page: import("@playwright/test").Page) {
 
 async function createNoteWithContent(page: import("@playwright/test").Page, title: string, body: string) {
   const newNoteButton = page.getByRole("button", { name: /^new note$/i }).first();
+  const titleInput = page.getByRole("textbox", { name: "Title" }).first();
   await expect(newNoteButton).toBeEnabled();
   await newNoteButton.click();
-  await expect(page.getByRole("textbox", { name: "Title" }).first()).toHaveValue("");
-  const editorFooter = page.locator(".bb-editor-footer").first();
-  await expect
-    .poll(async () => ((await editorFooter.textContent()) ?? "").trim())
-    .toMatch(UPDATED_AT_STATUS_PATTERN);
-  const initialFooterText = ((await editorFooter.textContent()) ?? "").trim();
-  await page.getByRole("textbox", { name: "Title" }).first().fill(title);
+  await expect(titleInput).toHaveValue("");
+  await expect(titleInput).toBeFocused();
+  const initialUpdatedStatusText = await waitForUpdatedStatus(page);
+  await titleInput.fill(title);
   await page.getByPlaceholder("Write in Markdown").first().fill(body);
+  await waitForUpdatedStatus(page, initialUpdatedStatusText);
+  await expect(page.getByTestId(buildNoteTestId("drag", title))).toBeVisible();
+}
+
+function editorUpdatedAtStatus(page: import("@playwright/test").Page) {
+  return page.getByTestId("editor-updated-at").first();
+}
+
+async function waitForUpdatedStatus(page: import("@playwright/test").Page, previousText?: string) {
+  let currentText = "";
+
   await expect
     .poll(async () => {
-      const footerText = ((await editorFooter.textContent()) ?? "").trim();
-      return footerText !== initialFooterText ? footerText : "";
+      currentText = ((await editorUpdatedAtStatus(page).textContent()) ?? "").trim();
+      if (!UPDATED_AT_STATUS_PATTERN.test(currentText)) {
+        return "";
+      }
+
+      if (previousText && currentText === previousText) {
+        return "";
+      }
+
+      return currentText;
     })
     .toMatch(UPDATED_AT_STATUS_PATTERN);
-  await expect(page.getByTestId(buildNoteTestId("drag", title))).toBeVisible();
+
+  return currentText;
 }
 
 async function expectNoteOrderInLane(page: import("@playwright/test").Page, titles: string[]) {

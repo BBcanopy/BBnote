@@ -49,7 +49,7 @@ export function UserMenu(props: {
         className="bb-avatar-button"
       >
         <span className="bb-avatar-button__letter">
-          {initial}
+          <span className="bb-avatar-button__glyph">{initial}</span>
         </span>
       </button>
       {open ? (

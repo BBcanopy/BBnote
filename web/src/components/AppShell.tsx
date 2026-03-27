@@ -3,7 +3,7 @@ import { useState } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../auth/AuthProvider";
 import { AuthSplash } from "./AuthSplash";
-import type { PageNavTitleControl } from "./AppShellContext";
+import type { PageNavTitleControl, PageNavTitleLayout } from "./AppShellContext";
 import { PageNav } from "./PageNav";
 import { isNotesPathname } from "../utils/noteRoute";
 
@@ -12,6 +12,7 @@ export function AppShell() {
   const location = useLocation();
   const useWorkspaceShell = isNotesPathname(location.pathname);
   const [pageNavTitleControl, setPageNavTitleControl] = useState<PageNavTitleControl | null>(null);
+  const [pageNavTitleLayout, setPageNavTitleLayout] = useState<PageNavTitleLayout | null>(null);
 
   if (auth.status === "loading") {
     return (
@@ -40,11 +41,12 @@ export function AppShell() {
         <PageNav
           user={auth.user}
           titleControl={pageNavTitleControl}
+          titleLayout={pageNavTitleLayout}
           onLogout={() => void auth.logout()}
           onThemeChange={(theme) => auth.setTheme(theme)}
         />
         <div className="bb-shell__content">
-          <Outlet context={{ setPageNavTitleControl }} />
+          <Outlet context={{ setPageNavTitleControl, setPageNavTitleLayout }} />
         </div>
       </div>
     </main>

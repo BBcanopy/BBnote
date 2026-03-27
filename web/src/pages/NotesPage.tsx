@@ -23,7 +23,7 @@ import {
   Trash,
   VideoCamera
 } from "@phosphor-icons/react";
-import { startTransition, useDeferredValue, useEffect, useId, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { startTransition, useDeferredValue, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode, type Ref } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   createFolder,
@@ -112,7 +112,7 @@ interface TextSelectionRange {
 export function NotesPage() {
   const auth = useAuth();
   const navigate = useNavigate();
-  const { setPageNavTitleControl } = useAppShellOutletContext();
+  const { setPageNavTitleControl, setPageNavTitleLayout } = useAppShellOutletContext();
   const params = useParams<{ folderId?: string; noteId?: string }>();
   const routeFolderId = params.folderId ?? null;
   const routeNoteId = params.noteId ?? null;
@@ -142,6 +142,9 @@ export function NotesPage() {
   const [uploadingAttachment, setUploadingAttachment] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [draggedNoteDeleteCandidate, setDraggedNoteDeleteCandidate] = useState<PendingNoteDelete | null>(null);
+  const desktopEditorPanelRef = useRef<HTMLElement | null>(null);
+  const mobileEditorPanelRef = useRef<HTMLElement | null>(null);
+  const [titleFocusRequestKey, setTitleFocusRequestKey] = useState(0);
   const [pendingNoteDelete, setPendingNoteDelete] = useState<PendingNoteDelete | null>(null);
   const [pendingFolderDelete, setPendingFolderDelete] = useState<FolderNode | null>(null);
   const [lastSyncedContentKey, setLastSyncedContentKey] = useState<string | null>(null);
@@ -237,24 +240,113 @@ export function NotesPage() {
   useEffect(() => {
     return () => {
       setPageNavTitleControl(null);
+      setPageNavTitleLayout(null);
     };
-  }, [setPageNavTitleControl]);
+  }, [setPageNavTitleControl, setPageNavTitleLayout]);
 
   useEffect(() => {
     if (!editorNote) {
       setPageNavTitleControl(null);
+      setPageNavTitleLayout(null);
       return;
     }
 
     setPageNavTitleControl({
       label: "Title",
       value: editorNote.title,
-      placeholder: "Note title",
+      placeholder: MEDIA_PLACEHOLDER_TITLE,
+      focusRequestKey: editorNote.isDraft && titleFocusRequestKey > 0 ? titleFocusRequestKey : undefined,
       onChange: (title) => {
         setEditorNote((current) => (current ? { ...current, title } : current));
       }
     });
-  }, [editorNote?.noteId, editorNote?.title, setPageNavTitleControl]);
+  }, [editorNote?.isDraft, editorNote?.noteId, editorNote?.title, setPageNavTitleControl, setPageNavTitleLayout, titleFocusRequestKey]);
+
+  useLayoutEffect(() => {
+    if (!editorNote) {
+      setPageNavTitleLayout(null);
+      return;
+    }
+
+    const activePanel = [desktopEditorPanelRef.current, mobileEditorPanelRef.current].find(
+      (panel): panel is HTMLElement => panel instanceof HTMLElement && panel.getClientRects().length > 0
+    );
+    if (!activePanel) {
+      setPageNavTitleLayout(null);
+      return;
+    }
+
+    const shell = activePanel.closest(".bb-shell--app");
+    if (!(shell instanceof HTMLElement)) {
+      setPageNavTitleLayout(null);
+      return;
+    }
+
+    const shellRect = shell.getBoundingClientRect();
+    const panelRect = activePanel.getBoundingClientRect();
+    const nextLayout = {
+      leftOffset: Math.max(0, panelRect.left - shellRect.left),
+      width: Math.max(0, panelRect.width)
+    };
+
+    setPageNavTitleLayout((current) => {
+      if (current && current.leftOffset === nextLayout.leftOffset && current.width === nextLayout.width) {
+        return current;
+      }
+
+      return nextLayout;
+    });
+  }, [
+    editorNote?.noteId,
+    editorFullscreen,
+    folderPaneCollapsed,
+    notePaneCollapsed,
+    folderPaneWidth,
+    notePaneWidth,
+    setPageNavTitleLayout
+  ]);
+
+  useEffect(() => {
+    if (!editorNote) {
+      return;
+    }
+
+    function syncPageNavTitleLayout() {
+      const activePanel = [desktopEditorPanelRef.current, mobileEditorPanelRef.current].find(
+        (panel): panel is HTMLElement => panel instanceof HTMLElement && panel.getClientRects().length > 0
+      );
+      if (!activePanel) {
+        setPageNavTitleLayout(null);
+        return;
+      }
+
+      const shell = activePanel.closest(".bb-shell--app");
+      if (!(shell instanceof HTMLElement)) {
+        setPageNavTitleLayout(null);
+        return;
+      }
+
+      const shellRect = shell.getBoundingClientRect();
+      const panelRect = activePanel.getBoundingClientRect();
+      const nextLayout = {
+        leftOffset: Math.max(0, panelRect.left - shellRect.left),
+        width: Math.max(0, panelRect.width)
+      };
+
+      setPageNavTitleLayout((current) => {
+        if (current && current.leftOffset === nextLayout.leftOffset && current.width === nextLayout.width) {
+          return current;
+        }
+
+        return nextLayout;
+      });
+    }
+
+    window.addEventListener("resize", syncPageNavTitleLayout);
+    return () => {
+      window.removeEventListener("resize", syncPageNavTitleLayout);
+    };
+  }, [editorNote?.noteId, setPageNavTitleLayout]);
 
   useEffect(() => {
     if (!auth.user || !selectedNoteId) {
@@ -703,6 +795,7 @@ export function NotesPage() {
 
     editorSessionRef.current = nextSessionId;
     noteLoadRef.current += 1;
+    setTitleFocusRequestKey((current) => current + 1);
     setSelectedNoteId(null);
     setEditorNote(createDraft(selectedFolderId));
     setLastSyncedContentKey(null);
@@ -1150,6 +1243,7 @@ export function NotesPage() {
         )}
 
         <EditorPanel
+          panelRef={desktopEditorPanelRef}
           panelTestId="editor-panel-desktop"
           editorNote={editorNote}
           editorPane={editorPane}
@@ -1178,6 +1272,7 @@ export function NotesPage() {
 
       <div className="lg:hidden">
         <EditorPanel
+          panelRef={mobileEditorPanelRef}
           panelTestId="editor-panel-mobile"
           editorNote={editorNote}
           editorPane={editorPane}
@@ -1287,6 +1382,7 @@ export function NotesPage() {
 }
 
 function EditorPanel(props: {
+  panelRef?: Ref<HTMLElement>;
   panelTestId?: string;
   editorNote: EditorState | null;
   editorPane: EditorPane;
@@ -1349,6 +1445,8 @@ function EditorPanel(props: {
   const mediaActionsDisabled = props.loading || props.uploadingAttachment || savingRecording || !props.canUseMediaActions;
   const formatActionsDisabled = !props.editorNote || props.editorPane !== "markdown";
   const hasAttachments = (props.editorNote?.attachments.length ?? 0) > 0;
+  const headerStatusText = props.statusText.startsWith("Updated at ") ? props.statusText : null;
+  const footerStatusText = headerStatusText ? null : props.statusText;
   const activeTableDimensions = tableHoverDimensions ?? tableDimensions;
 
   useEffect(() => {
@@ -2103,6 +2201,7 @@ function EditorPanel(props: {
 
   return (
     <section
+      ref={props.panelRef}
       data-testid={props.panelTestId}
       className={[
         "bb-editor-panel bb-editor-panel--workspace lg:flex-1",
@@ -2112,7 +2211,13 @@ function EditorPanel(props: {
         .join(" ")}
     >
       <div className="bb-editor-header">
-        <div className="bb-editor-header__spacer" aria-hidden="true" />
+        <div className="bb-editor-header__meta">
+          {headerStatusText ? (
+            <span className="bb-editor-header__status" data-testid="editor-updated-at">
+              {headerStatusText}
+            </span>
+          ) : null}
+        </div>
         <div className="bb-editor-header__actions">
           {editorMode}
           {props.showFullscreenToggle ? (
@@ -2229,6 +2334,7 @@ function EditorPanel(props: {
 
             {hasAttachments ? (
               <AttachmentList
+                key={props.editorNote.noteId ?? "draft"}
                 attachments={props.editorNote.attachments}
                 disabled={!props.editorNote.noteId || props.uploadingAttachment}
                 onInsertLink={props.onInsertLink}
@@ -2244,7 +2350,7 @@ function EditorPanel(props: {
       )}
 
       <div className="bb-editor-footer">
-        <span>{props.statusText}</span>
+        {footerStatusText ? <span>{footerStatusText}</span> : null}
       </div>
     </section>
   );
