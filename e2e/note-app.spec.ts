@@ -226,15 +226,16 @@ test("keeps the left workspace lanes screen-tall while the editor and preview co
   const viewport = page.viewportSize();
   const notebookPane = page.getByTestId("notebook-pane");
   const notesPane = page.getByTestId("notes-pane");
-  const editorStack = page.locator(".bb-editor-stack").first();
+  const editorPanel = page.getByTestId("editor-panel-desktop");
+  const editorTextarea = editorPanel.getByPlaceholder("Write in Markdown");
 
   await expect
     .poll(async () =>
-      editorStack.evaluate((element) => element.scrollHeight - element.clientHeight)
+      editorTextarea.evaluate((element) => element.scrollHeight - element.clientHeight)
     )
     .toBeGreaterThan(120);
 
-  await editorStack.evaluate((element) => {
+  await editorTextarea.evaluate((element) => {
     element.scrollTop = element.scrollHeight;
   });
 
@@ -261,7 +262,7 @@ test("keeps the left workspace lanes screen-tall while the editor and preview co
     .toBeLessThan(6);
 
   await page.getByRole("button", { name: /^preview$/i }).click();
-  const editorPreview = page.locator(".bb-editor-preview").first();
+  const editorPreview = editorPanel.locator(".bb-editor-preview");
   await expect
     .poll(async () =>
       editorPreview.evaluate((element) => element.scrollHeight - element.clientHeight)
