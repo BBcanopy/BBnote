@@ -341,10 +341,9 @@ button:disabled {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 1rem;
+  width: 1.05rem;
   min-height: 2.1rem;
   color: color-mix(in srgb, var(--ink-soft) 88%, transparent);
-  transform: translateY(0.01rem);
 }
 
 .bb-topbar__titlebar-icon svg {
