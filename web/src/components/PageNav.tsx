@@ -1,5 +1,5 @@
 import { File } from "@phosphor-icons/react";
-import type { CSSProperties } from "react";
+import { useEffect, useRef, type CSSProperties } from "react";
 import type { AuthSession } from "../api/types";
 import type { UserTheme } from "../api/types";
 import type { PageNavTitleControl, PageNavTitleLayout } from "./AppShellContext";
@@ -14,6 +14,7 @@ export function PageNav(props: {
   onThemeChange(theme: UserTheme): Promise<void>;
 }) {
   const titleControl = props.titleControl;
+  const titleInputRef = useRef<HTMLInputElement | null>(null);
   const rawTitleLayout = titleControl ? props.titleLayout : null;
   const titleLayout = rawTitleLayout
     ? (() => {
@@ -34,6 +35,26 @@ export function PageNav(props: {
       } as CSSProperties)
     : undefined;
 
+  useEffect(() => {
+    if (!titleLayout || titleControl?.focusRequestKey === undefined) {
+      return;
+    }
+
+    const focusTimer = window.setTimeout(() => {
+      const input = titleInputRef.current;
+      if (!input || input.disabled) {
+        return;
+      }
+
+      input.focus();
+      input.select();
+    }, 0);
+
+    return () => {
+      window.clearTimeout(focusTimer);
+    };
+  }, [titleControl?.focusRequestKey, titleLayout]);
+
   return (
     <header className={`bb-topbar ${titleLayout ? "bb-topbar--with-title" : ""}`.trim()}>
       <div className="bb-topbar__nav bb-topbar__nav--brand-only">
@@ -51,6 +72,7 @@ export function PageNav(props: {
               <File size={15} weight="regular" />
             </span>
             <input
+              ref={titleInputRef}
               aria-label={titleControl.label}
               value={titleControl.value}
               onChange={(event) => titleControl.onChange(event.target.value)}

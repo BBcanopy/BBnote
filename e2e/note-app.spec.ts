@@ -1336,11 +1336,13 @@ test("persists empty notes immediately so repeated new-note clicks create multip
 
   await page.getByRole("button", { name: /^new note$/i }).click();
   await expect(page.getByRole("textbox", { name: "Title" }).first()).toHaveValue("");
+  await expect(page.getByRole("textbox", { name: "Title" }).first()).toBeFocused();
   await expect.poll(async () => page.locator(".bb-note-card__title").count()).toBe(1);
   await expect(page.locator(".bb-note-card__title").first()).toHaveText("Untitled note");
 
   await page.getByRole("button", { name: /^new note$/i }).click();
   await expect(page.getByRole("textbox", { name: "Title" }).first()).toHaveValue("");
+  await expect(page.getByRole("textbox", { name: "Title" }).first()).toBeFocused();
   await expect.poll(async () => page.locator(".bb-note-card__title").count()).toBe(2);
   await expect(page.locator(".bb-note-card__title")).toHaveText(["Untitled note", "Untitled note"]);
   await expect(page.locator(".bb-note-card__excerpt")).toHaveText(["Empty note", "Empty note"]);
@@ -1605,11 +1607,13 @@ async function installMockVoiceRecorder(page: import("@playwright/test").Page) {
 
 async function createNoteWithContent(page: import("@playwright/test").Page, title: string, body: string) {
   const newNoteButton = page.getByRole("button", { name: /^new note$/i }).first();
+  const titleInput = page.getByRole("textbox", { name: "Title" }).first();
   await expect(newNoteButton).toBeEnabled();
   await newNoteButton.click();
-  await expect(page.getByRole("textbox", { name: "Title" }).first()).toHaveValue("");
+  await expect(titleInput).toHaveValue("");
+  await expect(titleInput).toBeFocused();
   const initialUpdatedStatusText = await waitForUpdatedStatus(page);
-  await page.getByRole("textbox", { name: "Title" }).first().fill(title);
+  await titleInput.fill(title);
   await page.getByPlaceholder("Write in Markdown").first().fill(body);
   await waitForUpdatedStatus(page, initialUpdatedStatusText);
   await expect(page.getByTestId(buildNoteTestId("drag", title))).toBeVisible();

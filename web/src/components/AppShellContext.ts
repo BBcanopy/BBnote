@@ -6,6 +6,7 @@ export interface PageNavTitleControl {
   value: string;
   placeholder: string;
   disabled?: boolean;
+  focusRequestKey?: number;
   onChange(value: string): void;
 }
 

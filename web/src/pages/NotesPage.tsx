@@ -144,6 +144,7 @@ export function NotesPage() {
   const [draggedNoteDeleteCandidate, setDraggedNoteDeleteCandidate] = useState<PendingNoteDelete | null>(null);
   const desktopEditorPanelRef = useRef<HTMLElement | null>(null);
   const mobileEditorPanelRef = useRef<HTMLElement | null>(null);
+  const [titleFocusRequestKey, setTitleFocusRequestKey] = useState(0);
   const [pendingNoteDelete, setPendingNoteDelete] = useState<PendingNoteDelete | null>(null);
   const [pendingFolderDelete, setPendingFolderDelete] = useState<FolderNode | null>(null);
   const [lastSyncedContentKey, setLastSyncedContentKey] = useState<string | null>(null);
@@ -254,11 +255,12 @@ export function NotesPage() {
       label: "Title",
       value: editorNote.title,
       placeholder: MEDIA_PLACEHOLDER_TITLE,
+      focusRequestKey: editorNote.isDraft && titleFocusRequestKey > 0 ? titleFocusRequestKey : undefined,
       onChange: (title) => {
         setEditorNote((current) => (current ? { ...current, title } : current));
       }
     });
-  }, [editorNote?.noteId, editorNote?.title, setPageNavTitleControl, setPageNavTitleLayout]);
+  }, [editorNote?.isDraft, editorNote?.noteId, editorNote?.title, setPageNavTitleControl, setPageNavTitleLayout, titleFocusRequestKey]);
 
   useLayoutEffect(() => {
     if (!editorNote) {
@@ -793,6 +795,7 @@ export function NotesPage() {
 
     editorSessionRef.current = nextSessionId;
     noteLoadRef.current += 1;
+    setTitleFocusRequestKey((current) => current + 1);
     setSelectedNoteId(null);
     setEditorNote(createDraft(selectedFolderId));
     setLastSyncedContentKey(null);
