@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, useLocation } from "react-router-dom";
 import type { UserTheme } from "../api/types";
 import { themeOptions } from "../theme/theme";
+import { createGravatarUrl } from "../utils/gravatar";
 import { isNotesPathname } from "../utils/noteRoute";
 
 export function UserMenu(props: {
@@ -15,6 +16,8 @@ export function UserMenu(props: {
   const location = useLocation();
   const menuRef = useRef<HTMLDivElement | null>(null);
   const [open, setOpen] = useState(false);
+  const [gravatarUrl, setGravatarUrl] = useState<string | null>(null);
+  const [gravatarLoaded, setGravatarLoaded] = useState(false);
   const [themePending, setThemePending] = useState<UserTheme | null>(null);
   const [themeError, setThemeError] = useState<string | null>(null);
 
@@ -33,6 +36,28 @@ export function UserMenu(props: {
     return () => document.removeEventListener("mousedown", handlePointerDown);
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    const email = props.email?.trim() ?? "";
+
+    setGravatarLoaded(false);
+    setGravatarUrl(null);
+
+    if (!email) {
+      return;
+    }
+
+    void createGravatarUrl(email).then((nextUrl) => {
+      if (!cancelled) {
+        setGravatarUrl(nextUrl);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [props.email]);
+
   const initial = useMemo(() => {
     const source = props.name?.trim() || props.email?.trim() || "B";
     return source.charAt(0).toUpperCase();
@@ -50,6 +75,21 @@ export function UserMenu(props: {
       >
         <span className="bb-avatar-button__letter">
           <span className="bb-avatar-button__glyph">{initial}</span>
+          {gravatarUrl ? (
+            <img
+              key={gravatarUrl}
+              src={gravatarUrl}
+              alt=""
+              data-testid="user-avatar-image"
+              className={`bb-avatar-button__image${gravatarLoaded ? " is-visible" : ""}`}
+              referrerPolicy="no-referrer"
+              onLoad={() => setGravatarLoaded(true)}
+              onError={() => {
+                setGravatarLoaded(false);
+                setGravatarUrl(null);
+              }}
+            />
+          ) : null}
         </span>
       </button>
       {open ? (
