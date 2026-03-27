@@ -921,11 +921,27 @@ test("shows the note title in the topbar above the editor lane, keeps folder and
   await expect(deleteButton).toBeVisible();
   await expect(page.getByTestId("editor-format-toolbar").first()).toBeVisible();
   await expect(updatedAtStatus).toBeVisible();
+  await textarea.click();
+  await expect
+    .poll(async () =>
+      titleInput.evaluate((element) => {
+        const styles = getComputedStyle(element);
+        return {
+          backgroundColor: styles.backgroundColor,
+          boxShadow: styles.boxShadow
+        };
+      })
+    )
+    .toEqual({
+      backgroundColor: "rgba(0, 0, 0, 0)",
+      boxShadow: "none"
+    });
 
   const topbarBox = await topbar.boundingBox();
   const editorPanelBox = await editorPanel.boundingBox();
   const topbarTitleFieldBox = await topbarTitleField.boundingBox();
   const editorStackBox = await editorStack.boundingBox();
+  const titleLabelBox = await titleLabel.boundingBox();
   const titleInputBox = await titleInput.boundingBox();
   const textareaBox = await textarea.boundingBox();
   const deleteButtonBox = await deleteButton.boundingBox();
@@ -935,28 +951,34 @@ test("shows the note title in the topbar above the editor lane, keeps folder and
   expect(editorPanelBox).not.toBeNull();
   expect(topbarTitleFieldBox).not.toBeNull();
   expect(editorStackBox).not.toBeNull();
+  expect(titleLabelBox).not.toBeNull();
   expect(titleInputBox).not.toBeNull();
   expect(textareaBox).not.toBeNull();
   expect(deleteButtonBox).not.toBeNull();
   expect(updatedAtStatusBox).not.toBeNull();
   expect(editorHeaderActionsBox).not.toBeNull();
-  if (!topbarBox || !editorPanelBox || !topbarTitleFieldBox || !editorStackBox || !titleInputBox || !textareaBox || !deleteButtonBox || !updatedAtStatusBox || !editorHeaderActionsBox) {
+  if (!topbarBox || !editorPanelBox || !topbarTitleFieldBox || !editorStackBox || !titleLabelBox || !titleInputBox || !textareaBox || !deleteButtonBox || !updatedAtStatusBox || !editorHeaderActionsBox) {
     throw new Error("Expected the topbar title input and editor actions layout to be visible.");
   }
   expect(topbarTitleFieldBox.x).toBeGreaterThanOrEqual(editorPanelBox.x - 4);
   expect(topbarTitleFieldBox.x + topbarTitleFieldBox.width).toBeLessThanOrEqual(editorPanelBox.x + editorPanelBox.width + 4);
-  expect(Math.abs(titleInputBox.x - editorPanelBox.x)).toBeLessThan(12);
+  expect(titleLabelBox.x + titleLabelBox.width).toBeLessThan(titleInputBox.x - 4);
+  expect(Math.abs(titleLabelBox.y + titleLabelBox.height / 2 - (titleInputBox.y + titleInputBox.height / 2))).toBeLessThan(10);
+  expect(Math.abs(topbarTitleFieldBox.x - editorPanelBox.x)).toBeLessThan(12);
   expect(topbarTitleFieldBox.y).toBeGreaterThanOrEqual(topbarBox.y - 1);
   expect(titleInputBox.y).toBeLessThan(editorPanelBox.y - 8);
   expect(titleInputBox.width).toBeGreaterThan(editorPanelBox.width * 0.3);
   expect(topbarBox.height).toBeGreaterThan(54);
   expect(textareaBox.height / editorStackBox.height).toBeGreaterThan(0.72);
   expect(updatedAtStatusBox.x + updatedAtStatusBox.width).toBeLessThanOrEqual(editorHeaderActionsBox.x + 8);
+  await titleInput.click();
   await expect
     .poll(async () =>
       titleInput.evaluate((element) => {
         const styles = getComputedStyle(element);
         return {
+          backgroundColor: styles.backgroundColor,
+          boxShadow: styles.boxShadow,
           topLeft: styles.borderTopLeftRadius,
           topRight: styles.borderTopRightRadius,
           bottomRight: styles.borderBottomRightRadius,
@@ -966,6 +988,8 @@ test("shows the note title in the topbar above the editor lane, keeps folder and
       })
     )
     .toEqual({
+      backgroundColor: expect.not.stringMatching(/^rgba\(0,\s0,\s0,\s0\)$/),
+      boxShadow: expect.not.stringMatching(/^none$/),
       topLeft: "0px",
       topRight: "0px",
       bottomRight: "0px",
