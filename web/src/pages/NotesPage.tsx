@@ -44,7 +44,6 @@ import {
 import type { AttachmentRef, FolderNode, NoteDetail, NoteSummary } from "../api/types";
 import { useAuth } from "../auth/AuthProvider";
 import { AttachmentList } from "../components/AttachmentList";
-import { useAppShellOutletContext } from "../components/AppShellContext";
 import { buttonGhost, buttonPrimary, buttonSecondary } from "../components/buttonStyles";
 import { ConfirmationDialog } from "../components/ConfirmationDialog";
 import { FolderTree } from "../components/FolderTree";
@@ -112,7 +111,6 @@ interface TextSelectionRange {
 export function NotesPage() {
   const auth = useAuth();
   const navigate = useNavigate();
-  const { setPageNavTitleControl } = useAppShellOutletContext();
   const params = useParams<{ folderId?: string; noteId?: string }>();
   const routeFolderId = params.folderId ?? null;
   const routeNoteId = params.noteId ?? null;
@@ -233,28 +231,6 @@ export function NotesPage() {
     }
     void refreshNotes();
   }, [auth.user, deferredSearch, selectedFolderId]);
-
-  useEffect(() => {
-    return () => {
-      setPageNavTitleControl(null);
-    };
-  }, [setPageNavTitleControl]);
-
-  useEffect(() => {
-    if (!editorNote) {
-      setPageNavTitleControl(null);
-      return;
-    }
-
-    setPageNavTitleControl({
-      label: "Title",
-      value: editorNote.title,
-      placeholder: "Untitled note",
-      onChange: (title) => {
-        setEditorNote((current) => (current ? { ...current, title } : current));
-      }
-    });
-  }, [editorNote?.noteId, editorNote?.title, setPageNavTitleControl]);
 
   useEffect(() => {
     if (!auth.user || !selectedNoteId) {
@@ -1158,6 +1134,7 @@ export function NotesPage() {
           canUseMediaActions={canUseMediaActions}
           mediaActionDisabledReason="Select a notebook to add media."
           onEditorPaneChange={setEditorPane}
+          onTitleChange={(title) => setEditorNote((current) => (current ? { ...current, title } : current))}
           onBodyChange={(bodyMarkdown) => setEditorNote((current) => (current ? { ...current, bodyMarkdown } : current))}
           onToggleFullscreen={() => setEditorFullscreen((current) => !current)}
           onDeleteRequest={handleRequestDeleteCurrentNote}
@@ -1185,6 +1162,7 @@ export function NotesPage() {
           canUseMediaActions={canUseMediaActions}
           mediaActionDisabledReason="Select a notebook to add media."
           onEditorPaneChange={setEditorPane}
+          onTitleChange={(title) => setEditorNote((current) => (current ? { ...current, title } : current))}
           onBodyChange={(bodyMarkdown) => setEditorNote((current) => (current ? { ...current, bodyMarkdown } : current))}
           onToggleFullscreen={() => undefined}
           onDeleteRequest={handleRequestDeleteCurrentNote}
@@ -1295,6 +1273,7 @@ function EditorPanel(props: {
   canUseMediaActions: boolean;
   mediaActionDisabledReason: string;
   onEditorPaneChange(value: EditorPane): void;
+  onTitleChange(title: string): void;
   onBodyChange(bodyMarkdown: string): void;
   onToggleFullscreen(): void;
   onDeleteRequest(): void;
@@ -1317,6 +1296,7 @@ function EditorPanel(props: {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const bodyTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const formatSelectionFrameRef = useRef<number | null>(null);
+  const titleInputId = useId();
   const tablePickerId = useId();
   const tablePickerRef = useRef<HTMLDivElement | null>(null);
   const tableColumnsInputRef = useRef<HTMLInputElement | null>(null);
@@ -2113,37 +2093,53 @@ function EditorPanel(props: {
         .filter(Boolean)
         .join(" ")}
     >
-      <div className="bb-editor-header">
-        <div className="bb-editor-header__meta">
-          {headerStatusText ? (
-            <span className="bb-editor-header__status" data-testid="editor-updated-at">
-              {headerStatusText}
-            </span>
-          ) : null}
-        </div>
-        <div className="bb-editor-header__actions">
-          {editorMode}
-          {props.showFullscreenToggle ? (
+      <div className="bb-editor-head">
+        {props.editorNote ? (
+          <label htmlFor={titleInputId} className="bb-field bb-editor-title-field" data-testid="editor-title-field">
+            <span className="bb-field__label">Title</span>
+            <input
+              id={titleInputId}
+              type="text"
+              aria-label="Title"
+              value={props.editorNote.title}
+              onChange={(event) => props.onTitleChange(event.target.value)}
+              placeholder={MEDIA_PLACEHOLDER_TITLE}
+              className="bb-input bb-editor-title-input"
+            />
+          </label>
+        ) : null}
+        <div className="bb-editor-header">
+          <div className="bb-editor-header__meta">
+            {headerStatusText ? (
+              <span className="bb-editor-header__status" data-testid="editor-updated-at">
+                {headerStatusText}
+              </span>
+            ) : null}
+          </div>
+          <div className="bb-editor-header__actions">
+            {editorMode}
+            {props.showFullscreenToggle ? (
+              <button
+                type="button"
+                onClick={props.onToggleFullscreen}
+                aria-label={props.isFullscreen ? "Exit fullscreen editor" : "Expand editor"}
+                title={props.isFullscreen ? "Exit fullscreen editor" : "Expand editor"}
+                className={`bb-icon-button bb-icon-button--toolbar bb-icon-button--accent${props.isFullscreen ? " bb-icon-button--is-active" : ""}`}
+              >
+                {props.isFullscreen ? <ArrowsInSimple size={17} /> : <ArrowsOutSimple size={17} />}
+              </button>
+            ) : null}
             <button
               type="button"
-              onClick={props.onToggleFullscreen}
-              aria-label={props.isFullscreen ? "Exit fullscreen editor" : "Expand editor"}
-              title={props.isFullscreen ? "Exit fullscreen editor" : "Expand editor"}
-              className={`bb-icon-button bb-icon-button--toolbar bb-icon-button--accent${props.isFullscreen ? " bb-icon-button--is-active" : ""}`}
+              onClick={props.onDeleteRequest}
+              disabled={!props.editorNote?.noteId}
+              aria-label="Delete note"
+              title="Delete note"
+              className="bb-icon-button bb-icon-button--bare bb-icon-button--danger"
             >
-              {props.isFullscreen ? <ArrowsInSimple size={17} /> : <ArrowsOutSimple size={17} />}
+              <Trash size={17} />
             </button>
-          ) : null}
-          <button
-            type="button"
-            onClick={props.onDeleteRequest}
-            disabled={!props.editorNote?.noteId}
-            aria-label="Delete note"
-            title="Delete note"
-            className="bb-icon-button bb-icon-button--bare bb-icon-button--danger"
-          >
-            <Trash size={17} />
-          </button>
+          </div>
         </div>
       </div>
 

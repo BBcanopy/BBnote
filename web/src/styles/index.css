@@ -298,10 +298,6 @@ button:disabled {
   backdrop-filter: none;
 }
 
-.bb-topbar--with-title {
-  grid-template-columns: minmax(max-content, 1fr) minmax(0, 3fr) minmax(max-content, 1fr);
-}
-
 .bb-topbar__nav {
   display: flex;
   align-items: center;
@@ -312,74 +308,6 @@ button:disabled {
 
 .bb-topbar__nav--brand-only {
   width: auto;
-}
-
-.bb-topbar__titlebar {
-  width: 100%;
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  min-height: calc(var(--bb-topbar-control-size) - 0.1rem);
-  padding: 0.08rem 0.14rem;
-  border: 1px solid transparent;
-  border-radius: 0.58rem;
-  background: transparent;
-  box-shadow: none;
-  transition:
-    border-color 220ms var(--ease),
-    background-color 220ms var(--ease),
-    box-shadow 220ms var(--ease);
-}
-
-.bb-topbar__titlebar:hover {
-  background: color-mix(in srgb, var(--surface-highlight) 48%, transparent);
-}
-
-.bb-topbar__titlebar:focus-within {
-  border-color: color-mix(in srgb, var(--accent) 34%, var(--line));
-  background: color-mix(in srgb, var(--surface-strong) 84%, transparent);
-  box-shadow:
-    inset 0 1px 0 var(--surface-highlight-strong),
-    0 0 0 3px color-mix(in srgb, var(--accent) 10%, transparent),
-    0 18px 30px -30px rgba(18, 34, 36, 0.18);
-}
-
-.bb-topbar__titlebar-input.bb-input {
-  width: 100%;
-  min-width: 0;
-  min-height: calc(var(--bb-topbar-control-size) - 0.26rem);
-  padding-block: 0.06rem;
-  padding-inline: 0.36rem;
-  border: none;
-  border-radius: 0.44rem;
-  background: transparent;
-  box-shadow: none;
-  color: var(--ink);
-  caret-color: var(--accent-strong);
-  font-size: 1.08rem;
-  font-weight: 600;
-  letter-spacing: -0.035em;
-  line-height: 1.15;
-}
-
-.bb-topbar__titlebar-input.bb-input::placeholder {
-  color: color-mix(in srgb, var(--ink-soft) 74%, transparent);
-  opacity: 1;
-  font-weight: 500;
-}
-
-.bb-topbar__titlebar-input.bb-input:hover {
-  background: transparent;
-}
-
-.bb-topbar__titlebar-input.bb-input:focus {
-  border-color: transparent;
-  background: transparent;
-  box-shadow: none;
-}
-
-.bb-topbar__titlebar-input.bb-input:disabled {
-  opacity: 0.7;
 }
 
 .bb-topbar__menu {
@@ -2202,6 +2130,36 @@ button:disabled {
   flex: 1 1 auto;
 }
 
+.bb-editor-head {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.bb-editor-title-field {
+  gap: 0.35rem;
+}
+
+.bb-editor-title-input.bb-input {
+  min-height: 2.9rem;
+  padding: 0.65rem 0.8rem;
+  border-radius: 0;
+  background: color-mix(in srgb, var(--surface-strong) 92%, transparent);
+  box-shadow:
+    inset 0 1px 0 var(--surface-highlight),
+    0 14px 24px -30px rgba(18, 34, 36, 0.18);
+  color: var(--ink);
+  font-size: 1.04rem;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+}
+
+.bb-editor-title-input.bb-input::placeholder {
+  color: color-mix(in srgb, var(--ink-soft) 78%, transparent);
+  opacity: 1;
+  font-weight: 500;
+}
+
 .bb-editor-media-toolbar {
   display: flex;
   flex-wrap: wrap;
@@ -2906,10 +2864,6 @@ button:disabled {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .bb-topbar--with-title {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
   .bb-topbar__nav {
     width: 100%;
   }
@@ -2971,7 +2925,7 @@ button:disabled {
 
   .bb-editor-header__meta,
   .bb-editor-header__actions,
-  .bb-topbar__titlebar {
+  .bb-editor-title-field {
     width: 100%;
   }
 

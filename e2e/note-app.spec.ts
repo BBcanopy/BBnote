@@ -887,7 +887,7 @@ test("reorders notes when the drop lands in the note-lane gap", async ({ page })
   await expectNoteOrderInLane(page, [secondNoteTitle, firstNoteTitle, thirdNoteTitle]);
 });
 
-test("shows the note title in the topbar, keeps folder and note drag cursors distinct, and supports table insertion, fullscreen editing, and markdown formatting tools", async ({
+test("shows the note title above the editor lane, keeps folder and note drag cursors distinct, and supports table insertion, fullscreen editing, and markdown formatting tools", async ({
   page
 }) => {
   await page.setViewportSize({ width: 1900, height: 1000 });
@@ -902,27 +902,29 @@ test("shows the note title in the topbar, keeps folder and note drag cursors dis
 
   const topbar = page.locator(".bb-topbar");
   const editorPanel = page.getByTestId("editor-panel-desktop");
+  const editorTitleField = editorPanel.getByTestId("editor-title-field");
   const editorHeader = editorPanel.locator(".bb-editor-header");
   const editorStack = editorPanel.locator(".bb-editor-stack");
-  const titleLabel = topbar.getByText(/^title$/i);
-  const titleInputShell = topbar.getByTestId("page-nav-title-input");
-  const titleInput = topbar.getByRole("textbox", { name: "Title" });
+  const titleLabel = editorTitleField.getByText(/^title$/i);
+  const titleInput = editorPanel.getByRole("textbox", { name: "Title" });
   const expandEditorButton = editorHeader.getByRole("button", { name: /^expand editor$/i });
   const deleteButton = editorHeader.getByRole("button", { name: /delete note/i });
   const updatedAtStatus = editorPanel.getByTestId("editor-updated-at");
   const editorHeaderActions = editorHeader.locator(".bb-editor-header__actions");
   const textarea = editorPanel.getByPlaceholder("Write in Markdown");
 
-  await expect(titleLabel).toHaveCount(0);
+  await expect(topbar.getByRole("textbox", { name: "Title" })).toHaveCount(0);
+  await expect(titleLabel).toBeVisible();
   await expect(titleInput).toBeVisible();
   await expect(titleInput).toHaveAttribute("placeholder", "Untitled note");
-  await expect(editorHeader.getByRole("textbox", { name: "Title" })).toHaveCount(0);
   await expect(expandEditorButton).toBeVisible();
   await expect(deleteButton).toBeVisible();
   await expect(page.getByTestId("editor-format-toolbar").first()).toBeVisible();
   await expect(updatedAtStatus).toBeVisible();
 
   const topbarBox = await topbar.boundingBox();
+  const editorPanelBox = await editorPanel.boundingBox();
+  const editorTitleFieldBox = await editorTitleField.boundingBox();
   const editorStackBox = await editorStack.boundingBox();
   const titleInputBox = await titleInput.boundingBox();
   const textareaBox = await textarea.boundingBox();
@@ -930,71 +932,44 @@ test("shows the note title in the topbar, keeps folder and note drag cursors dis
   const updatedAtStatusBox = await updatedAtStatus.boundingBox();
   const editorHeaderActionsBox = await editorHeaderActions.boundingBox();
   expect(topbarBox).not.toBeNull();
+  expect(editorPanelBox).not.toBeNull();
+  expect(editorTitleFieldBox).not.toBeNull();
   expect(editorStackBox).not.toBeNull();
   expect(titleInputBox).not.toBeNull();
   expect(textareaBox).not.toBeNull();
   expect(deleteButtonBox).not.toBeNull();
   expect(updatedAtStatusBox).not.toBeNull();
   expect(editorHeaderActionsBox).not.toBeNull();
-  if (!topbarBox || !editorStackBox || !titleInputBox || !textareaBox || !deleteButtonBox || !updatedAtStatusBox || !editorHeaderActionsBox) {
-    throw new Error("Expected the topbar title input and editor actions layout to be visible.");
+  if (!topbarBox || !editorPanelBox || !editorTitleFieldBox || !editorStackBox || !titleInputBox || !textareaBox || !deleteButtonBox || !updatedAtStatusBox || !editorHeaderActionsBox) {
+    throw new Error("Expected the editor-lane title input and editor actions layout to be visible.");
   }
-  expect(titleInputBox.y).toBeGreaterThanOrEqual(topbarBox.y - 1);
-  expect(titleInputBox.y + titleInputBox.height).toBeLessThanOrEqual(topbarBox.y + topbarBox.height + 1);
-  expect(Math.abs(titleInputBox.x + titleInputBox.width / 2 - (topbarBox.x + topbarBox.width / 2))).toBeLessThan(24);
-  expect(titleInputBox.width).toBeGreaterThan(topbarBox.width * 0.45);
-  expect(titleInputBox.height).toBeLessThan(32);
+  expect(editorTitleFieldBox.y).toBeGreaterThan(topbarBox.y + topbarBox.height + 8);
+  expect(titleInputBox.y).toBeGreaterThanOrEqual(editorPanelBox.y);
+  expect(titleInputBox.y + titleInputBox.height).toBeLessThan(textareaBox.y - 12);
+  expect(titleInputBox.width).toBeGreaterThan(editorPanelBox.width * 0.35);
   expect(topbarBox.height).toBeLessThan(38);
   expect(textareaBox.height / editorStackBox.height).toBeGreaterThan(0.72);
   expect(updatedAtStatusBox.x + updatedAtStatusBox.width).toBeLessThanOrEqual(editorHeaderActionsBox.x + 8);
-
-  await page.mouse.move(24, Math.min((topbarBox.y + topbarBox.height) + 80, textareaBox.y + 20));
-  const idleTitleShellStyles = await titleInputShell.evaluate((element) => {
-    const styles = getComputedStyle(element);
-    return {
-      backgroundColor: styles.backgroundColor,
-      borderTopColor: styles.borderTopColor,
-      boxShadow: styles.boxShadow
-    };
-  });
-  const idleTitleInputStyles = await titleInput.evaluate((element) => {
-    const styles = getComputedStyle(element);
-    return {
-      backgroundColor: styles.backgroundColor,
-      borderTopWidth: styles.borderTopWidth,
-      boxShadow: styles.boxShadow,
-      fontSize: styles.fontSize,
-      fontWeight: styles.fontWeight
-    };
-  });
-  expect(idleTitleShellStyles.backgroundColor).toBe("rgba(0, 0, 0, 0)");
-  expect(idleTitleShellStyles.borderTopColor).toBe("rgba(0, 0, 0, 0)");
-  expect(idleTitleShellStyles.boxShadow).toBe("none");
-  expect(idleTitleInputStyles.backgroundColor).toBe("rgba(0, 0, 0, 0)");
-  expect(idleTitleInputStyles.borderTopWidth).toBe("0px");
-  expect(idleTitleInputStyles.boxShadow).toBe("none");
-  expect(Number.parseFloat(idleTitleInputStyles.fontSize)).toBeGreaterThan(16.5);
-  expect(Number.parseInt(idleTitleInputStyles.fontWeight, 10)).toBeGreaterThanOrEqual(600);
-
-  await titleInput.click();
-  await expect(titleInput).toBeFocused();
-  const expectedFocusedTitleShellBackground = await resolveBackgroundColor(
-    page,
-    "color-mix(in srgb, var(--surface-strong) 84%, transparent)"
-  );
-  const expectedFocusedTitleShellBorder = await resolveBackgroundColor(
-    page,
-    "color-mix(in srgb, var(--accent) 34%, var(--line))"
-  );
   await expect
-    .poll(async () => titleInputShell.evaluate((element) => getComputedStyle(element).backgroundColor))
-    .toBe(expectedFocusedTitleShellBackground);
-  await expect
-    .poll(async () => titleInputShell.evaluate((element) => getComputedStyle(element).borderTopColor))
-    .toBe(expectedFocusedTitleShellBorder);
-  await expect
-    .poll(async () => titleInputShell.evaluate((element) => getComputedStyle(element).boxShadow !== "none"))
-    .toBeTruthy();
+    .poll(async () =>
+      titleInput.evaluate((element) => {
+        const styles = getComputedStyle(element);
+        return {
+          topLeft: styles.borderTopLeftRadius,
+          topRight: styles.borderTopRightRadius,
+          bottomRight: styles.borderBottomRightRadius,
+          bottomLeft: styles.borderBottomLeftRadius,
+          fontWeight: styles.fontWeight
+        };
+      })
+    )
+    .toEqual({
+      topLeft: "0px",
+      topRight: "0px",
+      bottomRight: "0px",
+      bottomLeft: "0px",
+      fontWeight: "600"
+    });
 
   await expect
     .poll(async () => notebookRow(page, notebookName).evaluate((element) => getComputedStyle(element).cursor))
