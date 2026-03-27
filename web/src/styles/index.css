@@ -341,7 +341,7 @@ button:disabled {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 1.05rem;
+  width: 0.95rem;
   min-height: 2.1rem;
   color: color-mix(in srgb, var(--ink-soft) 88%, transparent);
 }
