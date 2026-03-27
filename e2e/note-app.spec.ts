@@ -1404,6 +1404,7 @@ test("opens migration from the avatar menu and runs both export and import flows
   await expect
     .poll(async () => ((await userMenuButton.textContent()) ?? "").trim().length)
     .toBe(1);
+  await expect.poll(async () => userMenuButton.getByTestId("user-avatar-image").count()).toBe(0);
   await expect
     .poll(async () => userMenuButton.evaluate((element) => getComputedStyle(element).borderTopWidth))
     .toBe("0px");
@@ -1477,10 +1478,45 @@ test("opens migration from the avatar menu and runs both export and import flows
   await expect(page).toHaveURL(/\/$/);
 });
 
-async function login(page: import("@playwright/test").Page) {
+test("shows the gravatar image on the avatar button when one is available", async ({ page }) => {
+  await page.route("https://www.gravatar.com/avatar/**", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "image/svg+xml",
+      body: '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><rect width="64" height="64" fill="#1f7a8c"/></svg>'
+    });
+  });
+
+  await login(page, { assertTheme: false, mockGravatar: false });
+
+  const avatarImage = page.getByRole("button", { name: /open user menu/i }).getByTestId("user-avatar-image");
+
+  await expect(avatarImage).toHaveAttribute(
+    "src",
+    "https://www.gravatar.com/avatar/c7bab17bda91be4f73ce7604f0d3a01dd80f3a999a370de999dde303f7794fba?d=404&s=64"
+  );
+  await expect.poll(async () => avatarImage.evaluate((element) => (element as HTMLImageElement).naturalWidth)).toBe(64);
+  await expect
+    .poll(async () => avatarImage.evaluate((element) => Number.parseFloat(getComputedStyle(element).opacity)))
+    .toBeGreaterThan(0.95);
+});
+
+async function login(page: import("@playwright/test").Page, options?: { assertTheme?: boolean; mockGravatar?: boolean }) {
+  if (options?.mockGravatar !== false) {
+    await page.route("https://www.gravatar.com/avatar/**", async (route) => {
+      await route.fulfill({
+        status: 404,
+        contentType: "text/plain",
+        body: "not found"
+      });
+    });
+  }
+
   await page.goto("/");
   await page.getByRole("button", { name: /sign in with oidc/i }).click();
-  await expect(page.locator("html")).toHaveAttribute("data-theme", "sea");
+  if (options?.assertTheme !== false) {
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "sea");
+  }
   await expect(page.getByText("Notebook workspace")).toHaveCount(0);
   await expect(page.getByTestId("editor-panel-desktop").locator(".bb-empty-state").getByText("No note selected")).toBeVisible();
   await expect(page.getByRole("textbox", { name: "Title" })).toHaveCount(0);
