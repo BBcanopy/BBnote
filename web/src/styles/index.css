@@ -333,7 +333,7 @@ button:disabled {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
-  column-gap: 0.58rem;
+  column-gap: 0.34rem;
   row-gap: 0;
 }
 
@@ -341,7 +341,7 @@ button:disabled {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 1.05rem;
+  width: 0.9rem;
   min-height: 2rem;
   color: color-mix(in srgb, var(--ink-soft) 88%, transparent);
   transform: translateY(0.04rem);

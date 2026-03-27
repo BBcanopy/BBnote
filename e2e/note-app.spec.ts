@@ -960,9 +960,11 @@ test("shows the note title in the topbar above the editor lane, keeps folder and
   if (!topbarBox || !editorPanelBox || !topbarTitleFieldBox || !editorStackBox || !titleIconBox || !titleInputBox || !textareaBox || !deleteButtonBox || !updatedAtStatusBox || !editorHeaderActionsBox) {
     throw new Error("Expected the topbar title input and editor actions layout to be visible.");
   }
+  const titleGap = titleInputBox.x - (titleIconBox.x + titleIconBox.width);
   expect(topbarTitleFieldBox.x).toBeGreaterThanOrEqual(editorPanelBox.x - 4);
   expect(topbarTitleFieldBox.x + topbarTitleFieldBox.width).toBeLessThanOrEqual(editorPanelBox.x + editorPanelBox.width + 4);
-  expect(titleIconBox.x + titleIconBox.width).toBeLessThan(titleInputBox.x - 4);
+  expect(titleGap).toBeGreaterThan(1);
+  expect(titleGap).toBeLessThan(10);
   expect(Math.abs(titleIconBox.y + titleIconBox.height / 2 - (titleInputBox.y + titleInputBox.height / 2))).toBeLessThan(2);
   expect(titleIconBox.width).toBeLessThan(18);
   expect(Math.abs(topbarTitleFieldBox.x - editorPanelBox.x)).toBeLessThan(12);
