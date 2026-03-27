@@ -28,8 +28,22 @@ describe("createGravatarUrl", () => {
     await expect(createGravatarUrl("   ")).resolves.toBeNull();
   });
 
-  it("returns null when subtle crypto is unavailable", async () => {
+  it("falls back to the local hash implementation when subtle crypto is unavailable", async () => {
     vi.stubGlobal("crypto", {});
-    await expect(createGravatarUrl("avery@example.com")).resolves.toBeNull();
+    await expect(createGravatarUrl("avery@example.com")).resolves.toBe(
+      "https://www.gravatar.com/avatar/c7bab17bda91be4f73ce7604f0d3a01dd80f3a999a370de999dde303f7794fba?d=404&s=64"
+    );
+  });
+
+  it("falls back to the local hash implementation when subtle crypto throws", async () => {
+    vi.stubGlobal("crypto", {
+      subtle: {
+        digest: vi.fn().mockRejectedValue(new Error("subtle unavailable"))
+      }
+    });
+
+    await expect(createGravatarUrl("avery@example.com")).resolves.toBe(
+      "https://www.gravatar.com/avatar/c7bab17bda91be4f73ce7604f0d3a01dd80f3a999a370de999dde303f7794fba?d=404&s=64"
+    );
   });
 });
