@@ -1027,10 +1027,12 @@ test("shows the note title in the topbar above the editor lane, keeps folder and
   await page.getByTestId("media-input-file").first().setInputFiles(uploadFile);
   const attachmentList = editorPanel.getByTestId("attachment-list").first();
   const attachmentCard = attachmentList.locator(".bb-attachment-card").first();
+  const attachmentIcon = attachmentCard.locator(".bb-attachment-card__icon").first();
   const attachmentToggle = attachmentList.locator(".bb-attachment-list__toggle");
   const attachmentActionButton = attachmentCard.locator(".bb-attachment-card__button").first();
   await expect(attachmentList).toBeVisible();
   await expect(attachmentList.getByText(`toolbar-attachment-${suffix}.txt`)).toBeVisible();
+  await expect(attachmentIcon).toBeVisible();
   await expect
     .poll(async () => ({
       list: await attachmentList.evaluate((element) => {
@@ -1042,7 +1044,27 @@ test("shows the note title in the topbar above the editor lane, keeps folder and
           bottomLeft: styles.borderBottomLeftRadius
         };
       }),
+      card: await attachmentCard.evaluate((element) => {
+        const styles = getComputedStyle(element);
+        return {
+          topLeft: styles.borderTopLeftRadius,
+          topRight: styles.borderTopRightRadius,
+          bottomRight: styles.borderBottomRightRadius,
+          bottomLeft: styles.borderBottomLeftRadius,
+          backgroundColor: styles.backgroundColor,
+          borderTopWidth: styles.borderTopWidth,
+          boxShadow: styles.boxShadow
+        };
+      }),
+      button: await attachmentActionButton.evaluate((element) => {
+        const styles = getComputedStyle(element);
+        return {
+          backgroundColor: styles.backgroundColor,
+          borderTopWidth: styles.borderTopWidth
+        };
+      }),
       cardHeight: (await attachmentCard.boundingBox())?.height ?? Number.POSITIVE_INFINITY,
+      iconWidth: (await attachmentIcon.boundingBox())?.width ?? Number.POSITIVE_INFINITY,
       toggleHeight: await attachmentToggle.evaluate((element) => element.getBoundingClientRect().height),
       buttonHeight: await attachmentActionButton.evaluate((element) => element.getBoundingClientRect().height)
     }))
@@ -1053,10 +1075,25 @@ test("shows the note title in the topbar above the editor lane, keeps folder and
         bottomRight: "0px",
         bottomLeft: "0px"
       },
+      card: {
+        topLeft: "0px",
+        topRight: "0px",
+        bottomRight: "0px",
+        bottomLeft: "0px",
+        backgroundColor: "rgba(0, 0, 0, 0)",
+        borderTopWidth: "0px",
+        boxShadow: "none"
+      },
+      button: {
+        backgroundColor: "rgba(0, 0, 0, 0)",
+        borderTopWidth: "0px"
+      },
       cardHeight: expect.any(Number),
+      iconWidth: expect.any(Number),
       toggleHeight: expect.any(Number),
       buttonHeight: expect.any(Number)
     });
+  expect((await attachmentIcon.boundingBox())?.width ?? Number.POSITIVE_INFINITY).toBeLessThan(20);
   expect((await attachmentCard.boundingBox())?.height ?? Number.POSITIVE_INFINITY).toBeLessThan(74);
   expect(await attachmentToggle.evaluate((element) => element.getBoundingClientRect().height)).toBeLessThan(50);
   expect(await attachmentActionButton.evaluate((element) => element.getBoundingClientRect().height)).toBeLessThan(32);

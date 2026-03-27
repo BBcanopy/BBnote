@@ -2,7 +2,6 @@ import { CaretDown, CaretRight, DownloadSimple, FileText, ImageSquare, Link, Mus
 import type { ReactNode } from "react";
 import { useState } from "react";
 import type { AttachmentRef } from "../api/types";
-import { buttonDanger, buttonSecondary } from "./buttonStyles";
 
 export function AttachmentList(props: {
   attachments: AttachmentRef[];
@@ -46,15 +45,15 @@ export function AttachmentList(props: {
                 return (
                   <div key={attachment.id} className="bb-attachment-card">
                     <div className="bb-attachment-meta">
-                      <div className="bb-note-icon">
+                      <div className="bb-attachment-card__icon" aria-hidden="true">
                         {kind === "image" ? <ImageSquare size={18} /> : null}
                         {kind === "audio" ? <MusicNotesSimple size={18} /> : null}
                         {kind === "video" ? <VideoCamera size={18} /> : null}
                         {kind === "file" ? <FileText size={18} /> : null}
                       </div>
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-medium text-[color:var(--ink)]">{attachment.name}</p>
-                        <p className="truncate text-xs text-[color:var(--ink-soft)]">{attachment.mimeType}</p>
+                      <div className="bb-attachment-meta__copy">
+                        <p className="bb-attachment-card__name">{attachment.name}</p>
+                        <p className="bb-attachment-card__type">{attachment.mimeType}</p>
                       </div>
                     </div>
                     <div className="bb-attachment-card__actions">
@@ -98,7 +97,7 @@ export function AttachmentList(props: {
                         type="button"
                         onClick={() => props.onDelete(attachment.id)}
                         disabled={props.disabled}
-                        className={`${buttonDanger} bb-attachment-card__button`}
+                        className="bb-attachment-card__button bb-attachment-card__button--danger"
                       >
                         Remove
                       </button>
@@ -120,7 +119,7 @@ function InlineAction(props: { label: string; icon: ReactNode; disabled?: boolea
       type="button"
       onClick={props.onClick}
       disabled={props.disabled}
-      className={`${buttonSecondary} bb-attachment-card__button`}
+      className="bb-attachment-card__button"
     >
       {props.icon}
       {props.label}
