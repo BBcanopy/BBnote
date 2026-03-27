@@ -249,7 +249,7 @@ export function NotesPage() {
     setPageNavTitleControl({
       label: "Title",
       value: editorNote.title,
-      placeholder: "Note title",
+      placeholder: "Untitled note",
       onChange: (title) => {
         setEditorNote((current) => (current ? { ...current, title } : current));
       }

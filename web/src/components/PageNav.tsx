@@ -25,7 +25,7 @@ export function PageNav(props: {
             onChange={(event) => titleControl.onChange(event.target.value)}
             placeholder={titleControl.placeholder}
             disabled={titleControl.disabled}
-            className="bb-input bb-topbar__titlebar-input text-base font-medium tracking-tight"
+            className="bb-input bb-topbar__titlebar-input"
           />
         </div>
       ) : null}
