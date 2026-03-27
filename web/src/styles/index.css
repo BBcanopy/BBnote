@@ -348,6 +348,7 @@ button:disabled {
   letter-spacing: 0.14em;
   line-height: 1;
   text-transform: uppercase;
+  transform: translateY(0.06em);
 }
 
 .bb-topbar__titlebar-input.bb-input {

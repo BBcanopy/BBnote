@@ -916,6 +916,9 @@ test("shows the note title in the topbar above the editor lane, keeps folder and
   await expect(titleLabel).toBeVisible();
   await expect(titleInput).toBeVisible();
   await expect(titleInput).toHaveAttribute("placeholder", "Untitled note");
+  await expect
+    .poll(async () => titleLabel.evaluate((element) => getComputedStyle(element).transform))
+    .not.toBe("none");
   await expect(editorPanel.getByRole("textbox", { name: "Title" })).toHaveCount(0);
   await expect(expandEditorButton).toBeVisible();
   await expect(deleteButton).toBeVisible();
@@ -963,7 +966,7 @@ test("shows the note title in the topbar above the editor lane, keeps folder and
   expect(topbarTitleFieldBox.x).toBeGreaterThanOrEqual(editorPanelBox.x - 4);
   expect(topbarTitleFieldBox.x + topbarTitleFieldBox.width).toBeLessThanOrEqual(editorPanelBox.x + editorPanelBox.width + 4);
   expect(titleLabelBox.x + titleLabelBox.width).toBeLessThan(titleInputBox.x - 4);
-  expect(Math.abs(titleLabelBox.y + titleLabelBox.height / 2 - (titleInputBox.y + titleInputBox.height / 2))).toBeLessThan(3);
+  expect(Math.abs(titleLabelBox.y + titleLabelBox.height / 2 - (titleInputBox.y + titleInputBox.height / 2))).toBeLessThan(2);
   expect(Math.abs(topbarTitleFieldBox.x - editorPanelBox.x)).toBeLessThan(12);
   expect(topbarTitleFieldBox.y).toBeGreaterThanOrEqual(topbarBox.y - 1);
   expect(topbarTitleFieldBox.y + topbarTitleFieldBox.height).toBeLessThanOrEqual(topbarBox.y + topbarBox.height + 1);
