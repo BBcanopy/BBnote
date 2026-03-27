@@ -338,11 +338,15 @@ button:disabled {
 }
 
 .bb-topbar__titlebar-field .bb-field__label {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.1rem;
   white-space: nowrap;
   color: color-mix(in srgb, var(--ink-soft) 88%, transparent);
   font-size: 0.72rem;
   font-weight: 700;
   letter-spacing: 0.14em;
+  line-height: 1;
   text-transform: uppercase;
 }
 
@@ -357,7 +361,7 @@ button:disabled {
   font-size: 1rem;
   font-weight: 600;
   letter-spacing: -0.03em;
-  line-height: 1.1;
+  line-height: 1;
 }
 
 .bb-topbar__titlebar-input.bb-input::placeholder {
