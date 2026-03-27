@@ -2163,6 +2163,7 @@ button:disabled {
 
 .bb-editor-surface {
   min-height: 30rem;
+  border-radius: 0;
 }
 
 .bb-editor-preview {
@@ -2455,6 +2456,7 @@ button:disabled {
 .bb-attachment-list {
   padding: 0;
   overflow: hidden;
+  border-radius: 0;
 }
 
 .bb-attachment-list__toggle {
@@ -2463,7 +2465,7 @@ button:disabled {
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
-  padding: 0.95rem 1rem;
+  padding: 0.72rem 0.85rem;
   border: none;
   background: transparent;
   color: var(--ink);
@@ -2478,7 +2480,7 @@ button:disabled {
 }
 
 .bb-attachment-list__title {
-  font-size: 0.92rem;
+  font-size: 0.88rem;
   font-weight: 700;
   letter-spacing: -0.02em;
 }
@@ -2513,23 +2515,45 @@ button:disabled {
 }
 
 .bb-attachment-list__body {
-  padding: 0 0 0.1rem;
+  padding: 0 0 0.08rem;
   border-top: 1px solid color-mix(in srgb, var(--line) 80%, transparent);
+}
+
+.bb-attachment-list__items {
+  display: grid;
+  gap: 0.42rem;
+  padding: 0.42rem;
 }
 
 .bb-attachment-card {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.85rem;
-  padding: 0.9rem 1rem;
+  gap: 0.7rem;
+  padding: 0.68rem 0.78rem;
+  border-radius: 0.8rem;
 }
 
 .bb-attachment-meta {
   display: flex;
   align-items: center;
-  gap: 0.8rem;
+  gap: 0.65rem;
   min-width: 0;
+}
+
+.bb-attachment-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.35rem;
+}
+
+.bb-attachment-card__button {
+  min-height: 0;
+  height: 1.85rem;
+  padding: 0 0.62rem;
+  font-size: 0.72rem;
+  gap: 0.35rem;
 }
 
 .bb-inline-button {

@@ -35,7 +35,7 @@ export function AttachmentList(props: {
 
       {!collapsed ? (
         <div className="bb-attachment-list__body">
-          <div className="space-y-3">
+          <div className="bb-attachment-list__items">
             {props.attachments.length === 0 ? (
               <div className="bb-empty-state text-sm">
                 Uploaded files will appear here.
@@ -57,7 +57,7 @@ export function AttachmentList(props: {
                         <p className="truncate text-xs text-[color:var(--ink-soft)]">{attachment.mimeType}</p>
                       </div>
                     </div>
-                    <div className="flex flex-wrap gap-2">
+                    <div className="bb-attachment-card__actions">
                       <InlineAction
                         label="Link"
                         icon={<Link size={16} />}
@@ -98,7 +98,7 @@ export function AttachmentList(props: {
                         type="button"
                         onClick={() => props.onDelete(attachment.id)}
                         disabled={props.disabled}
-                        className={`${buttonDanger} min-h-0 h-8 px-3 text-xs`}
+                        className={`${buttonDanger} bb-attachment-card__button`}
                       >
                         Remove
                       </button>
@@ -120,7 +120,7 @@ function InlineAction(props: { label: string; icon: ReactNode; disabled?: boolea
       type="button"
       onClick={props.onClick}
       disabled={props.disabled}
-      className={`${buttonSecondary} min-h-0 h-8 px-3 text-xs`}
+      className={`${buttonSecondary} bb-attachment-card__button`}
     >
       {props.icon}
       {props.label}

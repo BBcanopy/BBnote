@@ -972,6 +972,62 @@ test("shows the note title in the topbar above the editor lane, keeps folder and
       bottomLeft: "0px",
       fontWeight: "600"
     });
+  await expect
+    .poll(async () =>
+      textarea.evaluate((element) => {
+        const styles = getComputedStyle(element);
+        return {
+          topLeft: styles.borderTopLeftRadius,
+          topRight: styles.borderTopRightRadius,
+          bottomRight: styles.borderBottomRightRadius,
+          bottomLeft: styles.borderBottomLeftRadius
+        };
+      })
+    )
+    .toEqual({
+      topLeft: "0px",
+      topRight: "0px",
+      bottomRight: "0px",
+      bottomLeft: "0px"
+    });
+
+  const uploadFile = await createTempFile(`toolbar-attachment-${suffix}.txt`, "budget attachment");
+  await page.getByTestId("media-input-file").first().setInputFiles(uploadFile);
+  const attachmentList = editorPanel.getByTestId("attachment-list").first();
+  const attachmentCard = attachmentList.locator(".bb-attachment-card").first();
+  const attachmentToggle = attachmentList.locator(".bb-attachment-list__toggle");
+  const attachmentActionButton = attachmentCard.locator(".bb-attachment-card__button").first();
+  await expect(attachmentList).toBeVisible();
+  await expect(attachmentList.getByText(`toolbar-attachment-${suffix}.txt`)).toBeVisible();
+  await expect
+    .poll(async () => ({
+      list: await attachmentList.evaluate((element) => {
+        const styles = getComputedStyle(element);
+        return {
+          topLeft: styles.borderTopLeftRadius,
+          topRight: styles.borderTopRightRadius,
+          bottomRight: styles.borderBottomRightRadius,
+          bottomLeft: styles.borderBottomLeftRadius
+        };
+      }),
+      cardHeight: (await attachmentCard.boundingBox())?.height ?? Number.POSITIVE_INFINITY,
+      toggleHeight: await attachmentToggle.evaluate((element) => element.getBoundingClientRect().height),
+      buttonHeight: await attachmentActionButton.evaluate((element) => element.getBoundingClientRect().height)
+    }))
+    .toEqual({
+      list: {
+        topLeft: "0px",
+        topRight: "0px",
+        bottomRight: "0px",
+        bottomLeft: "0px"
+      },
+      cardHeight: expect.any(Number),
+      toggleHeight: expect.any(Number),
+      buttonHeight: expect.any(Number)
+    });
+  expect((await attachmentCard.boundingBox())?.height ?? Number.POSITIVE_INFINITY).toBeLessThan(74);
+  expect(await attachmentToggle.evaluate((element) => element.getBoundingClientRect().height)).toBeLessThan(50);
+  expect(await attachmentActionButton.evaluate((element) => element.getBoundingClientRect().height)).toBeLessThan(32);
 
   await expect
     .poll(async () => notebookRow(page, notebookName).evaluate((element) => getComputedStyle(element).cursor))
