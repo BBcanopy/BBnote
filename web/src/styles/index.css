@@ -298,20 +298,65 @@ button:disabled {
   backdrop-filter: none;
 }
 
+.bb-topbar--with-title {
+  min-height: 4.15rem;
+  align-items: start;
+}
+
 .bb-topbar__nav {
   display: flex;
   align-items: center;
   gap: 0.55rem;
   min-width: 0;
   justify-self: start;
+  position: relative;
+  z-index: 1;
 }
 
 .bb-topbar__nav--brand-only {
   width: auto;
 }
 
+.bb-topbar__titlebar {
+  position: absolute;
+  top: 0;
+  left: var(--bb-topbar-title-left);
+  width: var(--bb-topbar-title-width);
+  min-width: 0;
+  max-width: calc(100% - var(--bb-topbar-title-left));
+}
+
+.bb-topbar__titlebar-field {
+  width: 100%;
+  min-width: 0;
+  gap: 0.32rem;
+}
+
+.bb-topbar__titlebar-input.bb-input {
+  min-height: 2.8rem;
+  padding: 0.66rem 0.82rem;
+  border-radius: 0;
+  background: color-mix(in srgb, var(--surface-strong) 92%, transparent);
+  box-shadow:
+    inset 0 1px 0 var(--surface-highlight),
+    0 14px 24px -30px rgba(18, 34, 36, 0.18);
+  color: var(--ink);
+  font-size: 1.03rem;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+}
+
+.bb-topbar__titlebar-input.bb-input::placeholder {
+  color: color-mix(in srgb, var(--ink-soft) 78%, transparent);
+  opacity: 1;
+  font-weight: 500;
+}
+
 .bb-topbar__menu {
   justify-self: end;
+  position: relative;
+  z-index: 1;
 }
 
 .bb-brand-mark {
@@ -2130,36 +2175,6 @@ button:disabled {
   flex: 1 1 auto;
 }
 
-.bb-editor-head {
-  display: grid;
-  gap: 0.55rem;
-}
-
-.bb-editor-title-field {
-  gap: 0.35rem;
-}
-
-.bb-editor-title-input.bb-input {
-  min-height: 2.9rem;
-  padding: 0.65rem 0.8rem;
-  border-radius: 0;
-  background: color-mix(in srgb, var(--surface-strong) 92%, transparent);
-  box-shadow:
-    inset 0 1px 0 var(--surface-highlight),
-    0 14px 24px -30px rgba(18, 34, 36, 0.18);
-  color: var(--ink);
-  font-size: 1.04rem;
-  font-weight: 600;
-  letter-spacing: -0.03em;
-  line-height: 1.15;
-}
-
-.bb-editor-title-input.bb-input::placeholder {
-  color: color-mix(in srgb, var(--ink-soft) 78%, transparent);
-  opacity: 1;
-  font-weight: 500;
-}
-
 .bb-editor-media-toolbar {
   display: flex;
   flex-wrap: wrap;
@@ -2861,11 +2876,37 @@ button:disabled {
 
   .bb-topbar {
     position: static;
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
   }
 
   .bb-topbar__nav {
     width: 100%;
+  }
+
+  .bb-topbar--with-title {
+    grid-template-areas:
+      "nav menu"
+      "title title";
+    min-height: auto;
+  }
+
+  .bb-topbar--with-title .bb-topbar__nav {
+    grid-area: nav;
+  }
+
+  .bb-topbar--with-title .bb-topbar__menu {
+    grid-area: menu;
+  }
+
+  .bb-topbar__titlebar {
+    position: static;
+    width: 100%;
+    max-width: none;
+  }
+
+  .bb-topbar--with-title .bb-topbar__titlebar {
+    grid-area: title;
   }
 
   .bb-route-error__hero {
@@ -2925,7 +2966,7 @@ button:disabled {
 
   .bb-editor-header__meta,
   .bb-editor-header__actions,
-  .bb-editor-title-field {
+  .bb-topbar__titlebar {
     width: 100%;
   }
 

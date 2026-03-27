@@ -887,7 +887,7 @@ test("reorders notes when the drop lands in the note-lane gap", async ({ page })
   await expectNoteOrderInLane(page, [secondNoteTitle, firstNoteTitle, thirdNoteTitle]);
 });
 
-test("shows the note title above the editor lane, keeps folder and note drag cursors distinct, and supports table insertion, fullscreen editing, and markdown formatting tools", async ({
+test("shows the note title in the topbar above the editor lane, keeps folder and note drag cursors distinct, and supports table insertion, fullscreen editing, and markdown formatting tools", async ({
   page
 }) => {
   await page.setViewportSize({ width: 1900, height: 1000 });
@@ -902,21 +902,21 @@ test("shows the note title above the editor lane, keeps folder and note drag cur
 
   const topbar = page.locator(".bb-topbar");
   const editorPanel = page.getByTestId("editor-panel-desktop");
-  const editorTitleField = editorPanel.getByTestId("editor-title-field");
+  const topbarTitleField = topbar.getByTestId("page-nav-title-input");
   const editorHeader = editorPanel.locator(".bb-editor-header");
   const editorStack = editorPanel.locator(".bb-editor-stack");
-  const titleLabel = editorTitleField.getByText(/^title$/i);
-  const titleInput = editorPanel.getByRole("textbox", { name: "Title" });
+  const titleLabel = topbarTitleField.getByText(/^title$/i);
+  const titleInput = topbar.getByRole("textbox", { name: "Title" });
   const expandEditorButton = editorHeader.getByRole("button", { name: /^expand editor$/i });
   const deleteButton = editorHeader.getByRole("button", { name: /delete note/i });
   const updatedAtStatus = editorPanel.getByTestId("editor-updated-at");
   const editorHeaderActions = editorHeader.locator(".bb-editor-header__actions");
   const textarea = editorPanel.getByPlaceholder("Write in Markdown");
 
-  await expect(topbar.getByRole("textbox", { name: "Title" })).toHaveCount(0);
   await expect(titleLabel).toBeVisible();
   await expect(titleInput).toBeVisible();
   await expect(titleInput).toHaveAttribute("placeholder", "Untitled note");
+  await expect(editorPanel.getByRole("textbox", { name: "Title" })).toHaveCount(0);
   await expect(expandEditorButton).toBeVisible();
   await expect(deleteButton).toBeVisible();
   await expect(page.getByTestId("editor-format-toolbar").first()).toBeVisible();
@@ -924,7 +924,7 @@ test("shows the note title above the editor lane, keeps folder and note drag cur
 
   const topbarBox = await topbar.boundingBox();
   const editorPanelBox = await editorPanel.boundingBox();
-  const editorTitleFieldBox = await editorTitleField.boundingBox();
+  const topbarTitleFieldBox = await topbarTitleField.boundingBox();
   const editorStackBox = await editorStack.boundingBox();
   const titleInputBox = await titleInput.boundingBox();
   const textareaBox = await textarea.boundingBox();
@@ -933,21 +933,23 @@ test("shows the note title above the editor lane, keeps folder and note drag cur
   const editorHeaderActionsBox = await editorHeaderActions.boundingBox();
   expect(topbarBox).not.toBeNull();
   expect(editorPanelBox).not.toBeNull();
-  expect(editorTitleFieldBox).not.toBeNull();
+  expect(topbarTitleFieldBox).not.toBeNull();
   expect(editorStackBox).not.toBeNull();
   expect(titleInputBox).not.toBeNull();
   expect(textareaBox).not.toBeNull();
   expect(deleteButtonBox).not.toBeNull();
   expect(updatedAtStatusBox).not.toBeNull();
   expect(editorHeaderActionsBox).not.toBeNull();
-  if (!topbarBox || !editorPanelBox || !editorTitleFieldBox || !editorStackBox || !titleInputBox || !textareaBox || !deleteButtonBox || !updatedAtStatusBox || !editorHeaderActionsBox) {
-    throw new Error("Expected the editor-lane title input and editor actions layout to be visible.");
+  if (!topbarBox || !editorPanelBox || !topbarTitleFieldBox || !editorStackBox || !titleInputBox || !textareaBox || !deleteButtonBox || !updatedAtStatusBox || !editorHeaderActionsBox) {
+    throw new Error("Expected the topbar title input and editor actions layout to be visible.");
   }
-  expect(editorTitleFieldBox.y).toBeGreaterThan(topbarBox.y + topbarBox.height + 8);
-  expect(titleInputBox.y).toBeGreaterThanOrEqual(editorPanelBox.y);
-  expect(titleInputBox.y + titleInputBox.height).toBeLessThan(textareaBox.y - 12);
-  expect(titleInputBox.width).toBeGreaterThan(editorPanelBox.width * 0.35);
-  expect(topbarBox.height).toBeLessThan(38);
+  expect(topbarTitleFieldBox.x).toBeGreaterThanOrEqual(editorPanelBox.x - 4);
+  expect(topbarTitleFieldBox.x + topbarTitleFieldBox.width).toBeLessThanOrEqual(editorPanelBox.x + editorPanelBox.width + 4);
+  expect(Math.abs(titleInputBox.x - editorPanelBox.x)).toBeLessThan(12);
+  expect(topbarTitleFieldBox.y).toBeGreaterThanOrEqual(topbarBox.y - 1);
+  expect(titleInputBox.y).toBeLessThan(editorPanelBox.y - 8);
+  expect(titleInputBox.width).toBeGreaterThan(editorPanelBox.width * 0.3);
+  expect(topbarBox.height).toBeGreaterThan(54);
   expect(textareaBox.height / editorStackBox.height).toBeGreaterThan(0.72);
   expect(updatedAtStatusBox.x + updatedAtStatusBox.width).toBeLessThanOrEqual(editorHeaderActionsBox.x + 8);
   await expect

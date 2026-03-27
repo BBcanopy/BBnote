@@ -1,7 +1,9 @@
 import { CircleNotch } from "@phosphor-icons/react";
+import { useState } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../auth/AuthProvider";
 import { AuthSplash } from "./AuthSplash";
+import type { PageNavTitleControl, PageNavTitleLayout } from "./AppShellContext";
 import { PageNav } from "./PageNav";
 import { isNotesPathname } from "../utils/noteRoute";
 
@@ -9,6 +11,8 @@ export function AppShell() {
   const auth = useAuth();
   const location = useLocation();
   const useWorkspaceShell = isNotesPathname(location.pathname);
+  const [pageNavTitleControl, setPageNavTitleControl] = useState<PageNavTitleControl | null>(null);
+  const [pageNavTitleLayout, setPageNavTitleLayout] = useState<PageNavTitleLayout | null>(null);
 
   if (auth.status === "loading") {
     return (
@@ -36,11 +40,13 @@ export function AppShell() {
       <div className={`bb-shell bb-shell--app ${useWorkspaceShell ? "bb-shell--workspace" : ""}`}>
         <PageNav
           user={auth.user}
+          titleControl={pageNavTitleControl}
+          titleLayout={pageNavTitleLayout}
           onLogout={() => void auth.logout()}
           onThemeChange={(theme) => auth.setTheme(theme)}
         />
         <div className="bb-shell__content">
-          <Outlet />
+          <Outlet context={{ setPageNavTitleControl, setPageNavTitleLayout }} />
         </div>
       </div>
     </main>

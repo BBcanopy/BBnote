@@ -23,7 +23,7 @@ import {
   Trash,
   VideoCamera
 } from "@phosphor-icons/react";
-import { startTransition, useDeferredValue, useEffect, useId, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { startTransition, useDeferredValue, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode, type Ref } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   createFolder,
@@ -44,6 +44,7 @@ import {
 import type { AttachmentRef, FolderNode, NoteDetail, NoteSummary } from "../api/types";
 import { useAuth } from "../auth/AuthProvider";
 import { AttachmentList } from "../components/AttachmentList";
+import { useAppShellOutletContext } from "../components/AppShellContext";
 import { buttonGhost, buttonPrimary, buttonSecondary } from "../components/buttonStyles";
 import { ConfirmationDialog } from "../components/ConfirmationDialog";
 import { FolderTree } from "../components/FolderTree";
@@ -111,6 +112,7 @@ interface TextSelectionRange {
 export function NotesPage() {
   const auth = useAuth();
   const navigate = useNavigate();
+  const { setPageNavTitleControl, setPageNavTitleLayout } = useAppShellOutletContext();
   const params = useParams<{ folderId?: string; noteId?: string }>();
   const routeFolderId = params.folderId ?? null;
   const routeNoteId = params.noteId ?? null;
@@ -140,6 +142,8 @@ export function NotesPage() {
   const [uploadingAttachment, setUploadingAttachment] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [draggedNoteDeleteCandidate, setDraggedNoteDeleteCandidate] = useState<PendingNoteDelete | null>(null);
+  const desktopEditorPanelRef = useRef<HTMLElement | null>(null);
+  const mobileEditorPanelRef = useRef<HTMLElement | null>(null);
   const [pendingNoteDelete, setPendingNoteDelete] = useState<PendingNoteDelete | null>(null);
   const [pendingFolderDelete, setPendingFolderDelete] = useState<FolderNode | null>(null);
   const [lastSyncedContentKey, setLastSyncedContentKey] = useState<string | null>(null);
@@ -231,6 +235,116 @@ export function NotesPage() {
     }
     void refreshNotes();
   }, [auth.user, deferredSearch, selectedFolderId]);
+
+  useEffect(() => {
+    return () => {
+      setPageNavTitleControl(null);
+      setPageNavTitleLayout(null);
+    };
+  }, [setPageNavTitleControl, setPageNavTitleLayout]);
+
+  useEffect(() => {
+    if (!editorNote) {
+      setPageNavTitleControl(null);
+      setPageNavTitleLayout(null);
+      return;
+    }
+
+    setPageNavTitleControl({
+      label: "Title",
+      value: editorNote.title,
+      placeholder: MEDIA_PLACEHOLDER_TITLE,
+      onChange: (title) => {
+        setEditorNote((current) => (current ? { ...current, title } : current));
+      }
+    });
+  }, [editorNote?.noteId, editorNote?.title, setPageNavTitleControl, setPageNavTitleLayout]);
+
+  useLayoutEffect(() => {
+    if (!editorNote) {
+      setPageNavTitleLayout(null);
+      return;
+    }
+
+    const activePanel = [desktopEditorPanelRef.current, mobileEditorPanelRef.current].find(
+      (panel): panel is HTMLElement => panel instanceof HTMLElement && panel.getClientRects().length > 0
+    );
+    if (!activePanel) {
+      setPageNavTitleLayout(null);
+      return;
+    }
+
+    const shell = activePanel.closest(".bb-shell--app");
+    if (!(shell instanceof HTMLElement)) {
+      setPageNavTitleLayout(null);
+      return;
+    }
+
+    const shellRect = shell.getBoundingClientRect();
+    const panelRect = activePanel.getBoundingClientRect();
+    const nextLayout = {
+      leftOffset: Math.max(0, panelRect.left - shellRect.left),
+      width: Math.max(0, panelRect.width)
+    };
+
+    setPageNavTitleLayout((current) => {
+      if (current && current.leftOffset === nextLayout.leftOffset && current.width === nextLayout.width) {
+        return current;
+      }
+
+      return nextLayout;
+    });
+  }, [
+    editorNote?.noteId,
+    editorFullscreen,
+    folderPaneCollapsed,
+    notePaneCollapsed,
+    folderPaneWidth,
+    notePaneWidth,
+    setPageNavTitleLayout
+  ]);
+
+  useEffect(() => {
+    if (!editorNote) {
+      return;
+    }
+
+    function syncPageNavTitleLayout() {
+      const activePanel = [desktopEditorPanelRef.current, mobileEditorPanelRef.current].find(
+        (panel): panel is HTMLElement => panel instanceof HTMLElement && panel.getClientRects().length > 0
+      );
+      if (!activePanel) {
+        setPageNavTitleLayout(null);
+        return;
+      }
+
+      const shell = activePanel.closest(".bb-shell--app");
+      if (!(shell instanceof HTMLElement)) {
+        setPageNavTitleLayout(null);
+        return;
+      }
+
+      const shellRect = shell.getBoundingClientRect();
+      const panelRect = activePanel.getBoundingClientRect();
+      const nextLayout = {
+        leftOffset: Math.max(0, panelRect.left - shellRect.left),
+        width: Math.max(0, panelRect.width)
+      };
+
+      setPageNavTitleLayout((current) => {
+        if (current && current.leftOffset === nextLayout.leftOffset && current.width === nextLayout.width) {
+          return current;
+        }
+
+        return nextLayout;
+      });
+    }
+
+    window.addEventListener("resize", syncPageNavTitleLayout);
+    return () => {
+      window.removeEventListener("resize", syncPageNavTitleLayout);
+    };
+  }, [editorNote?.noteId, setPageNavTitleLayout]);
 
   useEffect(() => {
     if (!auth.user || !selectedNoteId) {
@@ -1126,6 +1240,7 @@ export function NotesPage() {
         )}
 
         <EditorPanel
+          panelRef={desktopEditorPanelRef}
           panelTestId="editor-panel-desktop"
           editorNote={editorNote}
           editorPane={editorPane}
@@ -1134,7 +1249,6 @@ export function NotesPage() {
           canUseMediaActions={canUseMediaActions}
           mediaActionDisabledReason="Select a notebook to add media."
           onEditorPaneChange={setEditorPane}
-          onTitleChange={(title) => setEditorNote((current) => (current ? { ...current, title } : current))}
           onBodyChange={(bodyMarkdown) => setEditorNote((current) => (current ? { ...current, bodyMarkdown } : current))}
           onToggleFullscreen={() => setEditorFullscreen((current) => !current)}
           onDeleteRequest={handleRequestDeleteCurrentNote}
@@ -1155,6 +1269,7 @@ export function NotesPage() {
 
       <div className="lg:hidden">
         <EditorPanel
+          panelRef={mobileEditorPanelRef}
           panelTestId="editor-panel-mobile"
           editorNote={editorNote}
           editorPane={editorPane}
@@ -1162,7 +1277,6 @@ export function NotesPage() {
           canUseMediaActions={canUseMediaActions}
           mediaActionDisabledReason="Select a notebook to add media."
           onEditorPaneChange={setEditorPane}
-          onTitleChange={(title) => setEditorNote((current) => (current ? { ...current, title } : current))}
           onBodyChange={(bodyMarkdown) => setEditorNote((current) => (current ? { ...current, bodyMarkdown } : current))}
           onToggleFullscreen={() => undefined}
           onDeleteRequest={handleRequestDeleteCurrentNote}
@@ -1265,6 +1379,7 @@ export function NotesPage() {
 }
 
 function EditorPanel(props: {
+  panelRef?: Ref<HTMLElement>;
   panelTestId?: string;
   editorNote: EditorState | null;
   editorPane: EditorPane;
@@ -1273,7 +1388,6 @@ function EditorPanel(props: {
   canUseMediaActions: boolean;
   mediaActionDisabledReason: string;
   onEditorPaneChange(value: EditorPane): void;
-  onTitleChange(title: string): void;
   onBodyChange(bodyMarkdown: string): void;
   onToggleFullscreen(): void;
   onDeleteRequest(): void;
@@ -1296,7 +1410,6 @@ function EditorPanel(props: {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const bodyTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const formatSelectionFrameRef = useRef<number | null>(null);
-  const titleInputId = useId();
   const tablePickerId = useId();
   const tablePickerRef = useRef<HTMLDivElement | null>(null);
   const tableColumnsInputRef = useRef<HTMLInputElement | null>(null);
@@ -2085,6 +2198,7 @@ function EditorPanel(props: {
 
   return (
     <section
+      ref={props.panelRef}
       data-testid={props.panelTestId}
       className={[
         "bb-editor-panel bb-editor-panel--workspace lg:flex-1",
@@ -2093,53 +2207,37 @@ function EditorPanel(props: {
         .filter(Boolean)
         .join(" ")}
     >
-      <div className="bb-editor-head">
-        {props.editorNote ? (
-          <label htmlFor={titleInputId} className="bb-field bb-editor-title-field" data-testid="editor-title-field">
-            <span className="bb-field__label">Title</span>
-            <input
-              id={titleInputId}
-              type="text"
-              aria-label="Title"
-              value={props.editorNote.title}
-              onChange={(event) => props.onTitleChange(event.target.value)}
-              placeholder={MEDIA_PLACEHOLDER_TITLE}
-              className="bb-input bb-editor-title-input"
-            />
-          </label>
-        ) : null}
-        <div className="bb-editor-header">
-          <div className="bb-editor-header__meta">
-            {headerStatusText ? (
-              <span className="bb-editor-header__status" data-testid="editor-updated-at">
-                {headerStatusText}
-              </span>
-            ) : null}
-          </div>
-          <div className="bb-editor-header__actions">
-            {editorMode}
-            {props.showFullscreenToggle ? (
-              <button
-                type="button"
-                onClick={props.onToggleFullscreen}
-                aria-label={props.isFullscreen ? "Exit fullscreen editor" : "Expand editor"}
-                title={props.isFullscreen ? "Exit fullscreen editor" : "Expand editor"}
-                className={`bb-icon-button bb-icon-button--toolbar bb-icon-button--accent${props.isFullscreen ? " bb-icon-button--is-active" : ""}`}
-              >
-                {props.isFullscreen ? <ArrowsInSimple size={17} /> : <ArrowsOutSimple size={17} />}
-              </button>
-            ) : null}
+      <div className="bb-editor-header">
+        <div className="bb-editor-header__meta">
+          {headerStatusText ? (
+            <span className="bb-editor-header__status" data-testid="editor-updated-at">
+              {headerStatusText}
+            </span>
+          ) : null}
+        </div>
+        <div className="bb-editor-header__actions">
+          {editorMode}
+          {props.showFullscreenToggle ? (
             <button
               type="button"
-              onClick={props.onDeleteRequest}
-              disabled={!props.editorNote?.noteId}
-              aria-label="Delete note"
-              title="Delete note"
-              className="bb-icon-button bb-icon-button--bare bb-icon-button--danger"
+              onClick={props.onToggleFullscreen}
+              aria-label={props.isFullscreen ? "Exit fullscreen editor" : "Expand editor"}
+              title={props.isFullscreen ? "Exit fullscreen editor" : "Expand editor"}
+              className={`bb-icon-button bb-icon-button--toolbar bb-icon-button--accent${props.isFullscreen ? " bb-icon-button--is-active" : ""}`}
             >
-              <Trash size={17} />
+              {props.isFullscreen ? <ArrowsInSimple size={17} /> : <ArrowsOutSimple size={17} />}
             </button>
-          </div>
+          ) : null}
+          <button
+            type="button"
+            onClick={props.onDeleteRequest}
+            disabled={!props.editorNote?.noteId}
+            aria-label="Delete note"
+            title="Delete note"
+            className="bb-icon-button bb-icon-button--bare bb-icon-button--danger"
+          >
+            <Trash size={17} />
+          </button>
         </div>
       </div>
 
