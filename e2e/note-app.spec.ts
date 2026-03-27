@@ -914,6 +914,7 @@ test("shows the note title in the topbar above the editor lane, keeps folder and
   const textarea = editorPanel.getByPlaceholder("Write in Markdown");
 
   await expect(titleIcon).toBeVisible();
+  await expect(titleIcon).toHaveAttribute("data-icon", "document");
   await expect(titleInput).toBeVisible();
   await expect(titleInput).toHaveAttribute("placeholder", "Untitled note");
   await expect(editorPanel.getByRole("textbox", { name: "Title" })).toHaveCount(0);

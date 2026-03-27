@@ -1,4 +1,4 @@
-import { FileText } from "@phosphor-icons/react";
+import { File } from "@phosphor-icons/react";
 import type { CSSProperties } from "react";
 import type { AuthSession } from "../api/types";
 import type { UserTheme } from "../api/types";
@@ -42,8 +42,13 @@ export function PageNav(props: {
       {titleControl && titleLayout ? (
         <div className="bb-topbar__titlebar" data-testid="page-nav-title-input" style={titlebarStyle}>
           <label className="bb-field bb-topbar__titlebar-field">
-            <span className="bb-topbar__titlebar-icon" data-testid="page-nav-title-icon" aria-hidden="true">
-              <FileText size={15} weight="regular" />
+            <span
+              className="bb-topbar__titlebar-icon"
+              data-testid="page-nav-title-icon"
+              data-icon="document"
+              aria-hidden="true"
+            >
+              <File size={15} weight="regular" />
             </span>
             <input
               aria-label={titleControl.label}

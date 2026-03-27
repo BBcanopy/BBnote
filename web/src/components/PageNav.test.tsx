@@ -33,7 +33,7 @@ describe("PageNav", () => {
 
     const input = screen.getByRole("textbox", { name: "Title" });
 
-    expect(screen.getByTestId("page-nav-title-icon")).toBeInTheDocument();
+    expect(screen.getByTestId("page-nav-title-icon")).toHaveAttribute("data-icon", "document");
     expect(screen.queryByText(/^title$/i)).not.toBeInTheDocument();
     expect(input).toHaveValue("Quarterly plan");
     fireEvent.change(input, { target: { value: "Updated plan" } });
