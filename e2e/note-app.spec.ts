@@ -967,6 +967,7 @@ test("shows the note title in the topbar above the editor lane, keeps folder and
   expect(Math.abs(topbarTitleFieldBox.x - editorPanelBox.x)).toBeLessThan(12);
   expect(topbarTitleFieldBox.y).toBeGreaterThanOrEqual(topbarBox.y - 1);
   expect(titleInputBox.y).toBeLessThan(editorPanelBox.y - 8);
+  expect(titleInputBox.height).toBeLessThan(40);
   expect(titleInputBox.width).toBeGreaterThan(editorPanelBox.width * 0.3);
   expect(topbarBox.height).toBeGreaterThan(54);
   expect(textareaBox.height / editorStackBox.height).toBeGreaterThan(0.72);
@@ -978,6 +979,7 @@ test("shows the note title in the topbar above the editor lane, keeps folder and
         const styles = getComputedStyle(element);
         return {
           backgroundColor: styles.backgroundColor,
+          borderColor: styles.borderTopColor,
           boxShadow: styles.boxShadow,
           topLeft: styles.borderTopLeftRadius,
           topRight: styles.borderTopRightRadius,
@@ -989,6 +991,7 @@ test("shows the note title in the topbar above the editor lane, keeps folder and
     )
     .toEqual({
       backgroundColor: expect.not.stringMatching(/^rgba\(0,\s0,\s0,\s0\)$/),
+      borderColor: expect.not.stringMatching(/^rgba\(0,\s0,\s0,\s0\)$/),
       boxShadow: expect.not.stringMatching(/^none$/),
       topLeft: "0px",
       topRight: "0px",
