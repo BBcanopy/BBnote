@@ -1184,6 +1184,11 @@ button:disabled {
   border-radius: 0.95rem;
 }
 
+.bb-note-list-shell {
+  position: relative;
+  min-height: 0;
+}
+
 .bb-note-list {
   display: grid;
   align-content: start;
@@ -1193,6 +1198,35 @@ button:disabled {
   overflow-y: auto;
   overscroll-behavior: contain;
   padding-right: 0.12rem;
+  transition: opacity 180ms var(--ease);
+}
+
+.bb-note-list.is-refreshing {
+  opacity: 0.58;
+}
+
+.bb-note-list__refresh-pill {
+  position: absolute;
+  top: 0.55rem;
+  left: 50%;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.38rem;
+  max-width: calc(100% - 1.1rem);
+  padding: 0.32rem 0.56rem;
+  border: 1px solid color-mix(in srgb, var(--line-strong) 72%, white);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface-elevated) 94%, white);
+  box-shadow: 0 12px 22px -18px rgba(18, 34, 36, 0.42);
+  color: var(--ink);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  text-align: center;
+  transform: translateX(-50%);
+  pointer-events: none;
 }
 
 .bb-note-drop-slot {
@@ -1570,6 +1604,10 @@ button:disabled {
   opacity: 0.54;
 }
 
+.bb-note-card--disabled {
+  cursor: default;
+}
+
 .bb-note-card--drop-before,
 .bb-note-card--drop-after {
   border-color: color-mix(in srgb, var(--accent) 30%, var(--line));
@@ -1604,6 +1642,11 @@ button:disabled {
 .bb-note-card:hover {
   transform: translateY(-1px);
   border-color: var(--line-strong);
+}
+
+.bb-note-card--disabled:hover {
+  transform: none;
+  border-color: var(--line);
 }
 
 .bb-note-card.is-active {
@@ -2173,7 +2216,44 @@ button:disabled {
 }
 
 .bb-editor-panel__content--editor {
+  position: relative;
   flex: 1 1 auto;
+}
+
+.bb-editor-panel__content-shell {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 1rem;
+  min-height: 0;
+  transition: opacity 180ms var(--ease);
+}
+
+.bb-editor-panel__content-shell.is-refreshing {
+  opacity: 0.58;
+}
+
+.bb-editor-panel__refresh-pill {
+  position: absolute;
+  top: 0.55rem;
+  left: 50%;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.38rem;
+  max-width: calc(100% - 1.1rem);
+  padding: 0.32rem 0.56rem;
+  border: 1px solid color-mix(in srgb, var(--line-strong) 72%, white);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface-elevated) 94%, white);
+  box-shadow: 0 12px 22px -18px rgba(18, 34, 36, 0.42);
+  color: var(--ink);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  text-align: center;
+  transform: translateX(-50%);
 }
 
 .bb-editor-stack {
@@ -2216,6 +2296,10 @@ button:disabled {
   min-height: 30rem;
   overflow-y: auto;
   overscroll-behavior: contain;
+}
+
+.bb-editor-preview.is-disabled {
+  pointer-events: none;
 }
 
 .bb-editor-preview--grow {

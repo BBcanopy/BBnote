@@ -1388,6 +1388,149 @@ test("syncs notebook and note selection into the URL and restores deep links on 
   await expect(page.getByRole("menu").getByRole("link", { name: /^notes$/i })).toHaveAttribute("aria-current", "page");
 });
 
+test("keeps the previous notes visible while switching folders", async ({ page }) => {
+  const suffix = Date.now().toString();
+  const firstNotebookName = `Smooth inbox ${suffix}`;
+  const secondNotebookName = `Smooth archive ${suffix}`;
+  const firstNoteTitle = `First smooth note ${suffix}`;
+  const secondNoteTitle = `Second smooth note ${suffix}`;
+
+  await login(page);
+
+  await createNotebookWithDialog(page, firstNotebookName);
+  const firstFolderId = extractFolderIdFromUrl(page.url());
+  await createNoteWithContent(page, firstNoteTitle, "This note should remain visible during the folder transition.");
+
+  await createNotebookWithDialog(page, secondNotebookName);
+  const secondFolderId = extractFolderIdFromUrl(page.url());
+  await createNoteWithContent(page, secondNoteTitle, "This note should appear after the delayed response resolves.");
+
+  await page.goto(`/folders/${firstFolderId}`);
+  await expect(page).toHaveURL(new RegExp(`/folders/${firstFolderId}$`));
+  await expect(notebookRowContainer(page, firstNotebookName)).toHaveClass(/is-active/);
+  await expect(page.getByTestId(buildNoteTestId("drag", firstNoteTitle))).toBeVisible();
+  await expect(page.getByTestId(buildNoteTestId("drag", secondNoteTitle))).toHaveCount(0);
+
+  let releaseTargetFolderNotes!: () => void;
+  const targetFolderNotesReleased = new Promise<void>((resolve) => {
+    releaseTargetFolderNotes = resolve;
+  });
+  let delayedTargetFolderRequestSeen = false;
+
+  await page.route("**/api/v1/notes?*", async (route) => {
+    const requestUrl = new URL(route.request().url());
+    const requestedFolderId = requestUrl.searchParams.get("folderId");
+    if (!delayedTargetFolderRequestSeen && requestedFolderId === secondFolderId) {
+      delayedTargetFolderRequestSeen = true;
+      const response = await route.fetch();
+      await targetFolderNotesReleased;
+      await route.fulfill({ response });
+      return;
+    }
+
+    await route.continue();
+  });
+
+  await notebookRow(page, secondNotebookName).click();
+  await expect(page).toHaveURL(new RegExp(`/folders/${secondFolderId}$`));
+  await expect.poll(() => delayedTargetFolderRequestSeen).toBe(true);
+
+  const staleNoteCard = page.getByTestId(buildNoteTestId("drag", firstNoteTitle));
+  const refreshIndicator = page.getByTestId("notes-refresh-indicator");
+  const notesPane = page.getByTestId("notes-pane");
+  await expect(staleNoteCard).toBeVisible();
+  await expect(staleNoteCard).toHaveAttribute("aria-disabled", "true");
+  await expect(refreshIndicator).toBeVisible();
+  await expect(page.locator(".bb-skeleton-card")).toHaveCount(0);
+  await expect
+    .poll(async () => {
+      const paneBox = await notesPane.boundingBox();
+      const indicatorBox = await refreshIndicator.boundingBox();
+      if (!paneBox || !indicatorBox) {
+        return Number.POSITIVE_INFINITY;
+      }
+      const paneCenter = paneBox.x + paneBox.width / 2;
+      const indicatorCenter = indicatorBox.x + indicatorBox.width / 2;
+      return Math.abs(paneCenter - indicatorCenter);
+    })
+    .toBeLessThan(12);
+
+  await staleNoteCard.dispatchEvent("click");
+  await expect(page).toHaveURL(new RegExp(`/folders/${secondFolderId}$`));
+  await expect(page.getByTestId(buildNoteTestId("drag", firstNoteTitle))).toBeVisible();
+
+  releaseTargetFolderNotes();
+
+  await expect(page.getByTestId(buildNoteTestId("drag", secondNoteTitle))).toBeVisible();
+  await expect(page.getByTestId(buildNoteTestId("drag", firstNoteTitle))).toHaveCount(0);
+  await expect(refreshIndicator).toHaveCount(0);
+});
+
+test("keeps the previous editor visible while switching notes", async ({ page }) => {
+  const suffix = Date.now().toString();
+  const notebookName = `Smooth note switch ${suffix}`;
+  const firstNoteTitle = `Editor stale first ${suffix}`;
+  const secondNoteTitle = `Editor stale second ${suffix}`;
+  const firstNoteBody = "This note should remain visible while the next note is loading.";
+  const secondNoteBody = "This note should replace the stale editor after the delayed response resolves.";
+
+  await login(page);
+  await createNotebookWithDialog(page, notebookName);
+  const folderId = extractFolderIdFromUrl(page.url());
+
+  await createNoteWithContent(page, firstNoteTitle, firstNoteBody);
+  const firstNoteId = extractNoteIdFromUrl(page.url());
+  await createNoteWithContent(page, secondNoteTitle, secondNoteBody);
+  const secondNoteId = extractNoteIdFromUrl(page.url());
+
+  await page.getByTestId(buildNoteTestId("drag", firstNoteTitle)).click();
+  await expect(page).toHaveURL(new RegExp(`/folders/${folderId}/notes/${firstNoteId}$`));
+
+  const desktopEditorPanel = page.getByTestId("editor-panel-desktop");
+  const topbarTitleInput = page.getByTestId("page-nav-title-input").getByRole("textbox", { name: "Title" });
+  const bodyTextarea = desktopEditorPanel.getByPlaceholder("Write in Markdown");
+  await expect(topbarTitleInput).toHaveValue(firstNoteTitle);
+  await expect(bodyTextarea).toHaveValue(firstNoteBody);
+
+  let releaseTargetNote!: () => void;
+  const targetNoteReleased = new Promise<void>((resolve) => {
+    releaseTargetNote = resolve;
+  });
+  let delayedTargetNoteRequestSeen = false;
+
+  await page.route(`**/api/v1/notes/${secondNoteId}`, async (route) => {
+    if (!delayedTargetNoteRequestSeen && route.request().method() === "GET") {
+      delayedTargetNoteRequestSeen = true;
+      const response = await route.fetch();
+      await targetNoteReleased;
+      await route.fulfill({ response });
+      return;
+    }
+
+    await route.continue();
+  });
+
+  await page.getByTestId(buildNoteTestId("drag", secondNoteTitle)).click();
+  await expect(page).toHaveURL(new RegExp(`/folders/${folderId}/notes/${secondNoteId}$`));
+  await expect.poll(() => delayedTargetNoteRequestSeen).toBe(true);
+
+  const refreshIndicator = desktopEditorPanel.getByTestId("editor-refresh-indicator");
+  await expect(refreshIndicator).toBeVisible();
+  await expect(page.locator(".bb-editor-panel__content--empty").filter({ hasText: "Loading note" })).toHaveCount(0);
+  await expect(topbarTitleInput).toHaveValue(firstNoteTitle);
+  await expect(topbarTitleInput).toBeDisabled();
+  await expect(bodyTextarea).toHaveValue(firstNoteBody);
+  await expect(bodyTextarea).toBeDisabled();
+
+  releaseTargetNote();
+
+  await expect(topbarTitleInput).toHaveValue(secondNoteTitle);
+  await expect(topbarTitleInput).toBeEnabled();
+  await expect(bodyTextarea).toHaveValue(secondNoteBody);
+  await expect(bodyTextarea).toBeEnabled();
+  await expect(refreshIndicator).toHaveCount(0);
+});
+
 test("opens migration from the avatar menu and runs both export and import flows", async ({ page }) => {
   await page.setViewportSize({ width: 1900, height: 1000 });
   await login(page);
@@ -1547,6 +1690,22 @@ function notebookRow(page: import("@playwright/test").Page, name: string) {
 
 function notebookRowContainer(page: import("@playwright/test").Page, name: string) {
   return page.getByTestId(buildNotebookTestId("drag", name)).locator(".bb-tree-row");
+}
+
+function extractFolderIdFromUrl(url: string) {
+  const match = /\/folders\/([^/]+)/.exec(url);
+  if (!match) {
+    throw new Error(`Expected a folder URL, got ${url}`);
+  }
+  return match[1];
+}
+
+function extractNoteIdFromUrl(url: string) {
+  const match = /\/notes\/([^/]+)/.exec(url);
+  if (!match) {
+    throw new Error(`Expected a note URL, got ${url}`);
+  }
+  return match[1];
 }
 
 async function createNotebookWithDialog(page: import("@playwright/test").Page, name: string) {
