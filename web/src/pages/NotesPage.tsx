@@ -505,13 +505,8 @@ export function NotesPage() {
 
     try {
       if (shouldShowLoading) {
-        if (keepVisibleNotesDuringRefresh) {
-          setRefreshingNotes(true);
-          setLoadingNotes(false);
-        } else {
-          setRefreshingNotes(false);
-          setLoadingNotes(true);
-        }
+        setRefreshingNotes(keepVisibleNotesDuringRefresh);
+        setLoadingNotes(!keepVisibleNotesDuringRefresh);
       }
       const payload = await listNotes({
         folderId: nextFolderId ?? undefined,
