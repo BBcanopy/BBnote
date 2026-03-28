@@ -1436,10 +1436,23 @@ test("keeps the previous notes visible while switching folders", async ({ page }
 
   const staleNoteCard = page.getByTestId(buildNoteTestId("drag", firstNoteTitle));
   const refreshIndicator = page.getByTestId("notes-refresh-indicator");
+  const notesPane = page.getByTestId("notes-pane");
   await expect(staleNoteCard).toBeVisible();
   await expect(staleNoteCard).toHaveAttribute("aria-disabled", "true");
   await expect(refreshIndicator).toBeVisible();
   await expect(page.locator(".bb-skeleton-card")).toHaveCount(0);
+  await expect
+    .poll(async () => {
+      const paneBox = await notesPane.boundingBox();
+      const indicatorBox = await refreshIndicator.boundingBox();
+      if (!paneBox || !indicatorBox) {
+        return Number.POSITIVE_INFINITY;
+      }
+      const paneCenter = paneBox.x + paneBox.width / 2;
+      const indicatorCenter = indicatorBox.x + indicatorBox.width / 2;
+      return Math.abs(paneCenter - indicatorCenter);
+    })
+    .toBeLessThan(12);
 
   await staleNoteCard.dispatchEvent("click");
   await expect(page).toHaveURL(new RegExp(`/folders/${secondFolderId}$`));
