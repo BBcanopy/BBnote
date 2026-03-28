@@ -144,6 +144,7 @@ export function NotesPage() {
   const [loadingNotes, setLoadingNotes] = useState(false);
   const [refreshingNotes, setRefreshingNotes] = useState(false);
   const [loadingEditor, setLoadingEditor] = useState(false);
+  const [refreshingEditor, setRefreshingEditor] = useState(false);
   const [saving, setSaving] = useState(false);
   const [uploadingAttachment, setUploadingAttachment] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -169,6 +170,7 @@ export function NotesPage() {
   const selectedFolderIdRef = useRef(selectedFolderId);
   const deferredSearchRef = useRef(deferredSearch);
   const notesRef = useRef(notes);
+  const editorNoteRef = useRef(editorNote);
   const renderedNotesContextRef = useRef<NotesQueryContext | null>(null);
 
   const selectedFolder = useMemo(
@@ -188,6 +190,7 @@ export function NotesPage() {
   selectedFolderIdRef.current = selectedFolderId;
   deferredSearchRef.current = deferredSearch;
   notesRef.current = notes;
+  editorNoteRef.current = editorNote;
 
   function updateSelectedFolderId(folderId: string | null) {
     selectedFolderIdRef.current = folderId;
@@ -264,12 +267,22 @@ export function NotesPage() {
       label: "Title",
       value: editorNote.title,
       placeholder: MEDIA_PLACEHOLDER_TITLE,
+      disabled: loadingEditor || refreshingEditor,
       focusRequestKey: editorNote.isDraft && titleFocusRequestKey > 0 ? titleFocusRequestKey : undefined,
       onChange: (title) => {
         setEditorNote((current) => (current ? { ...current, title } : current));
       }
     });
-  }, [editorNote?.isDraft, editorNote?.noteId, editorNote?.title, setPageNavTitleControl, setPageNavTitleLayout, titleFocusRequestKey]);
+  }, [
+    editorNote?.isDraft,
+    editorNote?.noteId,
+    editorNote?.title,
+    loadingEditor,
+    refreshingEditor,
+    setPageNavTitleControl,
+    setPageNavTitleLayout,
+    titleFocusRequestKey
+  ]);
 
   useLayoutEffect(() => {
     if (!editorNote) {
@@ -361,16 +374,22 @@ export function NotesPage() {
     if (!auth.user || !selectedNoteId) {
       noteLoadRef.current += 1;
       setLoadingEditor(false);
+      setRefreshingEditor(false);
       return;
     }
 
     if (skipNextNoteLoadRef.current === selectedNoteId) {
       skipNextNoteLoadRef.current = null;
+      setLoadingEditor(false);
+      setRefreshingEditor(false);
       return;
     }
 
     const loadId = ++noteLoadRef.current;
-    setLoadingEditor(true);
+    const keepVisibleEditorDuringRefresh =
+      Boolean(editorNoteRef.current) && editorNoteRef.current?.noteId !== selectedNoteId;
+    setRefreshingEditor(keepVisibleEditorDuringRefresh);
+    setLoadingEditor(!keepVisibleEditorDuringRefresh);
     setError(null);
 
     getNote(selectedNoteId)
@@ -395,6 +414,7 @@ export function NotesPage() {
       .finally(() => {
         if (loadId === noteLoadRef.current) {
           setLoadingEditor(false);
+          setRefreshingEditor(false);
         }
       });
   }, [auth.user, routeFolderId, selectedNoteId]);
@@ -1287,6 +1307,7 @@ export function NotesPage() {
           onDownloadAttachment={(attachment) => void handleDownloadAttachment(attachment)}
           statusText={editorStatus}
           loading={loadingEditor}
+          refreshing={refreshingEditor}
           saving={saving}
           uploadingAttachment={uploadingAttachment}
           error={error}
@@ -1315,6 +1336,7 @@ export function NotesPage() {
           onDownloadAttachment={(attachment) => void handleDownloadAttachment(attachment)}
           statusText={editorStatus}
           loading={loadingEditor}
+          refreshing={refreshingEditor}
           saving={saving}
           uploadingAttachment={uploadingAttachment}
           error={error}
@@ -1427,6 +1449,7 @@ function EditorPanel(props: {
   onDownloadAttachment(attachment: AttachmentRef): void;
   statusText: string;
   loading: boolean;
+  refreshing: boolean;
   saving: boolean;
   uploadingAttachment: boolean;
   error: string | null;
@@ -1466,8 +1489,9 @@ function EditorPanel(props: {
     rows: DEFAULT_MARKDOWN_TABLE_ROWS
   });
   const [tableHoverDimensions, setTableHoverDimensions] = useState<MarkdownTableDimensions | null>(null);
-  const mediaActionsDisabled = props.loading || props.uploadingAttachment || savingRecording || !props.canUseMediaActions;
-  const formatActionsDisabled = !props.editorNote || props.editorPane !== "markdown";
+  const editorActionsDisabled = props.loading || props.refreshing;
+  const mediaActionsDisabled = editorActionsDisabled || props.uploadingAttachment || savingRecording || !props.canUseMediaActions;
+  const formatActionsDisabled = editorActionsDisabled || !props.editorNote || props.editorPane !== "markdown";
   const hasAttachments = (props.editorNote?.attachments.length ?? 0) > 0;
   const headerStatusText = props.statusText.startsWith("Updated at ") ? props.statusText : null;
   const footerStatusText = headerStatusText ? null : props.statusText;
@@ -1532,12 +1556,12 @@ function EditorPanel(props: {
   }, [tablePickerOpen]);
 
   useEffect(() => {
-    if (props.editorPane === "markdown" && props.editorNote) {
+    if (!props.refreshing && props.editorPane === "markdown" && props.editorNote) {
       return;
     }
 
     closeTablePicker();
-  }, [props.editorPane, props.editorNote?.noteId]);
+  }, [props.editorPane, props.editorNote?.noteId, props.refreshing]);
 
   function resetRecorderProgress() {
     recordingStartedAtRef.current = null;
@@ -1911,14 +1935,14 @@ function EditorPanel(props: {
     <div className="bb-editor-mode">
       <ModeButton
         active={props.editorPane === "markdown"}
-        disabled={!props.editorNote}
+        disabled={!props.editorNote || props.refreshing}
         label="Markdown"
         icon={<PencilSimple size={17} />}
         onClick={() => props.onEditorPaneChange("markdown")}
       />
       <ModeButton
         active={props.editorPane === "preview"}
-        disabled={!props.editorNote}
+        disabled={!props.editorNote || props.refreshing}
         label="Preview"
         icon={<Eye size={17} />}
         onClick={() => props.onEditorPaneChange("preview")}
@@ -2179,17 +2203,17 @@ function EditorPanel(props: {
           ) : null}
           <div className="bb-recorder-panel__actions">
             {recorderState.phase === "recording" || recorderState.phase === "paused" ? (
-              <button type="button" onClick={handleStopRecording} className={buttonSecondary}>
+              <button type="button" onClick={handleStopRecording} disabled={props.refreshing} className={buttonSecondary}>
                 Stop
               </button>
             ) : null}
             {recorderState.phase === "recording" ? (
-              <button type="button" onClick={handlePauseRecording} className={buttonSecondary}>
+              <button type="button" onClick={handlePauseRecording} disabled={props.refreshing} className={buttonSecondary}>
                 Pause
               </button>
             ) : null}
             {recorderState.phase === "paused" ? (
-              <button type="button" onClick={handleResumeRecording} className={buttonSecondary}>
+              <button type="button" onClick={handleResumeRecording} disabled={props.refreshing} className={buttonSecondary}>
                 Resume
               </button>
             ) : null}
@@ -2197,24 +2221,24 @@ function EditorPanel(props: {
               <button
                 type="button"
                 onClick={() => void handleSaveRecording()}
-                disabled={savingRecording || props.uploadingAttachment}
+                disabled={props.refreshing || savingRecording || props.uploadingAttachment}
                 className={buttonPrimary}
               >
                 Retry save
               </button>
             ) : null}
             {recorderState.phase === "error" ? (
-              <button type="button" onClick={() => void handleStartRecording()} className={buttonSecondary}>
+              <button type="button" onClick={() => void handleStartRecording()} disabled={props.refreshing} className={buttonSecondary}>
                 Try again
               </button>
             ) : null}
             {recorderState.phase === "recorded" ? (
-              <button type="button" onClick={handleDiscardRecording} className={buttonSecondary}>
+              <button type="button" onClick={handleDiscardRecording} disabled={props.refreshing} className={buttonSecondary}>
                 Discard
               </button>
             ) : null}
             {recorderState.phase === "error" ? (
-              <button type="button" onClick={handleDiscardRecording} className={buttonSecondary}>
+              <button type="button" onClick={handleDiscardRecording} disabled={props.refreshing} className={buttonSecondary}>
                 Close
               </button>
             ) : null}
@@ -2227,6 +2251,7 @@ function EditorPanel(props: {
     <section
       ref={props.panelRef}
       data-testid={props.panelTestId}
+      aria-busy={props.loading || props.refreshing}
       className={[
         "bb-editor-panel bb-editor-panel--workspace lg:flex-1",
         props.isFullscreen ? "bb-editor-panel--fullscreen" : ""
@@ -2248,6 +2273,7 @@ function EditorPanel(props: {
             <button
               type="button"
               onClick={props.onToggleFullscreen}
+              disabled={props.refreshing}
               aria-label={props.isFullscreen ? "Exit fullscreen editor" : "Expand editor"}
               title={props.isFullscreen ? "Exit fullscreen editor" : "Expand editor"}
               className={`bb-icon-button bb-icon-button--toolbar bb-icon-button--accent${props.isFullscreen ? " bb-icon-button--is-active" : ""}`}
@@ -2258,7 +2284,7 @@ function EditorPanel(props: {
           <button
             type="button"
             onClick={props.onDeleteRequest}
-            disabled={!props.editorNote?.noteId}
+            disabled={!props.editorNote?.noteId || props.refreshing}
             aria-label="Delete note"
             title="Delete note"
             className="bb-icon-button bb-icon-button--bare bb-icon-button--danger"
@@ -2305,7 +2331,7 @@ function EditorPanel(props: {
       ) : null}
 
       {props.loading ? (
-        <div className="bb-editor-panel__content bb-editor-panel__content--empty">
+        <div className="bb-editor-panel__content bb-editor-panel__content--empty" aria-busy="true">
           <div className="bb-empty-state bb-empty-state--center text-sm">
             <span className="inline-flex items-center gap-2">
               <CircleNotch size={18} className="animate-spin text-[color:var(--accent-strong)]" />
@@ -2330,45 +2356,56 @@ function EditorPanel(props: {
         </div>
       ) : (
         <div className="bb-editor-panel__content bb-editor-panel__content--editor">
-          <div className="bb-editor-toolbar-row">
-            {mediaToolbar}
-            {formattingToolbar ? <span className="bb-editor-toolbar-divider" aria-hidden="true" /> : null}
-            {formattingToolbar}
-          </div>
+          {props.refreshing ? (
+            <div data-testid="editor-refresh-indicator" role="status" aria-live="polite" className="bb-editor-panel__refresh-pill">
+              <CircleNotch size={14} className="animate-spin text-[color:var(--accent-strong)]" />
+              Loading note
+            </div>
+          ) : null}
+          <div
+            className={`bb-editor-panel__content-shell ${props.refreshing ? "is-refreshing" : ""}`}
+            aria-busy={props.refreshing}
+          >
+            <div className="bb-editor-toolbar-row">
+              {mediaToolbar}
+              {formattingToolbar ? <span className="bb-editor-toolbar-divider" aria-hidden="true" /> : null}
+              {formattingToolbar}
+            </div>
 
-          {recorderPanel}
+            {recorderPanel}
 
-          <div className="bb-editor-stack bb-editor-stack--fill">
-            {props.editorPane === "markdown" ? (
-              <label className="bb-field bb-field--stretch">
-                <textarea
-                  ref={bodyTextareaRef}
-                  value={props.editorNote.bodyMarkdown}
-                  onChange={(event) => props.onBodyChange(event.target.value)}
-                  placeholder="Write in Markdown"
-                  disabled={!props.editorNote}
-                  className="bb-textarea bb-editor-surface bb-note-content text-sm leading-7"
+            <div className="bb-editor-stack bb-editor-stack--fill">
+              {props.editorPane === "markdown" ? (
+                <label className="bb-field bb-field--stretch">
+                  <textarea
+                    ref={bodyTextareaRef}
+                    value={props.editorNote.bodyMarkdown}
+                    onChange={(event) => props.onBodyChange(event.target.value)}
+                    placeholder="Write in Markdown"
+                    disabled={!props.editorNote || props.refreshing}
+                    className="bb-textarea bb-editor-surface bb-note-content text-sm leading-7"
+                  />
+                </label>
+              ) : (
+                <div className={`bb-pane-card bb-editor-preview bb-editor-preview--grow${props.refreshing ? " is-disabled" : ""}`}>
+                  <MarkdownPreview bodyMarkdown={props.editorNote.bodyMarkdown} attachments={props.editorNote.attachments} />
+                </div>
+              )}
+
+              {hasAttachments ? (
+                <AttachmentList
+                  key={props.editorNote.noteId ?? "draft"}
+                  attachments={props.editorNote.attachments}
+                  disabled={!props.editorNote.noteId || props.uploadingAttachment || props.refreshing}
+                  onInsertLink={props.onInsertLink}
+                  onInsertImage={props.onInsertImage}
+                  onInsertAudio={props.onInsertAudio}
+                  onInsertVideo={props.onInsertVideo}
+                  onDelete={props.onDeleteAttachment}
+                  onDownload={props.onDownloadAttachment}
                 />
-              </label>
-            ) : (
-              <div className="bb-pane-card bb-editor-preview bb-editor-preview--grow">
-                <MarkdownPreview bodyMarkdown={props.editorNote.bodyMarkdown} attachments={props.editorNote.attachments} />
-              </div>
-            )}
-
-            {hasAttachments ? (
-              <AttachmentList
-                key={props.editorNote.noteId ?? "draft"}
-                attachments={props.editorNote.attachments}
-                disabled={!props.editorNote.noteId || props.uploadingAttachment}
-                onInsertLink={props.onInsertLink}
-                onInsertImage={props.onInsertImage}
-                onInsertAudio={props.onInsertAudio}
-                onInsertVideo={props.onInsertVideo}
-                onDelete={props.onDeleteAttachment}
-                onDownload={props.onDownloadAttachment}
-              />
-            ) : null}
+              ) : null}
+            </div>
           </div>
         </div>
       )}
