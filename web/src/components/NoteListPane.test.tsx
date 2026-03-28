@@ -32,6 +32,49 @@ describe("NoteListPane", () => {
     expect(document.querySelector('[data-testid^="note-after-"]')).toBeNull();
   });
 
+  it("keeps the current notes visible and shows a refresh indicator while refreshing", () => {
+    const { container } = renderNoteListPane({
+      refreshing: true
+    });
+
+    expect(screen.getByTestId(buildNoteTestId("drag", "Quarterly review"))).toBeVisible();
+    expect(screen.getByTestId("notes-refresh-indicator")).toHaveTextContent("Loading notes");
+    expect(container.querySelector(".bb-pane-card--notes")).toHaveAttribute("aria-busy", "true");
+    expect(container.querySelector(".bb-note-list")).toHaveClass("is-refreshing");
+    expect(container.querySelector(".bb-skeleton-card")).toBeNull();
+  });
+
+  it("blocks note selection and reorder interactions while refreshing", () => {
+    const onSelectNote = vi.fn<NoteListPaneProps["onSelectNote"]>();
+
+    renderNoteListPane({
+      refreshing: true,
+      onSelectNote,
+      notes: [
+        buildNote({
+          id: "note-1",
+          title: "Quarterly review",
+          sortOrder: 0
+        }),
+        buildNote({
+          id: "note-2",
+          title: "Roadmap follow-up",
+          sortOrder: 1
+        })
+      ]
+    });
+
+    const noteCard = screen.getByTestId(buildNoteTestId("drag", "Quarterly review"));
+    expect(noteCard).toHaveAttribute("aria-disabled", "true");
+    expect(noteCard).not.toHaveAttribute("draggable", "true");
+    expect(screen.queryByTestId(buildNoteTestId("before", "Roadmap follow-up"))).not.toBeInTheDocument();
+
+    fireEvent.click(noteCard);
+    fireEvent.keyDown(noteCard, { key: "Enter" });
+
+    expect(onSelectNote).not.toHaveBeenCalled();
+  });
+
   it("shows a temporary delete target during note drag and requests confirmation on drop", () => {
     const handleRequestDeleteNote = vi.fn<NoteListPaneProps["onRequestDeleteNote"]>();
     const dataTransfer = createDataTransfer();
@@ -531,6 +574,7 @@ describe("NoteListPane", () => {
         onRequestDeleteNote={vi.fn()}
         onCollapse={vi.fn()}
         loading={false}
+        refreshing={false}
         notebookName="Projects"
         canCreateNote
         canReorder
@@ -554,6 +598,7 @@ describe("NoteListPane", () => {
         onRequestDeleteNote={vi.fn()}
         onCollapse={vi.fn()}
         loading={false}
+        refreshing={false}
         notebookName="Projects"
         canCreateNote
         canReorder
@@ -583,6 +628,7 @@ describe("NoteListPane", () => {
         onRequestDeleteNote={vi.fn()}
         onCollapse={vi.fn()}
         loading={false}
+        refreshing={false}
         notebookName="Projects"
         canCreateNote
         canReorder
@@ -611,6 +657,7 @@ describe("NoteListPane", () => {
         onRequestDeleteNote={vi.fn()}
         onCollapse={vi.fn()}
         loading={false}
+        refreshing={false}
         notebookName="Archive"
         canCreateNote
         canReorder
@@ -630,21 +677,24 @@ function renderNoteListPane(overrides?: {
   onRequestDeleteNote?: ReturnType<typeof vi.fn<NoteListPaneProps["onRequestDeleteNote"]>>;
   notes?: NoteSummary[];
   onMoveNote?: ReturnType<typeof vi.fn<NoteListPaneProps["onMoveNote"]>>;
+  onSelectNote?: ReturnType<typeof vi.fn<NoteListPaneProps["onSelectNote"]>>;
   canReorder?: boolean;
   enableCrossNotebookMove?: boolean;
+  refreshing?: boolean;
 }) {
-  render(
+  return render(
     <NoteListPane
       notes={overrides?.notes ?? buildNotes()}
       search=""
       onSearchChange={vi.fn<NoteListPaneProps["onSearchChange"]>()}
       selectedNoteId="note-1"
-      onSelectNote={vi.fn<NoteListPaneProps["onSelectNote"]>()}
+      onSelectNote={overrides?.onSelectNote ?? vi.fn<NoteListPaneProps["onSelectNote"]>()}
       onCreateNote={vi.fn<NoteListPaneProps["onCreateNote"]>()}
       onDraggedNoteChange={vi.fn<NoteListPaneProps["onDraggedNoteChange"]>()}
       onRequestDeleteNote={overrides?.onRequestDeleteNote ?? vi.fn<NoteListPaneProps["onRequestDeleteNote"]>()}
       onCollapse={vi.fn<NonNullable<NoteListPaneProps["onCollapse"]>>()}
       loading={false}
+      refreshing={overrides?.refreshing ?? false}
       notebookName="Projects"
       canCreateNote
       canReorder={overrides?.canReorder ?? true}

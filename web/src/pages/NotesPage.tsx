@@ -109,6 +109,11 @@ interface TextSelectionRange {
   end: number;
 }
 
+interface NotesQueryContext {
+  folderId: string | null;
+  search: string;
+}
+
 export function NotesPage() {
   const auth = useAuth();
   const navigate = useNavigate();
@@ -137,6 +142,7 @@ export function NotesPage() {
   const [mobileFoldersOpen, setMobileFoldersOpen] = useState(false);
   const [mobileNotesOpen, setMobileNotesOpen] = useState(false);
   const [loadingNotes, setLoadingNotes] = useState(false);
+  const [refreshingNotes, setRefreshingNotes] = useState(false);
   const [loadingEditor, setLoadingEditor] = useState(false);
   const [saving, setSaving] = useState(false);
   const [uploadingAttachment, setUploadingAttachment] = useState(false);
@@ -162,6 +168,8 @@ export function NotesPage() {
   }));
   const selectedFolderIdRef = useRef(selectedFolderId);
   const deferredSearchRef = useRef(deferredSearch);
+  const notesRef = useRef(notes);
+  const renderedNotesContextRef = useRef<NotesQueryContext | null>(null);
 
   const selectedFolder = useMemo(
     () => folders.find((folder) => folder.id === selectedFolderId) ?? null,
@@ -179,6 +187,7 @@ export function NotesPage() {
 
   selectedFolderIdRef.current = selectedFolderId;
   deferredSearchRef.current = deferredSearch;
+  notesRef.current = notes;
 
   function updateSelectedFolderId(folderId: string | null) {
     selectedFolderIdRef.current = folderId;
@@ -483,10 +492,26 @@ export function NotesPage() {
     const nextFolderId = options?.folderId === undefined ? selectedFolderIdRef.current : options.folderId;
     const nextSearch = options?.search === undefined ? deferredSearchRef.current : options.search;
     const shouldShowLoading = options?.showLoading !== false;
+    const nextContext = {
+      folderId: nextFolderId ?? null,
+      search: nextSearch ?? ""
+    } satisfies NotesQueryContext;
+    const currentContext = renderedNotesContextRef.current;
+    const keepVisibleNotesDuringRefresh =
+      shouldShowLoading &&
+      notesRef.current.length > 0 &&
+      currentContext !== null &&
+      currentContext.folderId !== nextContext.folderId;
 
     try {
       if (shouldShowLoading) {
-        setLoadingNotes(true);
+        if (keepVisibleNotesDuringRefresh) {
+          setRefreshingNotes(true);
+          setLoadingNotes(false);
+        } else {
+          setRefreshingNotes(false);
+          setLoadingNotes(true);
+        }
       }
       const payload = await listNotes({
         folderId: nextFolderId ?? undefined,
@@ -498,14 +523,16 @@ export function NotesPage() {
         return;
       }
       setNotes(payload.items);
+      renderedNotesContextRef.current = nextContext;
     } catch (notesError) {
       if (requestId !== notesRefreshRef.current) {
         return;
       }
       setError(String(notesError));
     } finally {
-      if (shouldShowLoading && requestId === notesRefreshRef.current) {
+      if (requestId === notesRefreshRef.current) {
         setLoadingNotes(false);
+        setRefreshingNotes(false);
       }
     }
   }
@@ -1218,6 +1245,7 @@ export function NotesPage() {
                     onRequestDeleteNote={handleRequestDeleteNote}
                     onCollapse={() => setNotePaneCollapsed(true)}
                     loading={loadingNotes}
+                    refreshing={refreshingNotes}
                     notebookName={selectedFolder?.name ?? null}
                     canCreateNote={canCreateDraft}
                     canReorder={canReorderNotes}
@@ -1327,6 +1355,7 @@ export function NotesPage() {
           onDraggedNoteChange={setDraggedNoteDeleteCandidate}
           onRequestDeleteNote={handleRequestDeleteNote}
           loading={loadingNotes}
+          refreshing={refreshingNotes}
           notebookName={selectedFolder?.name ?? null}
           canCreateNote={canCreateDraft}
           canReorder={canReorderNotes}

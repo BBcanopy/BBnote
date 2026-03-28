@@ -1,4 +1,4 @@
-import { CaretLeft, MagnifyingGlass, Plus, Trash } from "@phosphor-icons/react";
+import { CaretLeft, CircleNotch, MagnifyingGlass, Plus, Trash } from "@phosphor-icons/react";
 import { useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import { flushSync } from "react-dom";
 import type { NoteSummary } from "../api/types";
@@ -23,6 +23,7 @@ export function NoteListPane(props: {
   onRequestDeleteNote(note: Pick<NoteSummary, "id" | "title">): void;
   onCollapse?(): void;
   loading: boolean;
+  refreshing: boolean;
   notebookName: string | null;
   canCreateNote: boolean;
   canReorder: boolean;
@@ -34,7 +35,8 @@ export function NoteListPane(props: {
   const [dropTarget, setDropTarget] = useState<NoteDropTarget | null>(null);
   const [deleteTargetActive, setDeleteTargetActive] = useState(false);
   const draggedNoteIdRef = useRef<string | null>(null);
-  const canDragNotes = props.enableCrossNotebookMove || props.canReorder;
+  const canReorder = props.canReorder && !props.refreshing;
+  const canDragNotes = !props.refreshing && (props.enableCrossNotebookMove || props.canReorder);
   const dragging = canDragNotes && draggedNoteId !== null;
   const draggedNote = useMemo(
     () => props.notes.find((note) => note.id === draggedNoteId) ?? null,
@@ -42,16 +44,22 @@ export function NoteListPane(props: {
   );
 
   useEffect(() => {
-    if (!props.canReorder) {
+    if (!canReorder) {
       setDropTarget(null);
     }
-  }, [props.canReorder]);
+  }, [canReorder]);
 
   useEffect(() => {
     if (draggedNoteId && (!draggedNote || (draggedNoteFolderId !== null && draggedNote.folderId !== draggedNoteFolderId))) {
       clearDragState();
     }
   }, [draggedNote, draggedNoteFolderId, draggedNoteId]);
+
+  useEffect(() => {
+    if (props.refreshing && draggedNoteId !== null) {
+      clearDragState();
+    }
+  }, [draggedNoteId, props.refreshing]);
 
   function clearDragState() {
     draggedNoteIdRef.current = null;
@@ -98,7 +106,7 @@ export function NoteListPane(props: {
     }
   ) {
     const draggedId = resolveDraggedNoteId(event);
-    if (!props.canReorder || !draggedId || draggedId === targetId) {
+    if (!canReorder || !draggedId || draggedId === targetId) {
       return;
     }
 
@@ -115,7 +123,7 @@ export function NoteListPane(props: {
 
   function resolveNoteCardDropTarget(event: DragEvent<HTMLElement>, targetId: string) {
     const draggedId = resolveDraggedNoteId(event);
-    if (!props.canReorder || !draggedId || draggedId === targetId) {
+    if (!canReorder || !draggedId || draggedId === targetId) {
       return null;
     }
 
@@ -150,7 +158,7 @@ export function NoteListPane(props: {
   ) {
     const draggedId = resolveDraggedNoteId(event);
 
-    if (!props.canReorder || !draggedId || draggedId === targetId) {
+    if (!canReorder || !draggedId || draggedId === targetId) {
       clearDragState();
       return;
     }
@@ -185,7 +193,7 @@ export function NoteListPane(props: {
 
   function resolveNoteListDropTargetFromEvent(event: DragEvent<HTMLElement>) {
     const draggedId = resolveDraggedNoteId(event);
-    if (!props.canReorder || !draggedId || !(event.currentTarget instanceof HTMLElement)) {
+    if (!canReorder || !draggedId || !(event.currentTarget instanceof HTMLElement)) {
       return null;
     }
 
@@ -239,7 +247,7 @@ export function NoteListPane(props: {
   }
 
   return (
-    <section className="bb-pane-card bb-pane-card--notes">
+    <section className="bb-pane-card bb-pane-card--notes" aria-busy={props.loading || props.refreshing}>
       <div className={`bb-pane-card__header ${draggedNote ? "bb-pane-card__header--overlay" : "justify-end"}`}>
         {draggedNote ? (
           <button
@@ -314,37 +322,50 @@ export function NoteListPane(props: {
           className="text-sm"
         />
       </label>
-      <div className="bb-note-list" onDragOver={props.canReorder ? handleNoteListDragOver : undefined} onDrop={props.canReorder ? handleNoteListDrop : undefined}>
-        {props.loading ? (
-          <>
-            <SkeletonCard />
-            <SkeletonCard />
-            <SkeletonCard />
-          </>
-        ) : props.notes.length === 0 ? (
-          <div className="bb-empty-state text-sm leading-relaxed">
-            {props.notebookName ? "No notes yet." : "No notes match this view."}
+      <div className="bb-note-list-shell">
+        {props.refreshing ? (
+          <div data-testid="notes-refresh-indicator" role="status" aria-live="polite" className="bb-note-list__refresh-pill">
+            <CircleNotch size={14} className="animate-spin text-[color:var(--accent-strong)]" />
+            Loading notes
           </div>
-        ) : (
-          props.notes.map((note, index) =>
-            renderNote(note, {
-              canDragNotes,
-              canReorder: props.canReorder,
-              draggedNoteId,
-              dragging,
-              dropTarget,
-              showAfterDropZone: index === props.notes.length - 1,
-              onDragEnd: clearDragState,
-              onCardDragOver: handleNoteCardDragOver,
-              onCardDrop: handleNoteCardDrop,
-              onDropZoneDragOver: handleNoteDropZoneDragOver,
-              onDropZoneDrop: handleNoteDropZoneDrop,
-              onDragStart: handleDragStart,
-              onSelectNote: props.onSelectNote,
-              selectedNoteId: props.selectedNoteId
-            })
-          )
-        )}
+        ) : null}
+        <div
+          className={`bb-note-list ${props.refreshing ? "is-refreshing" : ""}`}
+          onDragOver={canReorder ? handleNoteListDragOver : undefined}
+          onDrop={canReorder ? handleNoteListDrop : undefined}
+        >
+          {props.loading ? (
+            <>
+              <SkeletonCard />
+              <SkeletonCard />
+              <SkeletonCard />
+            </>
+          ) : props.notes.length === 0 ? (
+            <div className="bb-empty-state text-sm leading-relaxed">
+              {props.notebookName ? "No notes yet." : "No notes match this view."}
+            </div>
+          ) : (
+            props.notes.map((note, index) =>
+              renderNote(note, {
+                canDragNotes,
+                canReorder,
+                draggedNoteId,
+                dragging,
+                dropTarget,
+                interactionsDisabled: props.refreshing,
+                showAfterDropZone: index === props.notes.length - 1,
+                onDragEnd: clearDragState,
+                onCardDragOver: handleNoteCardDragOver,
+                onCardDrop: handleNoteCardDrop,
+                onDropZoneDragOver: handleNoteDropZoneDragOver,
+                onDropZoneDrop: handleNoteDropZoneDrop,
+                onDragStart: handleDragStart,
+                onSelectNote: props.onSelectNote,
+                selectedNoteId: props.selectedNoteId
+              })
+            )
+          )}
+        </div>
       </div>
     </section>
   );
@@ -370,6 +391,7 @@ function renderNote(
     draggedNoteId: string | null;
     dragging: boolean;
     dropTarget: NoteDropTarget | null;
+    interactionsDisabled: boolean;
     showAfterDropZone: boolean;
     onDragEnd(): void;
     onCardDragOver(event: DragEvent<HTMLElement>, targetId: string): void;
@@ -391,7 +413,8 @@ function renderNote(
   const noteCard = (
     <div
       role="button"
-      tabIndex={0}
+      tabIndex={helpers.interactionsDisabled ? -1 : 0}
+      aria-disabled={helpers.interactionsDisabled || undefined}
       draggable={helpers.canDragNotes}
       data-testid={buildNoteTestId("drag", note.title)}
       onDragStart={(event) => helpers.onDragStart(event, note)}
@@ -399,8 +422,16 @@ function renderNote(
       onDragEnter={helpers.canReorder ? (event) => helpers.onCardDragOver(event, note.id) : undefined}
       onDragOver={helpers.canReorder ? (event) => helpers.onCardDragOver(event, note.id) : undefined}
       onDrop={helpers.canReorder ? (event) => helpers.onCardDrop(event, note.id) : undefined}
-      onClick={() => helpers.onSelectNote(note.id)}
+      onClick={() => {
+        if (helpers.interactionsDisabled) {
+          return;
+        }
+        helpers.onSelectNote(note.id);
+      }}
       onKeyDown={(event) => {
+        if (helpers.interactionsDisabled) {
+          return;
+        }
         if (event.key === "Enter" || event.key === " ") {
           event.preventDefault();
           helpers.onSelectNote(note.id);
@@ -408,7 +439,9 @@ function renderNote(
       }}
       className={`bb-note-card ${helpers.canDragNotes ? "bb-note-card--draggable" : ""} w-full text-left ${selected ? "is-active" : ""} ${
         dropPosition ? "bb-tree-drop-target" : ""
-      } ${dropPosition ? `bb-note-card--drop-${dropPosition}` : ""} ${dropShiftClass} ${draggingSource ? "bb-note-card--dragging" : ""}`}
+      } ${dropPosition ? `bb-note-card--drop-${dropPosition}` : ""} ${dropShiftClass} ${draggingSource ? "bb-note-card--dragging" : ""} ${
+        helpers.interactionsDisabled ? "bb-note-card--disabled" : ""
+      }`}
     >
       <div className="bb-note-card__layout">
         <div className="bb-note-card__copy">

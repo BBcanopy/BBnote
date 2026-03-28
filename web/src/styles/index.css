@@ -1184,6 +1184,11 @@ button:disabled {
   border-radius: 0.95rem;
 }
 
+.bb-note-list-shell {
+  position: relative;
+  min-height: 0;
+}
+
 .bb-note-list {
   display: grid;
   align-content: start;
@@ -1193,6 +1198,31 @@ button:disabled {
   overflow-y: auto;
   overscroll-behavior: contain;
   padding-right: 0.12rem;
+  transition: opacity 180ms var(--ease);
+}
+
+.bb-note-list.is-refreshing {
+  opacity: 0.58;
+}
+
+.bb-note-list__refresh-pill {
+  position: absolute;
+  top: 0.55rem;
+  right: 0.55rem;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.38rem;
+  padding: 0.32rem 0.56rem;
+  border: 1px solid color-mix(in srgb, var(--line-strong) 72%, white);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface-elevated) 94%, white);
+  box-shadow: 0 12px 22px -18px rgba(18, 34, 36, 0.42);
+  color: var(--ink);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  pointer-events: none;
 }
 
 .bb-note-drop-slot {
@@ -1570,6 +1600,10 @@ button:disabled {
   opacity: 0.54;
 }
 
+.bb-note-card--disabled {
+  cursor: default;
+}
+
 .bb-note-card--drop-before,
 .bb-note-card--drop-after {
   border-color: color-mix(in srgb, var(--accent) 30%, var(--line));
@@ -1604,6 +1638,11 @@ button:disabled {
 .bb-note-card:hover {
   transform: translateY(-1px);
   border-color: var(--line-strong);
+}
+
+.bb-note-card--disabled:hover {
+  transform: none;
+  border-color: var(--line);
 }
 
 .bb-note-card.is-active {
