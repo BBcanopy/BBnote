@@ -1349,7 +1349,6 @@ export function NotesPage() {
       <TextPromptDialog
         open={renameNotebookOpen}
         title="Rename notebook"
-        description="Double-click a notebook in the tree to change its name."
         value={renameNotebookName}
         placeholder="Notebook name"
         confirmLabel="Rename notebook"

@@ -439,6 +439,7 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
   await notebookRow(page, subNotebookName).dblclick();
   const renameNotebookDialog = page.getByRole("dialog", { name: /^rename notebook$/i });
   await expect(renameNotebookDialog).toBeVisible();
+  await expect(renameNotebookDialog.locator(".bb-dialog__description")).toHaveCount(0);
   await expect(renameNotebookDialog.getByPlaceholder("Notebook name")).toHaveValue(subNotebookName);
   await renameNotebookDialog.getByPlaceholder("Notebook name").fill(renamedSubNotebookName);
   await renameNotebookDialog.getByRole("button", { name: /^rename notebook$/i }).click();
