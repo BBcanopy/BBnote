@@ -21,6 +21,7 @@ export function AttachmentList(props: {
         type="button"
         className="bb-attachment-list__toggle"
         aria-expanded={!collapsed}
+        disabled={props.disabled}
         onClick={() => setCollapsed((currentValue) => !currentValue)}
       >
         <span className="bb-attachment-list__summary">
