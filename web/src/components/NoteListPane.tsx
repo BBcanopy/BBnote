@@ -422,21 +422,17 @@ function renderNote(
       onDragEnter={helpers.canReorder ? (event) => helpers.onCardDragOver(event, note.id) : undefined}
       onDragOver={helpers.canReorder ? (event) => helpers.onCardDragOver(event, note.id) : undefined}
       onDrop={helpers.canReorder ? (event) => helpers.onCardDrop(event, note.id) : undefined}
-      onClick={() => {
-        if (helpers.interactionsDisabled) {
-          return;
-        }
-        helpers.onSelectNote(note.id);
-      }}
-      onKeyDown={(event) => {
-        if (helpers.interactionsDisabled) {
-          return;
-        }
-        if (event.key === "Enter" || event.key === " ") {
-          event.preventDefault();
-          helpers.onSelectNote(note.id);
-        }
-      }}
+      onClick={helpers.interactionsDisabled ? undefined : () => helpers.onSelectNote(note.id)}
+      onKeyDown={
+        helpers.interactionsDisabled
+          ? undefined
+          : (event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                helpers.onSelectNote(note.id);
+              }
+            }
+      }
       className={`bb-note-card ${helpers.canDragNotes ? "bb-note-card--draggable" : ""} w-full text-left ${selected ? "is-active" : ""} ${
         dropPosition ? "bb-tree-drop-target" : ""
       } ${dropPosition ? `bb-note-card--drop-${dropPosition}` : ""} ${dropShiftClass} ${draggingSource ? "bb-note-card--dragging" : ""} ${
