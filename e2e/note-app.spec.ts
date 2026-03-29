@@ -1481,6 +1481,10 @@ test("keeps the previous editor visible while switching notes", async ({ page })
   const firstNoteId = extractNoteIdFromUrl(page.url());
   await createNoteWithContent(page, secondNoteTitle, secondNoteBody);
   const secondNoteId = extractNoteIdFromUrl(page.url());
+  await page.reload();
+  await expect(page).toHaveURL(new RegExp(`/folders/${folderId}/notes/${secondNoteId}$`));
+  await expect(page.getByTestId(buildNoteTestId("drag", firstNoteTitle))).toBeVisible();
+  await expect(page.getByTestId(buildNoteTestId("drag", secondNoteTitle))).toBeVisible();
 
   await page.getByTestId(buildNoteTestId("drag", firstNoteTitle)).click();
   await expect(page).toHaveURL(new RegExp(`/folders/${folderId}/notes/${firstNoteId}$`));

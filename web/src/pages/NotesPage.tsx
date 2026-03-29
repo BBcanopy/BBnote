@@ -802,6 +802,7 @@ export function NotesPage() {
     }
 
     const previousNotes = notes;
+    setDraggedNoteDeleteCandidate(null);
     setError(null);
     setNotes(nextNotes);
 
@@ -928,6 +929,7 @@ export function NotesPage() {
     }
 
     const movingSelectedNote = selectedNoteId === noteId || editorNote?.noteId === noteId;
+    setDraggedNoteDeleteCandidate(null);
     setError(null);
 
     try {
