@@ -1089,6 +1089,7 @@ button:disabled {
   flex: 1 1 auto;
   min-height: 0;
   height: 100%;
+  border-radius: 0;
 }
 
 .bb-mobile-workspace__editor .bb-editor-panel__content,
@@ -3300,10 +3301,6 @@ button:disabled {
     padding-block: 0.08rem 0.12rem;
   }
 
-  .bb-mobile-workspace__editor > .bb-editor-panel--workspace {
-    border-radius: 1.55rem;
-  }
-
   .bb-mobile-workspace__editor .bb-editor-panel__content {
     overflow: hidden;
   }
@@ -3356,10 +3353,6 @@ button:disabled {
     min-height: 3.35rem;
     font-size: 1rem;
     padding: 0.78rem 1.1rem;
-  }
-
-  .bb-mobile-workspace__editor > .bb-editor-panel--workspace {
-    border-radius: 1.4rem;
   }
 
   .bb-topbar__titlebar-input.bb-input {

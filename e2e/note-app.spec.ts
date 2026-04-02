@@ -311,6 +311,24 @@ test("uses a full-height mobile workspace and full-screen drawers on small scree
   await expect
     .poll(async () => (await mobileEditorPanel.boundingBox())?.height ?? 0)
     .toBeGreaterThan(520);
+  await expect
+    .poll(async () =>
+      mobileEditorPanel.evaluate((element) => {
+        const styles = getComputedStyle(element);
+        return {
+          topLeft: styles.borderTopLeftRadius,
+          topRight: styles.borderTopRightRadius,
+          bottomRight: styles.borderBottomRightRadius,
+          bottomLeft: styles.borderBottomLeftRadius
+        };
+      })
+    )
+    .toEqual({
+      topLeft: "0px",
+      topRight: "0px",
+      bottomRight: "0px",
+      bottomLeft: "0px"
+    });
 
   await notebooksButton.click();
   const notebooksDrawer = page.getByTestId("mobile-notebooks-drawer");
