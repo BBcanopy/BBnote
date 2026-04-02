@@ -1162,190 +1162,193 @@ export function NotesPage() {
 
   return (
     <>
-      <section className="mb-4 flex flex-wrap gap-2 lg:hidden">
-        <button type="button" onClick={() => setMobileFoldersOpen(true)} className={buttonSecondary}>
-          <FolderSimple size={18} />
-          Notebooks
-        </button>
-        <button type="button" onClick={() => setMobileNotesOpen(true)} className={buttonSecondary}>
-          <ListBullets size={18} />
-          Notes
-        </button>
-        <button
-          type="button"
-          onClick={handleCreateDraft}
-          disabled={!canCreateDraft}
-          title={canCreateDraft ? "New note" : "Select a notebook to create a note"}
-          className={buttonPrimary}
+      <div className="bb-notes-page">
+        <div className="bb-mobile-workspace">
+          <section className="bb-mobile-workspace__actions">
+            <button type="button" onClick={() => setMobileFoldersOpen(true)} className={`${buttonSecondary} bb-mobile-workspace__action`}>
+              <FolderSimple size={18} />
+              Notebooks
+            </button>
+            <button type="button" onClick={() => setMobileNotesOpen(true)} className={`${buttonSecondary} bb-mobile-workspace__action`}>
+              <ListBullets size={18} />
+              Notes
+            </button>
+            <button
+              type="button"
+              onClick={handleCreateDraft}
+              disabled={!canCreateDraft}
+              title={canCreateDraft ? "New note" : "Select a notebook to create a note"}
+              className={`${buttonPrimary} bb-mobile-workspace__action bb-mobile-workspace__action--primary`}
+            >
+              <Plus size={18} />
+              New note
+            </button>
+          </section>
+
+          <div className="bb-mobile-workspace__editor">
+            <EditorPanel
+              panelRef={mobileEditorPanelRef}
+              panelTestId="editor-panel-mobile"
+              editorNote={editorNote}
+              editorPane={editorPane}
+              isFullscreen={false}
+              canUseMediaActions={canUseMediaActions}
+              mediaActionDisabledReason="Select a notebook to add media."
+              onEditorPaneChange={setEditorPane}
+              onBodyChange={(bodyMarkdown) => setEditorNote((current) => (current ? { ...current, bodyMarkdown } : current))}
+              onDeleteRequest={handleRequestDeleteCurrentNote}
+              onUploadSelectedFile={(file, insertBehavior) => handleUploadSelectedFile(file, insertBehavior)}
+              onInsertLink={(attachment) => appendToBody(`[${attachment.name}](${attachment.url})`)}
+              onInsertImage={(attachment) => appendToBody(`![${attachment.name}](${attachment.url})`)}
+              onInsertAudio={(attachment) => appendToBody(`[${attachment.name}](${attachment.url})`)}
+              onInsertVideo={(attachment) => appendToBody(`[${attachment.name}](${attachment.url})`)}
+              onDeleteAttachment={(attachmentId) => void handleDeleteAttachment(attachmentId)}
+              onDownloadAttachment={(attachment) => void handleDownloadAttachment(attachment)}
+              statusText={editorStatus}
+              loading={loadingEditor}
+              refreshing={refreshingEditor}
+              saving={saving}
+              uploadingAttachment={uploadingAttachment}
+              error={error}
+            />
+          </div>
+        </div>
+
+        <div
+          className={[
+            "bb-desktop-workspace min-h-0 flex-1 items-stretch overflow-hidden",
+            editorFullscreen ? "bb-workspace-shell--editor-fullscreen" : ""
+          ]
+            .filter(Boolean)
+            .join(" ")}
         >
-          <Plus size={18} />
-          New note
-        </button>
-      </section>
+          {editorFullscreen ? null : explorerCollapsed ? (
+            <CollapsedPaneRail
+              label="Notebooks and notes"
+              ariaLabel="Open notebooks and notes panes"
+              titleText="Open notebooks and notes panes"
+              onOpen={() => {
+                setFolderPaneCollapsed(false);
+                setNotePaneCollapsed(false);
+              }}
+            />
+          ) : (
+            <>
+              {folderPaneCollapsed ? (
+                <CollapsedPaneRail
+                  label="Notebooks"
+                  onOpen={() => setFolderPaneCollapsed(false)}
+                />
+              ) : (
+                <div className="flex shrink-0 items-stretch">
+                  <div data-testid="notebook-pane" className="bb-workspace-lane bb-workspace-lane--folders shrink-0" style={{ width: folderPaneWidth }}>
+                    <FolderTree
+                      folders={folders}
+                      selectedFolderId={selectedFolderId}
+                      draggedNote={draggedNoteDeleteCandidate}
+                      onCreateNotebook={openCreateNotebookDialog}
+                      onMoveNotebook={(move) => void handleMoveNotebook(move)}
+                      onMoveNote={(noteId, folderId) => void handleMoveNoteToNotebook(noteId, folderId)}
+                      onRenameNotebook={openRenameNotebookDialog}
+                      onRequestDeleteNote={handleRequestDeleteNote}
+                      onRequestDeleteNotebook={handleRequestDeleteNotebook}
+                      onUpdateNotebookIcon={(folderId, icon) => handleUpdateNotebookIcon(folderId, icon)}
+                      onCollapse={() => setFolderPaneCollapsed(true)}
+                      onSelectFolder={handleSelectFolder}
+                      acceptDraggedNotes
+                      enableFolderDragAndDrop
+                    />
+                  </div>
+                  <PaneResizeHandle
+                    testId="notebook-pane-resizer"
+                    label="Resize notebooks pane"
+                    onPointerDown={(event) => {
+                      if (event.button !== 0) {
+                        return;
+                      }
+                      event.preventDefault();
+                      startPaneResize("folders", event.clientX);
+                    }}
+                    onNudge={(delta) => nudgePaneWidth("folders", delta)}
+                  />
+                </div>
+              )}
 
-      <div
-        className={[
-          "hidden min-h-0 flex-1 items-stretch overflow-hidden lg:flex",
-          editorFullscreen ? "bb-workspace-shell--editor-fullscreen" : ""
-        ]
-          .filter(Boolean)
-          .join(" ")}
-      >
-        {editorFullscreen ? null : explorerCollapsed ? (
-          <CollapsedPaneRail
-            label="Notebooks and notes"
-            ariaLabel="Open notebooks and notes panes"
-            titleText="Open notebooks and notes panes"
-            onOpen={() => {
-              setFolderPaneCollapsed(false);
-              setNotePaneCollapsed(false);
-            }}
+              {notePaneCollapsed ? (
+                <CollapsedPaneRail
+                  label="Notes"
+                  onOpen={() => setNotePaneCollapsed(false)}
+                />
+              ) : (
+                <div className="flex shrink-0 items-stretch">
+                  <div data-testid="notes-pane" className="bb-workspace-lane bb-workspace-lane--notes shrink-0" style={{ width: notePaneWidth }}>
+                    <NoteListPane
+                      notes={notes}
+                      search={search}
+                      onSearchChange={setSearch}
+                      selectedNoteId={selectedNoteId}
+                      onSelectNote={handleSelectNote}
+                      onCreateNote={handleCreateDraft}
+                      onDraggedNoteChange={setDraggedNoteDeleteCandidate}
+                      onRequestDeleteNote={handleRequestDeleteNote}
+                      onCollapse={() => setNotePaneCollapsed(true)}
+                      loading={loadingNotes}
+                      refreshing={refreshingNotes}
+                      notebookName={selectedFolder?.name ?? null}
+                      canCreateNote={canCreateDraft}
+                      canReorder={canReorderNotes}
+                      enableCrossNotebookMove={selectedFolderId !== null}
+                      onMoveNote={(move) => void handleMoveNote(move)}
+                    />
+                  </div>
+                  <PaneResizeHandle
+                    testId="notes-pane-resizer"
+                    label="Resize notes pane"
+                    onPointerDown={(event) => {
+                      if (event.button !== 0) {
+                        return;
+                      }
+                      event.preventDefault();
+                      startPaneResize("notes", event.clientX);
+                    }}
+                    onNudge={(delta) => nudgePaneWidth("notes", delta)}
+                  />
+                </div>
+              )}
+            </>
+          )}
+
+          <EditorPanel
+            panelRef={desktopEditorPanelRef}
+            panelTestId="editor-panel-desktop"
+            editorNote={editorNote}
+            editorPane={editorPane}
+            showFullscreenToggle
+            isFullscreen={editorFullscreen}
+            canUseMediaActions={canUseMediaActions}
+            mediaActionDisabledReason="Select a notebook to add media."
+            onEditorPaneChange={setEditorPane}
+            onBodyChange={(bodyMarkdown) => setEditorNote((current) => (current ? { ...current, bodyMarkdown } : current))}
+            onToggleFullscreen={() => setEditorFullscreen((current) => !current)}
+            onDeleteRequest={handleRequestDeleteCurrentNote}
+            onUploadSelectedFile={(file, insertBehavior) => handleUploadSelectedFile(file, insertBehavior)}
+            onInsertLink={(attachment) => appendToBody(`[${attachment.name}](${attachment.url})`)}
+            onInsertImage={(attachment) => appendToBody(`![${attachment.name}](${attachment.url})`)}
+            onInsertAudio={(attachment) => appendToBody(`[${attachment.name}](${attachment.url})`)}
+            onInsertVideo={(attachment) => appendToBody(`[${attachment.name}](${attachment.url})`)}
+            onDeleteAttachment={(attachmentId) => void handleDeleteAttachment(attachmentId)}
+            onDownloadAttachment={(attachment) => void handleDownloadAttachment(attachment)}
+            statusText={editorStatus}
+            loading={loadingEditor}
+            refreshing={refreshingEditor}
+            saving={saving}
+            uploadingAttachment={uploadingAttachment}
+            error={error}
           />
-        ) : (
-          <>
-            {folderPaneCollapsed ? (
-              <CollapsedPaneRail
-                label="Notebooks"
-                onOpen={() => setFolderPaneCollapsed(false)}
-              />
-            ) : (
-              <div className="flex shrink-0 items-stretch">
-                <div data-testid="notebook-pane" className="bb-workspace-lane bb-workspace-lane--folders shrink-0" style={{ width: folderPaneWidth }}>
-                  <FolderTree
-                    folders={folders}
-                    selectedFolderId={selectedFolderId}
-                    draggedNote={draggedNoteDeleteCandidate}
-                    onCreateNotebook={openCreateNotebookDialog}
-                    onMoveNotebook={(move) => void handleMoveNotebook(move)}
-                    onMoveNote={(noteId, folderId) => void handleMoveNoteToNotebook(noteId, folderId)}
-                    onRenameNotebook={openRenameNotebookDialog}
-                    onRequestDeleteNote={handleRequestDeleteNote}
-                    onRequestDeleteNotebook={handleRequestDeleteNotebook}
-                    onUpdateNotebookIcon={(folderId, icon) => handleUpdateNotebookIcon(folderId, icon)}
-                    onCollapse={() => setFolderPaneCollapsed(true)}
-                    onSelectFolder={handleSelectFolder}
-                    acceptDraggedNotes
-                    enableFolderDragAndDrop
-                  />
-                </div>
-                <PaneResizeHandle
-                  testId="notebook-pane-resizer"
-                  label="Resize notebooks pane"
-                  onPointerDown={(event) => {
-                    if (event.button !== 0) {
-                      return;
-                    }
-                    event.preventDefault();
-                    startPaneResize("folders", event.clientX);
-                  }}
-                  onNudge={(delta) => nudgePaneWidth("folders", delta)}
-                />
-              </div>
-            )}
-
-            {notePaneCollapsed ? (
-              <CollapsedPaneRail
-                label="Notes"
-                onOpen={() => setNotePaneCollapsed(false)}
-              />
-            ) : (
-              <div className="flex shrink-0 items-stretch">
-                <div data-testid="notes-pane" className="bb-workspace-lane bb-workspace-lane--notes shrink-0" style={{ width: notePaneWidth }}>
-                  <NoteListPane
-                    notes={notes}
-                    search={search}
-                    onSearchChange={setSearch}
-                    selectedNoteId={selectedNoteId}
-                    onSelectNote={handleSelectNote}
-                    onCreateNote={handleCreateDraft}
-                    onDraggedNoteChange={setDraggedNoteDeleteCandidate}
-                    onRequestDeleteNote={handleRequestDeleteNote}
-                    onCollapse={() => setNotePaneCollapsed(true)}
-                    loading={loadingNotes}
-                    refreshing={refreshingNotes}
-                    notebookName={selectedFolder?.name ?? null}
-                    canCreateNote={canCreateDraft}
-                    canReorder={canReorderNotes}
-                    enableCrossNotebookMove={selectedFolderId !== null}
-                    onMoveNote={(move) => void handleMoveNote(move)}
-                  />
-                </div>
-                <PaneResizeHandle
-                  testId="notes-pane-resizer"
-                  label="Resize notes pane"
-                  onPointerDown={(event) => {
-                    if (event.button !== 0) {
-                      return;
-                    }
-                    event.preventDefault();
-                    startPaneResize("notes", event.clientX);
-                  }}
-                  onNudge={(delta) => nudgePaneWidth("notes", delta)}
-                />
-              </div>
-            )}
-          </>
-        )}
-
-        <EditorPanel
-          panelRef={desktopEditorPanelRef}
-          panelTestId="editor-panel-desktop"
-          editorNote={editorNote}
-          editorPane={editorPane}
-          showFullscreenToggle
-          isFullscreen={editorFullscreen}
-          canUseMediaActions={canUseMediaActions}
-          mediaActionDisabledReason="Select a notebook to add media."
-          onEditorPaneChange={setEditorPane}
-          onBodyChange={(bodyMarkdown) => setEditorNote((current) => (current ? { ...current, bodyMarkdown } : current))}
-          onToggleFullscreen={() => setEditorFullscreen((current) => !current)}
-          onDeleteRequest={handleRequestDeleteCurrentNote}
-          onUploadSelectedFile={(file, insertBehavior) => handleUploadSelectedFile(file, insertBehavior)}
-          onInsertLink={(attachment) => appendToBody(`[${attachment.name}](${attachment.url})`)}
-          onInsertImage={(attachment) => appendToBody(`![${attachment.name}](${attachment.url})`)}
-          onInsertAudio={(attachment) => appendToBody(`[${attachment.name}](${attachment.url})`)}
-          onInsertVideo={(attachment) => appendToBody(`[${attachment.name}](${attachment.url})`)}
-          onDeleteAttachment={(attachmentId) => void handleDeleteAttachment(attachmentId)}
-          onDownloadAttachment={(attachment) => void handleDownloadAttachment(attachment)}
-          statusText={editorStatus}
-          loading={loadingEditor}
-          refreshing={refreshingEditor}
-          saving={saving}
-          uploadingAttachment={uploadingAttachment}
-          error={error}
-        />
+        </div>
       </div>
 
-      <div className="lg:hidden">
-        <EditorPanel
-          panelRef={mobileEditorPanelRef}
-          panelTestId="editor-panel-mobile"
-          editorNote={editorNote}
-          editorPane={editorPane}
-          isFullscreen={false}
-          canUseMediaActions={canUseMediaActions}
-          mediaActionDisabledReason="Select a notebook to add media."
-          onEditorPaneChange={setEditorPane}
-          onBodyChange={(bodyMarkdown) => setEditorNote((current) => (current ? { ...current, bodyMarkdown } : current))}
-          onToggleFullscreen={() => undefined}
-          onDeleteRequest={handleRequestDeleteCurrentNote}
-          onUploadSelectedFile={(file, insertBehavior) => handleUploadSelectedFile(file, insertBehavior)}
-          onInsertLink={(attachment) => appendToBody(`[${attachment.name}](${attachment.url})`)}
-          onInsertImage={(attachment) => appendToBody(`![${attachment.name}](${attachment.url})`)}
-          onInsertAudio={(attachment) => appendToBody(`[${attachment.name}](${attachment.url})`)}
-          onInsertVideo={(attachment) => appendToBody(`[${attachment.name}](${attachment.url})`)}
-          onDeleteAttachment={(attachmentId) => void handleDeleteAttachment(attachmentId)}
-          onDownloadAttachment={(attachment) => void handleDownloadAttachment(attachment)}
-          statusText={editorStatus}
-          loading={loadingEditor}
-          refreshing={refreshingEditor}
-          saving={saving}
-          uploadingAttachment={uploadingAttachment}
-          error={error}
-        />
-      </div>
-
-      <MobileDrawer open={mobileFoldersOpen} title="Notebooks" onClose={() => setMobileFoldersOpen(false)}>
+      <MobileDrawer panelTestId="mobile-notebooks-drawer" open={mobileFoldersOpen} title="Notebooks" onClose={() => setMobileFoldersOpen(false)}>
         <FolderTree
           folders={folders}
           selectedFolderId={selectedFolderId}
@@ -1363,7 +1366,7 @@ export function NotesPage() {
         />
       </MobileDrawer>
 
-      <MobileDrawer open={mobileNotesOpen} title="Notes" onClose={() => setMobileNotesOpen(false)}>
+      <MobileDrawer panelTestId="mobile-notes-drawer" open={mobileNotesOpen} title="Notes" onClose={() => setMobileNotesOpen(false)}>
         <NoteListPane
           notes={notes}
           search={search}
@@ -1439,7 +1442,7 @@ function EditorPanel(props: {
   mediaActionDisabledReason: string;
   onEditorPaneChange(value: EditorPane): void;
   onBodyChange(bodyMarkdown: string): void;
-  onToggleFullscreen(): void;
+  onToggleFullscreen?(): void;
   onDeleteRequest(): void;
   onUploadSelectedFile(file: File | null, insertBehavior: MediaInsertBehavior): Promise<boolean>;
   onInsertLink(attachment: AttachmentRef): void;
@@ -2273,7 +2276,7 @@ function EditorPanel(props: {
           {props.showFullscreenToggle ? (
             <button
               type="button"
-              onClick={props.onToggleFullscreen}
+              onClick={() => props.onToggleFullscreen?.()}
               disabled={props.refreshing}
               aria-label={props.isFullscreen ? "Exit fullscreen editor" : "Expand editor"}
               title={props.isFullscreen ? "Exit fullscreen editor" : "Expand editor"}
@@ -2475,6 +2478,7 @@ function PaneResizeHandle(props: {
 function MobileDrawer(props: {
   open: boolean;
   title: string;
+  panelTestId?: string;
   onClose(): void;
   children: ReactNode;
 }) {
@@ -2484,7 +2488,13 @@ function MobileDrawer(props: {
 
   return (
     <div className="bb-mobile-drawer lg:hidden">
-      <div className="bb-mobile-drawer__panel">
+      <div
+        data-testid={props.panelTestId}
+        role="dialog"
+        aria-modal="true"
+        aria-label={props.title}
+        className="bb-mobile-drawer__panel"
+      >
         <div className="bb-mobile-drawer__header">
           <p className="bb-eyebrow">{props.title}</p>
           <button type="button" onClick={props.onClose} className={buttonGhost}>
