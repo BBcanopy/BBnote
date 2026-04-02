@@ -3565,3 +3565,132 @@ button:disabled {
     width: 100%;
   }
 }
+
+@media (max-width: 480px) {
+  html {
+    font-size: 17px;
+  }
+
+  .bb-page-shell {
+    padding: 0;
+  }
+
+  .bb-page-shell--workspace {
+    padding:
+      max(0, env(safe-area-inset-top))
+      0
+      max(0.08rem, env(safe-area-inset-bottom));
+  }
+
+  .bb-shell,
+  .bb-shell__content,
+  .bb-shell--workspace {
+    gap: 0.42rem;
+  }
+
+  .bb-topbar {
+    --bb-topbar-control-size: 2.9rem;
+    --bb-topbar-pill-size: 2.05rem;
+    --bb-topbar-avatar-core-size: 1.8rem;
+    gap: 0.6rem;
+    padding: 0.14rem 0.16rem 0.24rem;
+    top: max(0.08rem, env(safe-area-inset-top));
+  }
+
+  .bb-topbar__titlebar {
+    min-height: 3.2rem;
+  }
+
+  .bb-topbar__titlebar-input.bb-input {
+    min-height: 3.1rem;
+    padding: 0.62rem 0.68rem;
+    font-size: 1.2rem;
+  }
+
+  .bb-mobile-workspace__actions {
+    gap: 0.88rem;
+  }
+
+  .bb-mobile-workspace__action {
+    min-height: 3.95rem;
+    padding: 0.98rem 1.2rem;
+    font-size: 1.08rem;
+  }
+
+  .bb-mobile-workspace__editor > .bb-editor-panel--workspace {
+    padding: 0.82rem 0.88rem 0.94rem;
+  }
+
+  .bb-editor-panel,
+  .bb-mobile-drawer__panel,
+  .bb-pane-card,
+  .bb-pane-card--tree,
+  .bb-pane-card--notes,
+  .bb-mobile-drawer__body > .bb-pane-card {
+    padding: 1.02rem;
+  }
+
+  .bb-search-shell,
+  .bb-pane-card--notes .bb-search-shell {
+    min-height: 3.55rem;
+    padding-inline: 1.05rem;
+  }
+
+  .bb-search-shell input,
+  .bb-input,
+  .bb-select,
+  .bb-textarea,
+  .bb-file-input,
+  .bb-markdown {
+    font-size: 1.1rem;
+  }
+
+  .bb-input,
+  .bb-select,
+  .bb-file-input {
+    min-height: 3.3rem;
+  }
+
+  .bb-textarea {
+    padding: 1.3rem 1.12rem 1.56rem;
+  }
+
+  .bb-tree-row {
+    min-height: 3.45rem;
+    padding: 0.38rem 0.46rem;
+  }
+
+  .bb-tree-row__label {
+    font-size: 1.08rem;
+  }
+
+  .bb-note-card {
+    padding: 1.08rem 1.08rem;
+  }
+
+  .bb-note-card__title {
+    font-size: 1.12rem;
+  }
+
+  .bb-note-card__excerpt {
+    font-size: 0.98rem;
+  }
+
+  .bb-editor-mode__button,
+  .bb-icon-button--toolbar {
+    width: 2.85rem;
+    height: 2.85rem;
+  }
+
+  .bb-editor-header__status,
+  .bb-editor-footer,
+  .bb-pane-card__header .bb-eyebrow,
+  .bb-empty-state {
+    font-size: 1rem;
+  }
+
+  .bb-mobile-drawer__header .bb-button {
+    min-height: 3.1rem;
+    font-size: 1.02rem;
+  }
+}

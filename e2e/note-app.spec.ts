@@ -296,10 +296,10 @@ test("uses a full-height mobile workspace and full-screen drawers on small scree
   await expect(page.getByTestId("editor-panel-desktop")).toBeHidden();
   await expect
     .poll(async () => parseFloat(await notebooksButton.evaluate((element) => getComputedStyle(element).fontSize)))
-    .toBeGreaterThanOrEqual(16.5);
+    .toBeGreaterThanOrEqual(17.5);
   await expect
     .poll(async () => (await newNoteButton.boundingBox())?.height ?? 0)
-    .toBeGreaterThan(58);
+    .toBeGreaterThan(60);
   await expect
     .poll(async () => {
       const editorBox = await mobileEditorPanel.boundingBox();
@@ -308,7 +308,7 @@ test("uses a full-height mobile workspace and full-screen drawers on small scree
       }
       return viewport.width - editorBox.width;
     })
-    .toBeLessThan(12);
+    .toBeLessThan(8);
   await expect
     .poll(async () => {
       const editorBox = await mobileEditorPanel.boundingBox();
@@ -370,7 +370,7 @@ test("uses a full-height mobile workspace and full-screen drawers on small scree
   await expect(mobileNotebookRow).toBeVisible();
   await expect
     .poll(async () => (await mobileNotebookRow.boundingBox())?.height ?? 0)
-    .toBeGreaterThan(50);
+    .toBeGreaterThan(52);
   await notebooksDrawer.getByTestId(buildNotebookTestId("drag", notebookName)).locator(".bb-tree-row__content").click();
   await expect(notebooksDrawer).toHaveCount(0);
 
@@ -385,10 +385,10 @@ test("uses a full-height mobile workspace and full-screen drawers on small scree
   await waitForUpdatedStatus(page, initialUpdatedStatusText);
   await expect
     .poll(async () => parseFloat(await titleInput.evaluate((element) => getComputedStyle(element).fontSize)))
-    .toBeGreaterThanOrEqual(18);
+    .toBeGreaterThanOrEqual(19);
   await expect
     .poll(async () => parseFloat(await textarea.evaluate((element) => getComputedStyle(element).fontSize)))
-    .toBeGreaterThanOrEqual(16.5);
+    .toBeGreaterThanOrEqual(17.5);
 
   await notesButton.click();
   const notesDrawer = page.getByTestId("mobile-notes-drawer");
@@ -415,13 +415,13 @@ test("uses a full-height mobile workspace and full-screen drawers on small scree
     .poll(async () =>
       parseFloat(await notesDrawer.locator(".bb-search-shell input").evaluate((element) => getComputedStyle(element).fontSize))
     )
-    .toBeGreaterThanOrEqual(16.5);
+    .toBeGreaterThanOrEqual(17.5);
 
   const mobileNoteCard = notesDrawer.getByTestId(buildNoteTestId("drag", noteTitle));
   await expect(mobileNoteCard).toBeVisible();
   await expect
     .poll(async () => (await mobileNoteCard.boundingBox())?.height ?? 0)
-    .toBeGreaterThan(70);
+    .toBeGreaterThan(72);
   await mobileNoteCard.click();
   await expect(notesDrawer).toHaveCount(0);
   await expect(page.getByRole("textbox", { name: "Title" }).first()).toHaveValue(noteTitle);
