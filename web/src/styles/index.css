@@ -3408,7 +3408,6 @@ button:disabled {
   .bb-pane-card--tree,
   .bb-pane-card--notes {
     gap: 0.9rem;
-    padding: 1rem;
   }
 
   .bb-search-shell,
@@ -3525,7 +3524,6 @@ button:disabled {
 
   .bb-mobile-drawer__body > .bb-pane-card {
     gap: 0.95rem;
-    padding: 1rem;
   }
 
   .bb-attachment-card {
