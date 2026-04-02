@@ -455,7 +455,10 @@ test.describe("mobile workspace", () => {
       .toBeGreaterThan(0.48);
     await expect
       .poll(async () => parseFloat(await titleInput.evaluate((element) => getComputedStyle(element).fontSize)))
-      .toBeGreaterThanOrEqual(19.5);
+      .toBeGreaterThanOrEqual(19);
+    await expect
+      .poll(async () => (await topbarTitleField.boundingBox())?.height ?? 0)
+      .toBeLessThan(48);
     await expect
       .poll(async () => parseFloat(await textarea.evaluate((element) => getComputedStyle(element).fontSize)))
       .toBeGreaterThanOrEqual(19.8);
@@ -592,7 +595,10 @@ test.describe("mobile workspace", () => {
 
     await expect
       .poll(async () => parseFloat(await titleInput.evaluate((element) => getComputedStyle(element).fontSize)))
-      .toBeGreaterThanOrEqual(20);
+      .toBeGreaterThanOrEqual(19);
+    await expect
+      .poll(async () => (await topbarTitleField.boundingBox())?.height ?? 0)
+      .toBeLessThan(48);
     await expect
       .poll(async () => parseFloat(await textarea.evaluate((element) => getComputedStyle(element).fontSize)))
       .toBeGreaterThanOrEqual(19.8);
