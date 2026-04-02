@@ -321,6 +321,7 @@ test.describe("mobile workspace", () => {
     const emptyState = mobileEditorPanel.locator(".bb-empty-state");
     const mobileToolbarImageButton = page.getByRole("button", { name: /^add image$/i }).first();
     const topbarTitleField = page.getByTestId("page-nav-title-input");
+    const brandMark = page.getByRole("link", { name: /bbnote home/i }).first();
     const userMenuButton = page.getByRole("button", { name: /open user menu/i }).first();
 
     await expect(mobileActions).toBeVisible();
@@ -468,15 +469,17 @@ test.describe("mobile workspace", () => {
     await expect
       .poll(async () => {
         const titleBox = await topbarTitleField.boundingBox();
+        const brandBox = await brandMark.boundingBox();
         const menuBox = await userMenuButton.boundingBox();
-        if (!titleBox || !menuBox) {
+        if (!titleBox || !brandBox || !menuBox) {
           return Number.POSITIVE_INFINITY;
         }
         const titleCenterY = titleBox.y + titleBox.height / 2;
+        const brandCenterY = brandBox.y + brandBox.height / 2;
         const menuCenterY = menuBox.y + menuBox.height / 2;
-        return Math.abs(titleCenterY - menuCenterY);
+        return Math.max(Math.abs(titleCenterY - brandCenterY), Math.abs(titleCenterY - menuCenterY));
       })
-      .toBeLessThan(16);
+      .toBeLessThan(8);
 
     await focusedNewNoteButton.click();
     await expect(titleInput).toHaveValue("");
@@ -539,6 +542,7 @@ test.describe("mobile workspace", () => {
     const noteTitle = `Large phone note ${suffix}`;
     const noteBody = `Wider phone body ${suffix}\n\nThis should still feel app-sized.`;
     const topbarTitleField = page.getByTestId("page-nav-title-input");
+    const brandMark = page.getByRole("link", { name: /bbnote home/i }).first();
     const userMenuButton = page.getByRole("button", { name: /open user menu/i }).first();
 
     await login(page);
@@ -615,15 +619,17 @@ test.describe("mobile workspace", () => {
     await expect
       .poll(async () => {
         const titleBox = await topbarTitleField.boundingBox();
+        const brandBox = await brandMark.boundingBox();
         const menuBox = await userMenuButton.boundingBox();
-        if (!titleBox || !menuBox) {
+        if (!titleBox || !brandBox || !menuBox) {
           return Number.POSITIVE_INFINITY;
         }
         const titleCenterY = titleBox.y + titleBox.height / 2;
+        const brandCenterY = brandBox.y + brandBox.height / 2;
         const menuCenterY = menuBox.y + menuBox.height / 2;
-        return Math.abs(titleCenterY - menuCenterY);
+        return Math.max(Math.abs(titleCenterY - brandCenterY), Math.abs(titleCenterY - menuCenterY));
       })
-      .toBeLessThan(16);
+      .toBeLessThan(8);
 
     await focusedNotesButton.click();
     await expect(notesDrawer).toBeVisible();
