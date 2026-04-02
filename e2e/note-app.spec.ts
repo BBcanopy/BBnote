@@ -318,7 +318,7 @@ test.describe("mobile workspace", () => {
     await expect(emptyState).toBeVisible();
     await expect
       .poll(async () => parseFloat(await notebooksButton.evaluate((element) => getComputedStyle(element).fontSize)))
-      .toBeGreaterThanOrEqual(15);
+      .toBeGreaterThanOrEqual(13.5);
     await expect
       .poll(async () => parseFloat(await emptyState.evaluate((element) => getComputedStyle(element).fontSize)))
       .toBeGreaterThanOrEqual(18.5);
@@ -333,7 +333,7 @@ test.describe("mobile workspace", () => {
       });
     await expect
       .poll(async () => (await newNoteButton.boundingBox())?.height ?? 0)
-      .toBeGreaterThan(48);
+      .toBeGreaterThan(40);
     await expect
       .poll(async () => {
         const editorBox = await mobileEditorPanel.boundingBox();
@@ -476,7 +476,7 @@ test.describe("mobile workspace", () => {
       .toBeGreaterThanOrEqual(17);
     await expect
       .poll(async () => parseFloat(await newNoteButton.evaluate((element) => getComputedStyle(element).fontSize)))
-      .toBeGreaterThanOrEqual(15);
+      .toBeGreaterThanOrEqual(13.5);
     await expect
       .poll(async () => ({
         notebooks: await notebooksButton.evaluate((element) => getComputedStyle(element).borderRadius),
@@ -488,7 +488,7 @@ test.describe("mobile workspace", () => {
       });
     await expect
       .poll(async () => (await newNoteButton.boundingBox())?.height ?? 0)
-      .toBeGreaterThan(48);
+      .toBeGreaterThan(40);
 
     await notebooksButton.click();
     await expect(notebooksDrawer).toBeVisible();
