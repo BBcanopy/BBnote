@@ -388,7 +388,7 @@ test("uses a full-height mobile workspace and full-screen drawers on small scree
     .toBeGreaterThanOrEqual(19);
   await expect
     .poll(async () => parseFloat(await textarea.evaluate((element) => getComputedStyle(element).fontSize)))
-    .toBeGreaterThanOrEqual(17.5);
+    .toBeGreaterThanOrEqual(19.5);
 
   await notesButton.click();
   const notesDrawer = page.getByTestId("mobile-notes-drawer");
@@ -476,7 +476,7 @@ test("applies the larger phone scale on wider mobile screens", async ({ page }) 
     .toBeGreaterThanOrEqual(20);
   await expect
     .poll(async () => parseFloat(await textarea.evaluate((element) => getComputedStyle(element).fontSize)))
-    .toBeGreaterThanOrEqual(18);
+    .toBeGreaterThanOrEqual(19.5);
 
   await page.getByRole("button", { name: /^notes$/i }).click();
   const notesDrawer = page.getByTestId("mobile-notes-drawer");

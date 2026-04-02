@@ -3653,6 +3653,19 @@ button:disabled {
     padding: 1.3rem 1.12rem 1.56rem;
   }
 
+  .bb-mobile-workspace__editor .bb-textarea,
+  .bb-mobile-workspace__editor .bb-markdown {
+    font-size: 1.18rem;
+  }
+
+  .bb-mobile-workspace__editor .bb-textarea {
+    line-height: 1.92;
+  }
+
+  .bb-mobile-workspace__editor .bb-markdown {
+    line-height: 1.86;
+  }
+
   .bb-tree-row {
     min-height: 3.45rem;
     padding: 0.38rem 0.46rem;
