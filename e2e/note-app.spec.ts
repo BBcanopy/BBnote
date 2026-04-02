@@ -512,9 +512,8 @@ test.describe("mobile workspace", () => {
       .locator(".bb-tree-row__content")
       .click();
     await expect(notebooksDrawer).toHaveCount(0);
-    await expect(titleInput).toHaveValue(firstNoteTitle);
-    await expect(mobileActions).toBeHidden();
-    await expect(focusedShortcuts).toBeVisible();
+    await expect(mobileActions).toBeVisible();
+    await expect(focusedShortcuts).toHaveCount(0);
   });
 
   test("applies the larger phone scale on wider mobile screens", async ({ page }) => {

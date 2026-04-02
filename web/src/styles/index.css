@@ -3452,12 +3452,14 @@ button:disabled {
   .bb-mobile-workspace.is-focus-editor .bb-editor-header__meta {
     align-items: center;
     gap: 0.32rem;
+    width: auto;
   }
 
   .bb-mobile-workspace.is-focus-editor .bb-editor-header__actions {
     flex-wrap: nowrap;
     gap: 0.18rem;
     margin-left: 0;
+    width: auto;
   }
 
   .bb-mobile-editor-shortcut {

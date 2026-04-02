@@ -1142,7 +1142,7 @@ export function NotesPage() {
     loadingEditor,
     saving
   });
-  const mobileEditorFocused = Boolean(editorNote || selectedNoteId || loadingEditor);
+  const mobileEditorFocused = Boolean(selectedNoteId || loadingEditor || editorNote?.isDraft);
 
   function startPaneResize(target: PaneResizeTarget, startX: number) {
     setPaneResize({
