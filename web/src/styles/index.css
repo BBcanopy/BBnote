@@ -3397,21 +3397,19 @@ button:disabled {
     --bb-topbar-control-size: 2.64rem;
     --bb-topbar-pill-size: 1.92rem;
     --bb-topbar-avatar-core-size: 1.66rem;
-    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr) auto;
     align-items: center;
     gap: 0.56rem;
     padding: 0.12rem 0.14rem 0.22rem;
     top: max(0.08rem, env(safe-area-inset-top));
   }
 
-  .bb-topbar__nav {
-    gap: 0.65rem;
-    align-self: center;
+  .bb-topbar--with-title {
+    grid-template-columns: auto minmax(0, 1fr) auto;
   }
 
-  .bb-topbar__menu,
-  .bb-topbar__titlebar {
-    align-self: center;
+  .bb-topbar__nav {
+    gap: 0.65rem;
   }
 
   .bb-topbar__titlebar {

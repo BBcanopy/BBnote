@@ -320,6 +320,7 @@ test.describe("mobile workspace", () => {
     const viewport = page.viewportSize();
     const emptyState = mobileEditorPanel.locator(".bb-empty-state");
     const mobileToolbarImageButton = page.getByRole("button", { name: /^add image$/i }).first();
+    const topbar = page.locator(".bb-topbar").first();
     const topbarTitleField = page.getByTestId("page-nav-title-input");
     const topbarTitleIcon = topbarTitleField.getByTestId("page-nav-title-icon");
     const brandMark = page.getByRole("link", { name: /bbnote home/i }).first();
@@ -329,6 +330,7 @@ test.describe("mobile workspace", () => {
     await expect(mobileEditorPanel).toBeVisible();
     await expect(desktopEditorPanel).toBeHidden();
     await expect(emptyState).toBeVisible();
+    await expect(topbarTitleField).toHaveCount(0);
     await expect
       .poll(async () => parseFloat(await browseNotebooksButton.evaluate((element) => getComputedStyle(element).fontSize)))
       .toBeGreaterThanOrEqual(12.5);
@@ -353,6 +355,16 @@ test.describe("mobile workspace", () => {
     await expect
       .poll(async () => (await browseNewNoteButton.boundingBox())?.height ?? 0)
       .toBeLessThan(42.5);
+    await expect
+      .poll(async () => {
+        const topbarBox = await topbar.boundingBox();
+        const menuBox = await userMenuButton.boundingBox();
+        if (!topbarBox || !menuBox) {
+          return Number.POSITIVE_INFINITY;
+        }
+        return Math.abs(topbarBox.x + topbarBox.width - (menuBox.x + menuBox.width));
+      })
+      .toBeLessThan(8);
     await expect
       .poll(async () => {
         const editorBox = await mobileEditorPanel.boundingBox();
@@ -555,6 +567,7 @@ test.describe("mobile workspace", () => {
     const notebookName = `Large phone ${suffix}`;
     const noteTitle = `Large phone note ${suffix}`;
     const noteBody = `Wider phone body ${suffix}\n\nThis should still feel app-sized.`;
+    const topbar = page.locator(".bb-topbar").first();
     const topbarTitleField = page.getByTestId("page-nav-title-input");
     const topbarTitleIcon = topbarTitleField.getByTestId("page-nav-title-icon");
     const brandMark = page.getByRole("link", { name: /bbnote home/i }).first();
@@ -565,6 +578,7 @@ test.describe("mobile workspace", () => {
 
     await expect(mobileActions).toBeVisible();
     await expect(mobileEditorPanel).toBeVisible();
+    await expect(topbarTitleField).toHaveCount(0);
     await expect
       .poll(async () => parseFloat(await page.evaluate(() => getComputedStyle(document.documentElement).fontSize)))
       .toBeGreaterThanOrEqual(17);
@@ -589,6 +603,16 @@ test.describe("mobile workspace", () => {
     await expect
       .poll(async () => (await browseNewNoteButton.boundingBox())?.height ?? 0)
       .toBeLessThan(42.5);
+    await expect
+      .poll(async () => {
+        const topbarBox = await topbar.boundingBox();
+        const menuBox = await userMenuButton.boundingBox();
+        if (!topbarBox || !menuBox) {
+          return Number.POSITIVE_INFINITY;
+        }
+        return Math.abs(topbarBox.x + topbarBox.width - (menuBox.x + menuBox.width));
+      })
+      .toBeLessThan(8);
 
     await browseNotebooksButton.click();
     await expect(notebooksDrawer).toBeVisible();
