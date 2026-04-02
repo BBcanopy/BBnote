@@ -3417,16 +3417,18 @@ button:disabled {
   .bb-topbar__titlebar {
     display: flex;
     align-items: center;
-    min-height: 2.2rem;
+    min-height: 2.04rem;
   }
 
   .bb-topbar__titlebar-field {
-    min-height: 2.12rem;
+    min-height: 1.96rem;
+    column-gap: 0.3rem;
   }
 
   .bb-topbar__titlebar-icon {
     min-height: 0;
     transform: none;
+    margin-left: 0.34rem;
   }
 
   .bb-mobile-workspace__actions {
@@ -3522,9 +3524,9 @@ button:disabled {
   }
 
   .bb-topbar__titlebar-input.bb-input {
-    min-height: 2.08rem;
-    padding: 0.12rem 0.38rem;
-    font-size: 1.12rem;
+    min-height: 1.92rem;
+    padding: 0.08rem 0.32rem 0.08rem 0.2rem;
+    font-size: 1.02rem;
   }
 
   .bb-textarea {

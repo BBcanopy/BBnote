@@ -321,6 +321,7 @@ test.describe("mobile workspace", () => {
     const emptyState = mobileEditorPanel.locator(".bb-empty-state");
     const mobileToolbarImageButton = page.getByRole("button", { name: /^add image$/i }).first();
     const topbarTitleField = page.getByTestId("page-nav-title-input");
+    const topbarTitleIcon = topbarTitleField.getByTestId("page-nav-title-icon");
     const brandMark = page.getByRole("link", { name: /bbnote home/i }).first();
     const userMenuButton = page.getByRole("button", { name: /open user menu/i }).first();
 
@@ -456,10 +457,23 @@ test.describe("mobile workspace", () => {
       .toBeGreaterThan(0.48);
     await expect
       .poll(async () => parseFloat(await titleInput.evaluate((element) => getComputedStyle(element).fontSize)))
-      .toBeGreaterThanOrEqual(19);
+      .toBeGreaterThanOrEqual(17);
+    await expect
+      .poll(async () => parseFloat(await titleInput.evaluate((element) => getComputedStyle(element).fontSize)))
+      .toBeLessThan(18.6);
     await expect
       .poll(async () => (await topbarTitleField.boundingBox())?.height ?? 0)
-      .toBeLessThan(48);
+      .toBeLessThan(45);
+    await expect
+      .poll(async () => {
+        const titleBox = await topbarTitleField.boundingBox();
+        const iconBox = await topbarTitleIcon.boundingBox();
+        if (!titleBox || !iconBox) {
+          return 0;
+        }
+        return iconBox.x - titleBox.x;
+      })
+      .toBeGreaterThan(5);
     await expect
       .poll(async () => parseFloat(await textarea.evaluate((element) => getComputedStyle(element).fontSize)))
       .toBeGreaterThanOrEqual(19.8);
@@ -542,6 +556,7 @@ test.describe("mobile workspace", () => {
     const noteTitle = `Large phone note ${suffix}`;
     const noteBody = `Wider phone body ${suffix}\n\nThis should still feel app-sized.`;
     const topbarTitleField = page.getByTestId("page-nav-title-input");
+    const topbarTitleIcon = topbarTitleField.getByTestId("page-nav-title-icon");
     const brandMark = page.getByRole("link", { name: /bbnote home/i }).first();
     const userMenuButton = page.getByRole("button", { name: /open user menu/i }).first();
 
@@ -599,10 +614,23 @@ test.describe("mobile workspace", () => {
 
     await expect
       .poll(async () => parseFloat(await titleInput.evaluate((element) => getComputedStyle(element).fontSize)))
-      .toBeGreaterThanOrEqual(19);
+      .toBeGreaterThanOrEqual(17);
+    await expect
+      .poll(async () => parseFloat(await titleInput.evaluate((element) => getComputedStyle(element).fontSize)))
+      .toBeLessThan(18.6);
     await expect
       .poll(async () => (await topbarTitleField.boundingBox())?.height ?? 0)
-      .toBeLessThan(48);
+      .toBeLessThan(45);
+    await expect
+      .poll(async () => {
+        const titleBox = await topbarTitleField.boundingBox();
+        const iconBox = await topbarTitleIcon.boundingBox();
+        if (!titleBox || !iconBox) {
+          return 0;
+        }
+        return iconBox.x - titleBox.x;
+      })
+      .toBeGreaterThan(5);
     await expect
       .poll(async () => parseFloat(await textarea.evaluate((element) => getComputedStyle(element).fontSize)))
       .toBeGreaterThanOrEqual(19.8);
