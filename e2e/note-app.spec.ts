@@ -221,7 +221,7 @@ test("keeps the left workspace lanes screen-tall while the editor and preview co
   for (let index = 0; index < 12; index += 1) {
     const uploadFile = await createTempFile(`lane-overflow-${suffix}-${index}.txt`, `attachment ${index} for ${suffix}`);
     await page.getByTestId("media-input-file").first().setInputFiles(uploadFile);
-    await expect(page.getByText(`lane-overflow-${suffix}-${index}.txt`).first()).toBeVisible();
+    await expect(activeAttachmentCards(page).filter({ hasText: `lane-overflow-${suffix}-${index}.txt` }).first()).toBeVisible();
   }
 
   const viewport = page.viewportSize();
@@ -368,7 +368,7 @@ test("uses a full-height mobile workspace and full-screen drawers on small scree
   await expect(newNoteButton).toBeEnabled();
   await newNoteButton.click();
   const titleInput = page.getByRole("textbox", { name: "Title" }).first();
-  const textarea = page.getByPlaceholder("Write in Markdown").first();
+  const textarea = activeEditorTextarea(page);
   await expect(titleInput).toHaveValue("");
   const initialUpdatedStatusText = await waitForUpdatedStatus(page);
   await titleInput.fill(noteTitle);
@@ -653,7 +653,7 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
   await expect(page.locator('[data-testid^="note-drag-"] .bb-note-icon')).toHaveCount(0);
 
   await page.getByRole("textbox", { name: "Title" }).first().fill(noteTitle);
-  const bodyTextarea = page.getByPlaceholder("Write in Markdown").first();
+  const bodyTextarea = activeEditorTextarea(page);
   expect(await bodyTextarea.evaluate((element) => getComputedStyle(element).fontFamily)).toContain("Open Sans");
   await expect(page.getByText("Uploaded files will appear here.")).toHaveCount(0);
   await expect
@@ -666,7 +666,7 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
   await expect
     .poll(async () => {
       const textareaBox = await bodyTextarea.boundingBox();
-      const footerBox = await page.locator(".bb-editor-footer").first().boundingBox();
+      const footerBox = await activeEditorFooter(page).boundingBox();
       if (!textareaBox || !footerBox) {
         return Number.POSITIVE_INFINITY;
       }
@@ -676,7 +676,7 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
   await bodyTextarea.fill(`# Budget\n\nalpha launch ${searchTerm}`);
   await expect(page.getByText(/^Saved /)).toHaveCount(0);
   await expect(page.locator(".bb-editor-body-header")).toHaveCount(0);
-  await expect(page.locator(".bb-editor-header .bb-editor-mode").first()).toBeVisible();
+  await expect(activeEditorPanel(page).locator(".bb-editor-header .bb-editor-mode").first()).toBeVisible();
   await waitForUpdatedStatus(page);
 
   await page.getByRole("button", { name: /^new note$/i }).click();
@@ -684,7 +684,7 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
   await expect(page.getByRole("textbox", { name: "Title" }).first()).toHaveValue("");
   const followUpInitialStatusText = await waitForUpdatedStatus(page);
   await page.getByRole("textbox", { name: "Title" }).first().fill(followUpNoteTitle);
-  await page.getByPlaceholder("Write in Markdown").first().fill("Second note to test manual priority.");
+  await activeEditorTextarea(page).fill("Second note to test manual priority.");
   await waitForUpdatedStatus(page, followUpInitialStatusText);
 
   await expect.poll(async () => page.locator('[data-testid^="note-drag-"]').count()).toBe(2);
@@ -724,7 +724,7 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
     .toEqual([expect.stringContaining(followUpNoteTitle), expect.stringContaining(noteTitle)]);
 
   await page.getByRole("button", { name: new RegExp(followUpNoteTitle, "i") }).click();
-  const followUpBody = page.getByPlaceholder("Write in Markdown").first();
+  const followUpBody = activeEditorTextarea(page);
   await expect(page.getByRole("textbox", { name: "Title" }).first()).toHaveValue(followUpNoteTitle);
   await expect(followUpBody).toHaveValue("Second note to test manual priority.");
   const previousFollowUpStatusText = await waitForUpdatedStatus(page);
@@ -791,17 +791,17 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
   await expect(page.getByRole("button", { name: /^markdown$/i })).toHaveAttribute("title", "Markdown");
   await expect(page.getByRole("button", { name: /^preview$/i })).toHaveAttribute("title", "Preview");
   await page.getByRole("button", { name: /^preview$/i }).click();
-  expect(await page.locator(".bb-markdown").first().evaluate((element) => getComputedStyle(element).fontFamily)).toContain("Open Sans");
+  expect(await activeEditorPanel(page).locator(".bb-markdown").first().evaluate((element) => getComputedStyle(element).fontFamily)).toContain("Open Sans");
   await expect(page.getByRole("heading", { name: "Budget" })).toBeVisible();
   await page.getByRole("button", { name: /^markdown$/i }).click();
 
   const uploadFile = await createTempFile("budget.txt", "budget attachment");
   await page.locator('input[type="file"]').first().setInputFiles(uploadFile);
   await expect(page.getByRole("button", { name: /attachments/i }).first()).toBeVisible();
-  await expect(page.getByText("budget.txt").first()).toBeVisible();
+  await expect(activeAttachmentCards(page).filter({ hasText: "budget.txt" }).first()).toBeVisible();
 
   await page.getByRole("button", { name: /^link$/i }).click();
-  await expect(page.getByPlaceholder("Write in Markdown").first()).toHaveValue(/budget\.txt/);
+  await expect(activeEditorTextarea(page)).toHaveValue(/budget\.txt/);
 
   await page.getByPlaceholder("Search notes").fill("");
   await notebookRow(page, renamedSubNotebookName).click();
@@ -1066,7 +1066,7 @@ test("shows the note title in the topbar above the editor lane, keeps folder and
   await expect(editorPanel.getByRole("textbox", { name: "Title" })).toHaveCount(0);
   await expect(expandEditorButton).toBeVisible();
   await expect(deleteButton).toBeVisible();
-  await expect(page.getByTestId("editor-format-toolbar").first()).toBeVisible();
+  await expect(activeEditorPanel(page).getByTestId("editor-format-toolbar")).toBeVisible();
   await expect(updatedAtStatus).toBeVisible();
   await textarea.click();
   await expect
@@ -1303,10 +1303,7 @@ test("shows the note title in the topbar above the editor lane, keeps folder and
   await textarea.fill("");
   await editorPanel.getByRole("button", { name: /^insert table$/i }).click();
   await expect(tablePicker).toBeVisible();
-  await tablePicker.getByLabel(/^columns$/i).fill("3");
-  await tablePicker.getByLabel(/^rows$/i).fill("2");
-  await expect(tablePicker.getByTestId("table-picker-summary")).toHaveText("3 columns x 2 rows");
-  await tablePicker.getByRole("button", { name: /^insert table$/i }).click();
+  await tablePicker.getByRole("button", { name: /^use 3 columns x 2 rows$/i }).click();
   await expect(textarea).toHaveValue("| Column 1 | Column 2 | Column 3 |\n| --- | --- | --- |\n|  |  |  |\n|  |  |  |");
   await expect
     .poll(async () =>
@@ -1414,15 +1411,15 @@ test("auto-saves voice notes on stop, inserts them into the editor, keeps delete
     .toBe(true);
 
   await recorderPanel.getByRole("button", { name: /^stop$/i }).click();
-  const voiceAttachment = page.locator(".bb-attachment-card").filter({ hasText: /voice-note-\d{14}\.webm/i }).first();
-  const bodyTextarea = page.getByPlaceholder("Write in Markdown").first();
+  const voiceAttachment = activeAttachmentCards(page).filter({ hasText: /voice-note-\d{14}\.webm/i }).first();
+  const bodyTextarea = activeEditorTextarea(page);
   await expect(page.getByRole("button", { name: /attachments/i }).first()).toBeVisible();
   await expect(voiceAttachment).toBeVisible();
   await expect(recorderPanels).toHaveCount(0);
   await expect(bodyTextarea).toHaveValue(/\[voice-note-\d{14}\.webm\]\(.*\/attachments\/.*\)/i);
   await expect(page.getByRole("button", { name: /^retry save$/i })).toHaveCount(0);
   await page.getByRole("button", { name: /^preview$/i }).click();
-  const audioEmbed = page.locator(".bb-editor-preview .bb-markdown__audio-card").first();
+  const audioEmbed = activeEditorPanel(page).locator(".bb-editor-preview .bb-markdown__audio-card").first();
   await expect(audioEmbed).toBeVisible();
   await expect(audioEmbed.locator(".bb-markdown__audio-title")).toHaveText(/voice-note-\d{14}\.webm/i);
   await expect(audioEmbed.getByText("Voice note")).toBeVisible();
@@ -1468,7 +1465,7 @@ test("uploads multi-megabyte audio attachments without proxy 413 errors", async 
   await expect(attachmentCard).toBeVisible();
 
   await page.getByRole("button", { name: /^preview$/i }).click();
-  const audioEmbed = page.locator(".bb-editor-preview .bb-markdown__audio-card").first();
+  const audioEmbed = activeEditorPanel(page).locator(".bb-editor-preview .bb-markdown__audio-card").first();
   await expect(audioEmbed).toBeVisible();
   await expect(audioEmbed.locator(".bb-markdown__audio-title")).toHaveText(audioFileName);
   await expect(audioEmbed.locator("audio")).toHaveCount(1);
@@ -1514,7 +1511,7 @@ test("syncs notebook and note selection into the URL and restores deep links on 
   const noteUrl = page.url();
 
   await page.getByRole("textbox", { name: "Title" }).first().fill(noteTitle);
-  await page.getByPlaceholder("Write in Markdown").first().fill("Route this note back in.");
+  await activeEditorTextarea(page).fill("Route this note back in.");
   await waitForUpdatedStatus(page);
   await expect(page.getByRole("button", { name: new RegExp(noteTitle, "i") }).first()).toBeVisible();
 
@@ -1819,6 +1816,22 @@ function createTestSuffix() {
   return randomUUID().replace(/-/g, "");
 }
 
+function activeEditorPanel(page: import("@playwright/test").Page) {
+  return page.locator('[data-testid="editor-panel-mobile"]:visible, [data-testid="editor-panel-desktop"]:visible').first();
+}
+
+function activeEditorTextarea(page: import("@playwright/test").Page) {
+  return activeEditorPanel(page).getByPlaceholder("Write in Markdown");
+}
+
+function activeEditorFooter(page: import("@playwright/test").Page) {
+  return activeEditorPanel(page).locator(".bb-editor-footer").first();
+}
+
+function activeAttachmentCards(page: import("@playwright/test").Page) {
+  return activeEditorPanel(page).locator(".bb-attachment-card");
+}
+
 async function createNotebookAndPersistedNote(page: import("@playwright/test").Page) {
   const suffix = Date.now().toString();
   await createNotebookWithDialog(page, `Exports ${suffix}`);
@@ -1827,7 +1840,7 @@ async function createNotebookAndPersistedNote(page: import("@playwright/test").P
   await expect(page.getByRole("textbox", { name: "Title" }).first()).toHaveValue("");
   const initialUpdatedStatusText = await waitForUpdatedStatus(page);
   await page.getByRole("textbox", { name: "Title" }).first().fill(`Export ready note ${suffix}`);
-  await page.getByPlaceholder("Write in Markdown").first().fill("This note should travel well.");
+  await activeEditorTextarea(page).fill("This note should travel well.");
   await waitForUpdatedStatus(page, initialUpdatedStatusText);
   await expect(page.getByRole("button", { name: new RegExp(`Export ready note ${suffix}`, "i") })).toBeVisible();
 }
@@ -1963,13 +1976,13 @@ async function createNoteWithContent(page: import("@playwright/test").Page, titl
   await expect(titleInput).toBeFocused();
   const initialUpdatedStatusText = await waitForUpdatedStatus(page);
   await titleInput.fill(title);
-  await page.getByPlaceholder("Write in Markdown").first().fill(body);
+  await activeEditorTextarea(page).fill(body);
   await waitForUpdatedStatus(page, initialUpdatedStatusText);
   await expect(page.getByTestId(buildNoteTestId("drag", title))).toBeVisible();
 }
 
 function editorUpdatedAtStatus(page: import("@playwright/test").Page) {
-  return page.getByTestId("editor-updated-at").first();
+  return activeEditorPanel(page).getByTestId("editor-updated-at");
 }
 
 async function waitForUpdatedStatus(page: import("@playwright/test").Page, previousText?: string) {
@@ -2104,13 +2117,9 @@ async function dropOnTarget(
   target: import("@playwright/test").Locator,
   dataTransfer: Awaited<ReturnType<import("@playwright/test").Page["evaluateHandle"]>>
 ) {
-  const targetHandle = await target.elementHandle();
-  if (!targetHandle) {
-    throw new Error("Expected a drop target to be available.");
-  }
-
-  await targetHandle.dispatchEvent("dragover", { dataTransfer });
-  await targetHandle.dispatchEvent("drop", { dataTransfer });
+  await target.dispatchEvent("dragenter", { dataTransfer });
+  await target.dispatchEvent("dragover", { dataTransfer });
+  await target.dispatchEvent("drop", { dataTransfer });
   await endDrag(source, dataTransfer);
 }
 
