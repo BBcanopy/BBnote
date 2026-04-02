@@ -1196,7 +1196,6 @@ export function NotesPage() {
               mediaActionDisabledReason="Select a notebook to add media."
               onEditorPaneChange={setEditorPane}
               onBodyChange={(bodyMarkdown) => setEditorNote((current) => (current ? { ...current, bodyMarkdown } : current))}
-              onToggleFullscreen={() => undefined}
               onDeleteRequest={handleRequestDeleteCurrentNote}
               onUploadSelectedFile={(file, insertBehavior) => handleUploadSelectedFile(file, insertBehavior)}
               onInsertLink={(attachment) => appendToBody(`[${attachment.name}](${attachment.url})`)}
@@ -1443,7 +1442,7 @@ function EditorPanel(props: {
   mediaActionDisabledReason: string;
   onEditorPaneChange(value: EditorPane): void;
   onBodyChange(bodyMarkdown: string): void;
-  onToggleFullscreen(): void;
+  onToggleFullscreen?(): void;
   onDeleteRequest(): void;
   onUploadSelectedFile(file: File | null, insertBehavior: MediaInsertBehavior): Promise<boolean>;
   onInsertLink(attachment: AttachmentRef): void;
@@ -2277,7 +2276,7 @@ function EditorPanel(props: {
           {props.showFullscreenToggle ? (
             <button
               type="button"
-              onClick={props.onToggleFullscreen}
+              onClick={() => props.onToggleFullscreen?.()}
               disabled={props.refreshing}
               aria-label={props.isFullscreen ? "Exit fullscreen editor" : "Expand editor"}
               title={props.isFullscreen ? "Exit fullscreen editor" : "Expand editor"}

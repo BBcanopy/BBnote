@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -275,7 +276,7 @@ test("keeps the left workspace lanes screen-tall while the editor and preview co
 });
 
 test("uses a full-height mobile workspace and full-screen drawers on small screens", async ({ page }) => {
-  const suffix = Date.now().toString();
+  const suffix = createTestSuffix();
   const notebookName = `Pocket ${suffix}`;
   const noteTitle = `Pocket note ${suffix}`;
   const noteBody = `Mobile body ${suffix}\n\nThis note should stay comfortable on phones.`;
@@ -1812,6 +1813,10 @@ async function login(page: import("@playwright/test").Page, options?: { assertTh
   await expect(page.getByTestId("editor-panel-desktop").locator(".bb-empty-state").getByText("No note selected")).toBeVisible();
   await expect(page.getByRole("textbox", { name: "Title" })).toHaveCount(0);
   await expect(page.getByRole("combobox", { name: "Notebook" })).toHaveCount(0);
+}
+
+function createTestSuffix() {
+  return randomUUID().replace(/-/g, "");
 }
 
 async function createNotebookAndPersistedNote(page: import("@playwright/test").Page) {
