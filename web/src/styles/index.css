@@ -3614,6 +3614,7 @@ button:disabled {
     padding: 1.04rem 1.24rem;
     font-size: 1.14rem;
     gap: 0.62rem;
+    border-radius: 0;
   }
 
   .bb-mobile-workspace__editor > .bb-editor-panel--workspace {

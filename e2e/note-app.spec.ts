@@ -323,6 +323,15 @@ test.describe("mobile workspace", () => {
       .poll(async () => parseFloat(await emptyState.evaluate((element) => getComputedStyle(element).fontSize)))
       .toBeGreaterThanOrEqual(20);
     await expect
+      .poll(async () => ({
+        notebooks: await notebooksButton.evaluate((element) => getComputedStyle(element).borderRadius),
+        newNote: await newNoteButton.evaluate((element) => getComputedStyle(element).borderRadius)
+      }))
+      .toEqual({
+        notebooks: "0px",
+        newNote: "0px"
+      });
+    await expect
       .poll(async () => (await newNoteButton.boundingBox())?.height ?? 0)
       .toBeGreaterThan(64);
     await expect
@@ -468,6 +477,15 @@ test.describe("mobile workspace", () => {
     await expect
       .poll(async () => parseFloat(await newNoteButton.evaluate((element) => getComputedStyle(element).fontSize)))
       .toBeGreaterThanOrEqual(20);
+    await expect
+      .poll(async () => ({
+        notebooks: await notebooksButton.evaluate((element) => getComputedStyle(element).borderRadius),
+        newNote: await newNoteButton.evaluate((element) => getComputedStyle(element).borderRadius)
+      }))
+      .toEqual({
+        notebooks: "0px",
+        newNote: "0px"
+      });
     await expect
       .poll(async () => (await newNoteButton.boundingBox())?.height ?? 0)
       .toBeGreaterThan(66);
