@@ -3564,7 +3564,7 @@ button:disabled {
   }
 }
 
-@media (max-width: 480px) {
+@media (max-width: 720px) {
   html {
     font-size: 17px;
   }

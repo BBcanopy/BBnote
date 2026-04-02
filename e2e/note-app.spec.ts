@@ -427,6 +427,68 @@ test("uses a full-height mobile workspace and full-screen drawers on small scree
   await expect(page.getByRole("textbox", { name: "Title" }).first()).toHaveValue(noteTitle);
 });
 
+test("applies the larger phone scale on wider mobile screens", async ({ page }) => {
+  const suffix = createTestSuffix();
+  const notebookName = `Large phone ${suffix}`;
+  const noteTitle = `Large phone note ${suffix}`;
+  const noteBody = `Wider phone body ${suffix}\n\nThis should still feel app-sized.`;
+
+  await login(page);
+  await page.setViewportSize({ width: 540, height: 960 });
+
+  const mobileActions = page.locator(".bb-mobile-workspace__actions");
+  const notebooksButton = page.getByRole("button", { name: /^notebooks$/i });
+  const newNoteButton = page.getByRole("button", { name: /^new note$/i }).first();
+  const titleInput = page.getByRole("textbox", { name: "Title" }).first();
+  const textarea = activeEditorTextarea(page);
+
+  await expect(mobileActions).toBeVisible();
+  await expect(page.getByTestId("editor-panel-mobile")).toBeVisible();
+  await expect
+    .poll(async () => parseFloat(await page.evaluate(() => getComputedStyle(document.documentElement).fontSize)))
+    .toBeGreaterThanOrEqual(17);
+  await expect
+    .poll(async () => parseFloat(await newNoteButton.evaluate((element) => getComputedStyle(element).fontSize)))
+    .toBeGreaterThanOrEqual(17.5);
+  await expect
+    .poll(async () => (await newNoteButton.boundingBox())?.height ?? 0)
+    .toBeGreaterThan(62);
+
+  await notebooksButton.click();
+  const notebooksDrawer = page.getByTestId("mobile-notebooks-drawer");
+  await expect(notebooksDrawer).toBeVisible();
+  await createNotebookWithDialog(page, notebookName);
+  await expect(notebooksDrawer).toHaveCount(0);
+  await notebooksButton.click();
+  await expect(notebooksDrawer).toBeVisible();
+  await notebooksDrawer.getByTestId(buildNotebookTestId("drag", notebookName)).locator(".bb-tree-row__content").click();
+  await expect(notebooksDrawer).toHaveCount(0);
+  await expect(newNoteButton).toBeEnabled();
+
+  await newNoteButton.click();
+  const initialUpdatedStatusText = await waitForUpdatedStatus(page);
+  await titleInput.fill(noteTitle);
+  await textarea.fill(noteBody);
+  await waitForUpdatedStatus(page, initialUpdatedStatusText);
+
+  await expect
+    .poll(async () => parseFloat(await titleInput.evaluate((element) => getComputedStyle(element).fontSize)))
+    .toBeGreaterThanOrEqual(20);
+  await expect
+    .poll(async () => parseFloat(await textarea.evaluate((element) => getComputedStyle(element).fontSize)))
+    .toBeGreaterThanOrEqual(18);
+
+  await page.getByRole("button", { name: /^notes$/i }).click();
+  const notesDrawer = page.getByTestId("mobile-notes-drawer");
+  await expect(notesDrawer).toBeVisible();
+  await expect
+    .poll(async () =>
+      parseFloat(await notesDrawer.locator(".bb-search-shell input").evaluate((element) => getComputedStyle(element).fontSize))
+    )
+    .toBeGreaterThanOrEqual(18);
+  await expect(notesDrawer.getByTestId(buildNoteTestId("drag", noteTitle))).toBeVisible();
+});
+
 test("shows a branded 404 page instead of the router default error screen", async ({ page }) => {
   await page.goto("/missing/notebook/path");
 
