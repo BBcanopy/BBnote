@@ -3252,29 +3252,27 @@ button:disabled {
   }
 
   .bb-topbar--with-title {
-    grid-template-areas:
-      "nav menu"
-      "title title";
-    min-height: auto;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    column-gap: 0.5rem;
   }
 
   .bb-topbar--with-title .bb-topbar__nav {
-    grid-area: nav;
+    width: auto;
+    grid-column: 1;
   }
 
   .bb-topbar--with-title .bb-topbar__menu {
-    grid-area: menu;
-  }
-
-  .bb-topbar__titlebar {
-    position: static;
-    width: 100%;
-    max-width: none;
-    transform: none;
+    grid-column: 3;
   }
 
   .bb-topbar--with-title .bb-topbar__titlebar {
-    grid-area: title;
+    position: static;
+    width: 100%;
+    max-width: none;
+    min-width: 0;
+    transform: none;
+    grid-column: 2;
   }
 
   .bb-route-error__hero {
@@ -3379,7 +3377,6 @@ button:disabled {
   }
 
   .bb-auth-hero__actions,
-  .bb-topbar,
   .bb-pane-card__header,
   .bb-panel-header,
   .bb-migration-card__header,
@@ -3397,12 +3394,18 @@ button:disabled {
   }
 
   .bb-topbar {
-    --bb-topbar-control-size: 2.86rem;
-    --bb-topbar-pill-size: 2.02rem;
-    --bb-topbar-avatar-core-size: 1.78rem;
+    --bb-topbar-control-size: 2.64rem;
+    --bb-topbar-pill-size: 1.92rem;
+    --bb-topbar-avatar-core-size: 1.66rem;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
     gap: 0.56rem;
     padding: 0.12rem 0.14rem 0.22rem;
     top: max(0.08rem, env(safe-area-inset-top));
+  }
+
+  .bb-topbar--with-title {
+    grid-template-columns: auto minmax(0, 1fr) auto;
   }
 
   .bb-topbar__nav {
@@ -3410,7 +3413,20 @@ button:disabled {
   }
 
   .bb-topbar__titlebar {
-    min-height: 3.18rem;
+    display: flex;
+    align-items: center;
+    min-height: 2.04rem;
+  }
+
+  .bb-topbar__titlebar-field {
+    min-height: 1.96rem;
+    column-gap: 0.3rem;
+  }
+
+  .bb-topbar__titlebar-icon {
+    min-height: 0;
+    transform: none;
+    margin-left: 0.34rem;
   }
 
   .bb-mobile-workspace__actions {
@@ -3477,12 +3493,6 @@ button:disabled {
     color: var(--accent-strong);
   }
 
-  .bb-topbar__titlebar-input.bb-input {
-    min-height: 3.08rem;
-    padding: 0.6rem 0.68rem;
-    font-size: 1.18rem;
-  }
-
   .bb-pane-card--tree,
   .bb-pane-card--notes {
     gap: 0.9rem;
@@ -3509,6 +3519,12 @@ button:disabled {
   .bb-file-input {
     min-height: 3.32rem;
     padding: 0.9rem 1rem;
+  }
+
+  .bb-topbar__titlebar-input.bb-input {
+    min-height: 1.92rem;
+    padding: 0.08rem 0.32rem 0.08rem 0.2rem;
+    font-size: 1.02rem;
   }
 
   .bb-textarea {
