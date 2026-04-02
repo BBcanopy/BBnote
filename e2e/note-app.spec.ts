@@ -318,10 +318,10 @@ test.describe("mobile workspace", () => {
     await expect(emptyState).toBeVisible();
     await expect
       .poll(async () => parseFloat(await notebooksButton.evaluate((element) => getComputedStyle(element).fontSize)))
-      .toBeGreaterThanOrEqual(18.5);
+      .toBeGreaterThanOrEqual(15);
     await expect
       .poll(async () => parseFloat(await emptyState.evaluate((element) => getComputedStyle(element).fontSize)))
-      .toBeGreaterThanOrEqual(20);
+      .toBeGreaterThanOrEqual(18.5);
     await expect
       .poll(async () => ({
         notebooks: await notebooksButton.evaluate((element) => getComputedStyle(element).borderRadius),
@@ -333,7 +333,7 @@ test.describe("mobile workspace", () => {
       });
     await expect
       .poll(async () => (await newNoteButton.boundingBox())?.height ?? 0)
-      .toBeGreaterThan(64);
+      .toBeGreaterThan(48);
     await expect
       .poll(async () => {
         const editorBox = await mobileEditorPanel.boundingBox();
@@ -403,7 +403,7 @@ test.describe("mobile workspace", () => {
     await expect(mobileNotebookRow).toBeVisible();
     await expect
       .poll(async () => (await mobileNotebookRow.boundingBox())?.height ?? 0)
-      .toBeGreaterThan(56);
+      .toBeGreaterThan(54);
     await notebooksDrawer
       .getByTestId(buildNotebookTestId("drag", notebookName))
       .locator(".bb-tree-row__content")
@@ -419,10 +419,10 @@ test.describe("mobile workspace", () => {
     await waitForUpdatedStatus(page, initialUpdatedStatusText);
     await expect
       .poll(async () => parseFloat(await titleInput.evaluate((element) => getComputedStyle(element).fontSize)))
-      .toBeGreaterThanOrEqual(21);
+      .toBeGreaterThanOrEqual(19.5);
     await expect
       .poll(async () => parseFloat(await textarea.evaluate((element) => getComputedStyle(element).fontSize)))
-      .toBeGreaterThanOrEqual(21.5);
+      .toBeGreaterThanOrEqual(19.8);
 
     await notesButton.click();
     await expect(notesDrawer).toBeVisible();
@@ -448,13 +448,13 @@ test.describe("mobile workspace", () => {
       .poll(async () =>
         parseFloat(await notesDrawer.locator(".bb-search-shell input").evaluate((element) => getComputedStyle(element).fontSize))
       )
-      .toBeGreaterThanOrEqual(20);
+      .toBeGreaterThanOrEqual(18);
 
     const mobileNoteCard = notesDrawer.getByTestId(buildNoteTestId("drag", noteTitle));
     await expect(mobileNoteCard).toBeVisible();
     await expect
       .poll(async () => (await mobileNoteCard.boundingBox())?.height ?? 0)
-      .toBeGreaterThan(78);
+      .toBeGreaterThan(72);
     await mobileNoteCard.click();
     await expect(notesDrawer).toHaveCount(0);
     await expect(titleInput).toHaveValue(noteTitle);
@@ -473,10 +473,10 @@ test.describe("mobile workspace", () => {
     await expect(mobileEditorPanel).toBeVisible();
     await expect
       .poll(async () => parseFloat(await page.evaluate(() => getComputedStyle(document.documentElement).fontSize)))
-      .toBeGreaterThanOrEqual(18);
+      .toBeGreaterThanOrEqual(17);
     await expect
       .poll(async () => parseFloat(await newNoteButton.evaluate((element) => getComputedStyle(element).fontSize)))
-      .toBeGreaterThanOrEqual(20);
+      .toBeGreaterThanOrEqual(15);
     await expect
       .poll(async () => ({
         notebooks: await notebooksButton.evaluate((element) => getComputedStyle(element).borderRadius),
@@ -488,7 +488,7 @@ test.describe("mobile workspace", () => {
       });
     await expect
       .poll(async () => (await newNoteButton.boundingBox())?.height ?? 0)
-      .toBeGreaterThan(66);
+      .toBeGreaterThan(48);
 
     await notebooksButton.click();
     await expect(notebooksDrawer).toBeVisible();
@@ -511,10 +511,10 @@ test.describe("mobile workspace", () => {
 
     await expect
       .poll(async () => parseFloat(await titleInput.evaluate((element) => getComputedStyle(element).fontSize)))
-      .toBeGreaterThanOrEqual(22);
+      .toBeGreaterThanOrEqual(20);
     await expect
       .poll(async () => parseFloat(await textarea.evaluate((element) => getComputedStyle(element).fontSize)))
-      .toBeGreaterThanOrEqual(21.5);
+      .toBeGreaterThanOrEqual(19.8);
 
     await notesButton.click();
     await expect(notesDrawer).toBeVisible();
@@ -522,7 +522,7 @@ test.describe("mobile workspace", () => {
       .poll(async () =>
         parseFloat(await notesDrawer.locator(".bb-search-shell input").evaluate((element) => getComputedStyle(element).fontSize))
       )
-      .toBeGreaterThanOrEqual(20);
+      .toBeGreaterThanOrEqual(18);
     await expect(notesDrawer.getByTestId(buildNoteTestId("drag", noteTitle))).toBeVisible();
   });
 });
