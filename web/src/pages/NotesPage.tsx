@@ -1142,6 +1142,7 @@ export function NotesPage() {
     loadingEditor,
     saving
   });
+  const mobileEditorFocused = Boolean(editorNote || selectedNoteId || loadingEditor);
 
   function startPaneResize(target: PaneResizeTarget, startX: number) {
     setPaneResize({
@@ -1160,10 +1161,37 @@ export function NotesPage() {
     setNotePaneWidth((current) => clampValue(current + delta, MIN_NOTE_PANE_WIDTH, MAX_NOTE_PANE_WIDTH));
   }
 
+  useEffect(() => {
+    document.body.classList.toggle("bb-mobile-notes-focus", mobileEditorFocused);
+    return () => {
+      document.body.classList.remove("bb-mobile-notes-focus");
+    };
+  }, [mobileEditorFocused]);
+
+  const mobileEditorShortcuts = mobileEditorFocused ? (
+    <div className="bb-mobile-editor-shortcuts" data-testid="mobile-editor-shortcuts">
+      <button type="button" onClick={() => setMobileFoldersOpen(true)} className={`${buttonSecondary} bb-mobile-editor-shortcut`}>
+        Notebooks
+      </button>
+      <button type="button" onClick={() => setMobileNotesOpen(true)} className={`${buttonSecondary} bb-mobile-editor-shortcut`}>
+        Notes
+      </button>
+      <button
+        type="button"
+        onClick={handleCreateDraft}
+        disabled={!canCreateDraft}
+        title={canCreateDraft ? "New note" : "Select a notebook to create a note"}
+        className={`${buttonSecondary} bb-mobile-editor-shortcut bb-mobile-editor-shortcut--primary`}
+      >
+        New note
+      </button>
+    </div>
+  ) : null;
+
   return (
     <>
-      <div className="bb-notes-page">
-        <div className="bb-mobile-workspace">
+      <div className={`bb-notes-page${mobileEditorFocused ? " bb-notes-page--mobile-focus" : ""}`}>
+        <div className={`bb-mobile-workspace${mobileEditorFocused ? " is-focus-editor" : ""}`}>
           <section className="bb-mobile-workspace__actions">
             <button type="button" onClick={() => setMobileFoldersOpen(true)} className={`${buttonSecondary} bb-mobile-workspace__action`}>
               <FolderSimple size={18} />
@@ -1205,6 +1233,9 @@ export function NotesPage() {
               onDeleteAttachment={(attachmentId) => void handleDeleteAttachment(attachmentId)}
               onDownloadAttachment={(attachment) => void handleDownloadAttachment(attachment)}
               statusText={editorStatus}
+              mobileFocusMode={mobileEditorFocused}
+              mobileHeaderActions={mobileEditorShortcuts}
+              suppressHeaderStatus={mobileEditorFocused}
               loading={loadingEditor}
               refreshing={refreshingEditor}
               saving={saving}
@@ -1436,6 +1467,9 @@ function EditorPanel(props: {
   panelTestId?: string;
   editorNote: EditorState | null;
   editorPane: EditorPane;
+  mobileFocusMode?: boolean;
+  mobileHeaderActions?: ReactNode;
+  suppressHeaderStatus?: boolean;
   showFullscreenToggle?: boolean;
   isFullscreen: boolean;
   canUseMediaActions: boolean;
@@ -1497,7 +1531,7 @@ function EditorPanel(props: {
   const mediaActionsDisabled = editorActionsDisabled || props.uploadingAttachment || savingRecording || !props.canUseMediaActions;
   const formatActionsDisabled = editorActionsDisabled || !props.editorNote || props.editorPane !== "markdown";
   const hasAttachments = (props.editorNote?.attachments.length ?? 0) > 0;
-  const headerStatusText = props.statusText.startsWith("Updated at ") ? props.statusText : null;
+  const headerStatusText = props.suppressHeaderStatus ? null : props.statusText.startsWith("Updated at ") ? props.statusText : null;
   const footerStatusText = headerStatusText ? null : props.statusText;
   const activeTableDimensions = tableHoverDimensions ?? tableDimensions;
 
@@ -2258,6 +2292,7 @@ function EditorPanel(props: {
       aria-busy={props.loading || props.refreshing}
       className={[
         "bb-editor-panel bb-editor-panel--workspace lg:flex-1",
+        props.mobileFocusMode ? "bb-editor-panel--mobile-focus" : "",
         props.isFullscreen ? "bb-editor-panel--fullscreen" : ""
       ]
         .filter(Boolean)
@@ -2265,6 +2300,7 @@ function EditorPanel(props: {
     >
       <div className="bb-editor-header">
         <div className="bb-editor-header__meta">
+          {props.mobileHeaderActions}
           {headerStatusText ? (
             <span className="bb-editor-header__status" data-testid="editor-updated-at">
               {headerStatusText}

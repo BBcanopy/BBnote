@@ -1079,6 +1079,14 @@ button:disabled {
   grid-column: 1 / -1;
 }
 
+.bb-mobile-workspace.is-focus-editor {
+  gap: 0;
+}
+
+.bb-mobile-workspace.is-focus-editor .bb-mobile-workspace__actions {
+  display: none;
+}
+
 .bb-mobile-workspace__editor {
   display: flex;
   flex: 1 1 auto;
@@ -1108,6 +1116,18 @@ button:disabled {
 .bb-mobile-workspace__editor .bb-editor-surface,
 .bb-mobile-workspace__editor .bb-editor-preview {
   min-height: 0;
+}
+
+.bb-mobile-editor-shortcuts {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.bb-mobile-editor-shortcut {
+  flex-shrink: 0;
 }
 
 @media (min-width: 1024px) {
@@ -3333,6 +3353,11 @@ button:disabled {
     gap: 0.48rem;
   }
 
+  .bb-mobile-notes-focus .bb-shell__content,
+  .bb-mobile-notes-focus .bb-shell--workspace {
+    gap: 0.16rem;
+  }
+
   .bb-auth-hero,
   .bb-pane-card,
   .bb-overview-card,
@@ -3389,20 +3414,65 @@ button:disabled {
   }
 
   .bb-mobile-workspace__actions {
-    gap: 0.42rem;
+    gap: 0.28rem;
   }
 
   .bb-mobile-workspace__action {
-    min-height: 2.5rem;
-    padding: 0.46rem 0.72rem;
-    font-size: 0.82rem;
+    min-height: 2.28rem;
+    padding: 0.34rem 0.58rem;
+    font-size: 0.76rem;
     font-weight: 600;
-    gap: 0.36rem;
+    gap: 0.26rem;
     border-radius: 0;
+  }
+
+  .bb-mobile-workspace__action svg {
+    width: 0.92rem;
+    height: 0.92rem;
   }
 
   .bb-mobile-workspace__editor > .bb-editor-panel--workspace {
     padding: 0.88rem 0.92rem 0.98rem;
+  }
+
+  .bb-mobile-workspace.is-focus-editor .bb-mobile-workspace__editor > .bb-editor-panel--workspace {
+    gap: 0.42rem;
+    padding: 0.34rem 0.36rem 0.3rem;
+    border-color: transparent;
+    box-shadow: none;
+    backdrop-filter: none;
+  }
+
+  .bb-mobile-workspace.is-focus-editor .bb-editor-header {
+    align-items: center;
+    gap: 0.34rem;
+    flex-wrap: nowrap;
+  }
+
+  .bb-mobile-workspace.is-focus-editor .bb-editor-header__meta {
+    align-items: center;
+    gap: 0.32rem;
+  }
+
+  .bb-mobile-workspace.is-focus-editor .bb-editor-header__actions {
+    flex-wrap: nowrap;
+    gap: 0.18rem;
+    margin-left: 0;
+  }
+
+  .bb-mobile-editor-shortcut {
+    min-height: 1.92rem;
+    padding: 0 0.5rem;
+    border-radius: 0;
+    font-size: 0.72rem;
+    gap: 0.2rem;
+    box-shadow: none;
+  }
+
+  .bb-mobile-editor-shortcut--primary {
+    border-color: color-mix(in srgb, var(--accent) 20%, var(--line));
+    background: color-mix(in srgb, var(--accent-soft) 36%, var(--surface-input));
+    color: var(--accent-strong);
   }
 
   .bb-topbar__titlebar-input.bb-input {
@@ -3453,12 +3523,46 @@ button:disabled {
     font-size: 1.18rem;
   }
 
+  .bb-mobile-workspace.is-focus-editor .bb-textarea,
+  .bb-mobile-workspace.is-focus-editor .bb-markdown {
+    font-size: 1.22rem;
+  }
+
   .bb-mobile-workspace__editor .bb-textarea {
     line-height: 1.92;
   }
 
   .bb-mobile-workspace__editor .bb-markdown {
     line-height: 1.84;
+  }
+
+  .bb-mobile-workspace.is-focus-editor .bb-editor-panel__content,
+  .bb-mobile-workspace.is-focus-editor .bb-editor-panel__content-shell {
+    gap: 0.45rem;
+    overflow: hidden;
+  }
+
+  .bb-mobile-workspace.is-focus-editor .bb-editor-toolbar-row {
+    gap: 0.22rem;
+  }
+
+  .bb-mobile-workspace.is-focus-editor .bb-editor-toolbar-group {
+    gap: 0.08rem;
+  }
+
+  .bb-mobile-workspace.is-focus-editor .bb-editor-stack {
+    gap: 0.48rem;
+    padding-right: 0;
+  }
+
+  .bb-mobile-workspace.is-focus-editor .bb-editor-surface,
+  .bb-mobile-workspace.is-focus-editor .bb-editor-preview {
+    min-height: 0;
+  }
+
+  .bb-mobile-workspace.is-focus-editor .bb-note-content {
+    min-height: 0;
+    resize: none;
   }
 
   .bb-tree-row {
@@ -3515,10 +3619,22 @@ button:disabled {
     height: 2.84rem;
   }
 
+  .bb-mobile-workspace.is-focus-editor .bb-editor-mode__button,
+  .bb-mobile-workspace.is-focus-editor .bb-icon-button--toolbar,
+  .bb-mobile-workspace.is-focus-editor .bb-icon-button--bare {
+    width: 2.14rem;
+    height: 2.14rem;
+  }
+
   .bb-editor-header__status,
   .bb-editor-footer,
   .bb-pane-card__header .bb-eyebrow {
     font-size: 0.98rem;
+  }
+
+  .bb-mobile-workspace.is-focus-editor .bb-editor-footer {
+    padding-top: 0;
+    font-size: 0.74rem;
   }
 
   .bb-empty-state {

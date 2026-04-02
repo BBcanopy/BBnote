@@ -277,9 +277,12 @@ test("keeps the left workspace lanes screen-tall while the editor and preview co
 
 test.describe("mobile workspace", () => {
   let mobileActions: Locator;
-  let notebooksButton: Locator;
-  let notesButton: Locator;
-  let newNoteButton: Locator;
+  let browseNotebooksButton: Locator;
+  let browseNewNoteButton: Locator;
+  let focusedShortcuts: Locator;
+  let focusedNotebooksButton: Locator;
+  let focusedNotesButton: Locator;
+  let focusedNewNoteButton: Locator;
   let titleInput: Locator;
   let textarea: Locator;
   let mobileEditorPanel: Locator;
@@ -289,13 +292,16 @@ test.describe("mobile workspace", () => {
 
   test.beforeEach(({ page }) => {
     mobileActions = page.locator(".bb-mobile-workspace__actions");
-    notebooksButton = page.getByRole("button", { name: /^notebooks$/i });
-    notesButton = page.getByRole("button", { name: /^notes$/i });
-    newNoteButton = page.getByRole("button", { name: /^new note$/i }).first();
-    titleInput = page.getByRole("textbox", { name: "Title" }).first();
-    textarea = activeEditorTextarea(page);
     mobileEditorPanel = page.getByTestId("editor-panel-mobile");
     desktopEditorPanel = page.getByTestId("editor-panel-desktop");
+    browseNotebooksButton = mobileActions.getByRole("button", { name: /^notebooks$/i });
+    browseNewNoteButton = mobileActions.getByRole("button", { name: /^new note$/i });
+    focusedShortcuts = mobileEditorPanel.getByTestId("mobile-editor-shortcuts");
+    focusedNotebooksButton = mobileEditorPanel.getByRole("button", { name: /^notebooks$/i });
+    focusedNotesButton = mobileEditorPanel.getByRole("button", { name: /^notes$/i });
+    focusedNewNoteButton = mobileEditorPanel.getByRole("button", { name: /^new note$/i });
+    titleInput = page.getByRole("textbox", { name: "Title" }).first();
+    textarea = activeEditorTextarea(page);
     notebooksDrawer = page.getByTestId("mobile-notebooks-drawer");
     notesDrawer = page.getByTestId("mobile-notes-drawer");
   });
@@ -303,37 +309,46 @@ test.describe("mobile workspace", () => {
   test("uses a full-height mobile workspace and full-screen drawers on small screens", async ({ page }) => {
     const suffix = createTestSuffix();
     const notebookName = `Pocket ${suffix}`;
-    const noteTitle = `Pocket note ${suffix}`;
-    const noteBody = `Mobile body ${suffix}\n\nThis note should stay comfortable on phones.`;
+    const firstNoteTitle = `Pocket note ${suffix}`;
+    const firstNoteBody = `Mobile body ${suffix}\n\nThis note should stay comfortable on phones.`;
+    const secondNoteTitle = `Pocket follow-up ${suffix}`;
+    const secondNoteBody = `Second mobile body ${suffix}\n\nCompact actions should still feel easy to use.`;
 
     await login(page);
     await page.setViewportSize({ width: 390, height: 844 });
 
     const viewport = page.viewportSize();
     const emptyState = mobileEditorPanel.locator(".bb-empty-state");
+    const mobileToolbarImageButton = page.getByRole("button", { name: /^add image$/i }).first();
 
     await expect(mobileActions).toBeVisible();
     await expect(mobileEditorPanel).toBeVisible();
     await expect(desktopEditorPanel).toBeHidden();
     await expect(emptyState).toBeVisible();
     await expect
-      .poll(async () => parseFloat(await notebooksButton.evaluate((element) => getComputedStyle(element).fontSize)))
-      .toBeGreaterThanOrEqual(13.5);
+      .poll(async () => parseFloat(await browseNotebooksButton.evaluate((element) => getComputedStyle(element).fontSize)))
+      .toBeGreaterThanOrEqual(12.5);
+    await expect
+      .poll(async () => parseFloat(await browseNotebooksButton.evaluate((element) => getComputedStyle(element).fontSize)))
+      .toBeLessThan(14.25);
     await expect
       .poll(async () => parseFloat(await emptyState.evaluate((element) => getComputedStyle(element).fontSize)))
       .toBeGreaterThanOrEqual(18.5);
     await expect
       .poll(async () => ({
-        notebooks: await notebooksButton.evaluate((element) => getComputedStyle(element).borderRadius),
-        newNote: await newNoteButton.evaluate((element) => getComputedStyle(element).borderRadius)
+        notebooks: await browseNotebooksButton.evaluate((element) => getComputedStyle(element).borderRadius),
+        newNote: await browseNewNoteButton.evaluate((element) => getComputedStyle(element).borderRadius)
       }))
       .toEqual({
         notebooks: "0px",
         newNote: "0px"
       });
     await expect
-      .poll(async () => (await newNoteButton.boundingBox())?.height ?? 0)
-      .toBeGreaterThan(40);
+      .poll(async () => (await browseNewNoteButton.boundingBox())?.height ?? 0)
+      .toBeGreaterThan(36);
+    await expect
+      .poll(async () => (await browseNewNoteButton.boundingBox())?.height ?? 0)
+      .toBeLessThan(42.5);
     await expect
       .poll(async () => {
         const editorBox = await mobileEditorPanel.boundingBox();
@@ -374,7 +389,7 @@ test.describe("mobile workspace", () => {
         bottomLeft: "0px"
       });
 
-    await notebooksButton.click();
+    await browseNotebooksButton.click();
     await expect(notebooksDrawer).toBeVisible();
     await expect
       .poll(async () => {
@@ -397,7 +412,7 @@ test.describe("mobile workspace", () => {
 
     await createNotebookWithDialog(page, notebookName);
     await expect(notebooksDrawer).toHaveCount(0);
-    await notebooksButton.click();
+    await browseNotebooksButton.click();
     await expect(notebooksDrawer).toBeVisible();
     const mobileNotebookRow = notebooksDrawer.getByTestId(buildNotebookTestId("drag", notebookName)).locator(".bb-tree-row");
     await expect(mobileNotebookRow).toBeVisible();
@@ -410,21 +425,50 @@ test.describe("mobile workspace", () => {
       .click();
     await expect(notebooksDrawer).toHaveCount(0);
 
-    await expect(newNoteButton).toBeEnabled();
-    await newNoteButton.click();
+    await expect(browseNewNoteButton).toBeEnabled();
+    await browseNewNoteButton.click();
     await expect(titleInput).toHaveValue("");
     const initialUpdatedStatusText = await waitForUpdatedStatus(page);
-    await titleInput.fill(noteTitle);
-    await textarea.fill(noteBody);
+    await titleInput.fill(firstNoteTitle);
+    await textarea.fill(firstNoteBody);
     await waitForUpdatedStatus(page, initialUpdatedStatusText);
+    await expect(mobileActions).toBeHidden();
+    await expect(focusedShortcuts).toBeVisible();
+    await expect(focusedNotebooksButton).toBeVisible();
+    await expect(focusedNotesButton).toBeVisible();
+    await expect(focusedNewNoteButton).toBeVisible();
+    await expect(mobileEditorPanel.getByTestId("editor-updated-at")).toHaveCount(0);
+    await expect
+      .poll(async () => (await mobileToolbarImageButton.boundingBox())?.width ?? 0)
+      .toBeLessThan(40);
+    await expect
+      .poll(async () => {
+        const textareaBox = await textarea.boundingBox();
+        const editorBox = await mobileEditorPanel.boundingBox();
+        if (!textareaBox || !editorBox) {
+          return 0;
+        }
+        return textareaBox.height / editorBox.height;
+      })
+      .toBeGreaterThan(0.48);
     await expect
       .poll(async () => parseFloat(await titleInput.evaluate((element) => getComputedStyle(element).fontSize)))
       .toBeGreaterThanOrEqual(19.5);
     await expect
       .poll(async () => parseFloat(await textarea.evaluate((element) => getComputedStyle(element).fontSize)))
       .toBeGreaterThanOrEqual(19.8);
+    await expect
+      .poll(async () => parseFloat(await focusedNewNoteButton.evaluate((element) => getComputedStyle(element).fontSize)))
+      .toBeLessThan(13.5);
 
-    await notesButton.click();
+    await focusedNewNoteButton.click();
+    await expect(titleInput).toHaveValue("");
+    const secondUpdatedStatusText = await waitForUpdatedStatus(page);
+    await titleInput.fill(secondNoteTitle);
+    await textarea.fill(secondNoteBody);
+    await waitForUpdatedStatus(page, secondUpdatedStatusText);
+
+    await focusedNotesButton.click();
     await expect(notesDrawer).toBeVisible();
     await expect
       .poll(async () => {
@@ -450,14 +494,27 @@ test.describe("mobile workspace", () => {
       )
       .toBeGreaterThanOrEqual(18);
 
-    const mobileNoteCard = notesDrawer.getByTestId(buildNoteTestId("drag", noteTitle));
-    await expect(mobileNoteCard).toBeVisible();
+    const firstMobileNoteCard = notesDrawer.getByTestId(buildNoteTestId("drag", firstNoteTitle));
+    const secondMobileNoteCard = notesDrawer.getByTestId(buildNoteTestId("drag", secondNoteTitle));
+    await expect(firstMobileNoteCard).toBeVisible();
+    await expect(secondMobileNoteCard).toBeVisible();
     await expect
-      .poll(async () => (await mobileNoteCard.boundingBox())?.height ?? 0)
+      .poll(async () => (await firstMobileNoteCard.boundingBox())?.height ?? 0)
       .toBeGreaterThan(72);
-    await mobileNoteCard.click();
+    await firstMobileNoteCard.click();
     await expect(notesDrawer).toHaveCount(0);
-    await expect(titleInput).toHaveValue(noteTitle);
+    await expect(titleInput).toHaveValue(firstNoteTitle);
+
+    await focusedNotebooksButton.click();
+    await expect(notebooksDrawer).toBeVisible();
+    await notebooksDrawer
+      .getByTestId(buildNotebookTestId("drag", notebookName))
+      .locator(".bb-tree-row__content")
+      .click();
+    await expect(notebooksDrawer).toHaveCount(0);
+    await expect(titleInput).toHaveValue(firstNoteTitle);
+    await expect(mobileActions).toBeHidden();
+    await expect(focusedShortcuts).toBeVisible();
   });
 
   test("applies the larger phone scale on wider mobile screens", async ({ page }) => {
@@ -475,39 +532,48 @@ test.describe("mobile workspace", () => {
       .poll(async () => parseFloat(await page.evaluate(() => getComputedStyle(document.documentElement).fontSize)))
       .toBeGreaterThanOrEqual(17);
     await expect
-      .poll(async () => parseFloat(await newNoteButton.evaluate((element) => getComputedStyle(element).fontSize)))
-      .toBeGreaterThanOrEqual(13.5);
+      .poll(async () => parseFloat(await browseNewNoteButton.evaluate((element) => getComputedStyle(element).fontSize)))
+      .toBeGreaterThanOrEqual(12.5);
+    await expect
+      .poll(async () => parseFloat(await browseNewNoteButton.evaluate((element) => getComputedStyle(element).fontSize)))
+      .toBeLessThan(14.25);
     await expect
       .poll(async () => ({
-        notebooks: await notebooksButton.evaluate((element) => getComputedStyle(element).borderRadius),
-        newNote: await newNoteButton.evaluate((element) => getComputedStyle(element).borderRadius)
+        notebooks: await browseNotebooksButton.evaluate((element) => getComputedStyle(element).borderRadius),
+        newNote: await browseNewNoteButton.evaluate((element) => getComputedStyle(element).borderRadius)
       }))
       .toEqual({
         notebooks: "0px",
         newNote: "0px"
       });
     await expect
-      .poll(async () => (await newNoteButton.boundingBox())?.height ?? 0)
-      .toBeGreaterThan(40);
+      .poll(async () => (await browseNewNoteButton.boundingBox())?.height ?? 0)
+      .toBeGreaterThan(36);
+    await expect
+      .poll(async () => (await browseNewNoteButton.boundingBox())?.height ?? 0)
+      .toBeLessThan(42.5);
 
-    await notebooksButton.click();
+    await browseNotebooksButton.click();
     await expect(notebooksDrawer).toBeVisible();
     await createNotebookWithDialog(page, notebookName);
     await expect(notebooksDrawer).toHaveCount(0);
-    await notebooksButton.click();
+    await browseNotebooksButton.click();
     await expect(notebooksDrawer).toBeVisible();
     await notebooksDrawer
       .getByTestId(buildNotebookTestId("drag", notebookName))
       .locator(".bb-tree-row__content")
       .click();
     await expect(notebooksDrawer).toHaveCount(0);
-    await expect(newNoteButton).toBeEnabled();
+    await expect(browseNewNoteButton).toBeEnabled();
 
-    await newNoteButton.click();
+    await browseNewNoteButton.click();
     const initialUpdatedStatusText = await waitForUpdatedStatus(page);
     await titleInput.fill(noteTitle);
     await textarea.fill(noteBody);
     await waitForUpdatedStatus(page, initialUpdatedStatusText);
+    await expect(mobileActions).toBeHidden();
+    await expect(focusedShortcuts).toBeVisible();
+    await expect(mobileEditorPanel.getByTestId("editor-updated-at")).toHaveCount(0);
 
     await expect
       .poll(async () => parseFloat(await titleInput.evaluate((element) => getComputedStyle(element).fontSize)))
@@ -515,8 +581,18 @@ test.describe("mobile workspace", () => {
     await expect
       .poll(async () => parseFloat(await textarea.evaluate((element) => getComputedStyle(element).fontSize)))
       .toBeGreaterThanOrEqual(19.8);
+    await expect
+      .poll(async () => {
+        const textareaBox = await textarea.boundingBox();
+        const editorBox = await mobileEditorPanel.boundingBox();
+        if (!textareaBox || !editorBox) {
+          return 0;
+        }
+        return textareaBox.height / editorBox.height;
+      })
+      .toBeGreaterThan(0.52);
 
-    await notesButton.click();
+    await focusedNotesButton.click();
     await expect(notesDrawer).toBeVisible();
     await expect
       .poll(async () =>
@@ -2091,7 +2167,7 @@ async function createNoteWithContent(page: import("@playwright/test").Page, titl
 }
 
 function editorUpdatedAtStatus(page: import("@playwright/test").Page) {
-  return activeEditorPanel(page).getByTestId("editor-updated-at");
+  return activeEditorPanel(page).locator('[data-testid="editor-updated-at"], .bb-editor-footer').first();
 }
 
 async function waitForUpdatedStatus(page: import("@playwright/test").Page, previousText?: string) {
