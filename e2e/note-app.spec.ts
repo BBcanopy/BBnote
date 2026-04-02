@@ -31,7 +31,7 @@ test("keeps desktop lanes viewport-height and only shows the pane grip on border
   const notesPaneResizer = page.getByTestId("notes-pane-resizer");
   const notebookPaneHandle = notebookPaneResizer.locator(".bb-pane-resizer__handle");
   const notesPaneHandle = notesPaneResizer.locator(".bb-pane-resizer__handle");
-  const editorPanel = page.locator(".bb-editor-panel").first();
+  const editorPanel = page.getByTestId("editor-panel-desktop");
   const notebookCard = notebookPane.locator(".bb-pane-card").first();
   const notesCard = notesPane.locator(".bb-pane-card").first();
 
@@ -272,6 +272,131 @@ test("keeps the left workspace lanes screen-tall while the editor and preview co
     element.scrollTop = element.scrollHeight;
   });
   await expect(editorPreview.getByText(previewBottomMarker)).toBeVisible();
+});
+
+test("uses a full-height mobile workspace and full-screen drawers on small screens", async ({ page }) => {
+  const suffix = Date.now().toString();
+  const notebookName = `Pocket ${suffix}`;
+  const noteTitle = `Pocket note ${suffix}`;
+  const noteBody = `Mobile body ${suffix}\n\nThis note should stay comfortable on phones.`;
+
+  await login(page);
+  await page.setViewportSize({ width: 390, height: 844 });
+
+  const viewport = page.viewportSize();
+  const mobileActions = page.locator(".bb-mobile-workspace__actions");
+  const notebooksButton = page.getByRole("button", { name: /^notebooks$/i });
+  const notesButton = page.getByRole("button", { name: /^notes$/i });
+  const newNoteButton = page.getByRole("button", { name: /^new note$/i }).first();
+  const mobileEditorPanel = page.getByTestId("editor-panel-mobile");
+
+  await expect(mobileActions).toBeVisible();
+  await expect(mobileEditorPanel).toBeVisible();
+  await expect(page.getByTestId("editor-panel-desktop")).toBeHidden();
+  await expect
+    .poll(async () => parseFloat(await notebooksButton.evaluate((element) => getComputedStyle(element).fontSize)))
+    .toBeGreaterThanOrEqual(16);
+  await expect
+    .poll(async () => (await newNoteButton.boundingBox())?.height ?? 0)
+    .toBeGreaterThan(52);
+  await expect
+    .poll(async () => {
+      const editorBox = await mobileEditorPanel.boundingBox();
+      if (!editorBox || !viewport) {
+        return Number.POSITIVE_INFINITY;
+      }
+      return Math.abs(editorBox.y + editorBox.height - viewport.height);
+    })
+    .toBeLessThan(14);
+  await expect
+    .poll(async () => (await mobileEditorPanel.boundingBox())?.height ?? 0)
+    .toBeGreaterThan(520);
+
+  await notebooksButton.click();
+  const notebooksDrawer = page.getByTestId("mobile-notebooks-drawer");
+  await expect(notebooksDrawer).toBeVisible();
+  await expect
+    .poll(async () => {
+      const box = await notebooksDrawer.boundingBox();
+      if (!box || !viewport) {
+        return Number.POSITIVE_INFINITY;
+      }
+      return Math.abs(box.x + box.width - viewport.width);
+    })
+    .toBeLessThan(2);
+  await expect
+    .poll(async () => {
+      const box = await notebooksDrawer.boundingBox();
+      if (!box || !viewport) {
+        return Number.POSITIVE_INFINITY;
+      }
+      return Math.abs(box.y + box.height - viewport.height);
+    })
+    .toBeLessThan(2);
+
+  await createNotebookWithDialog(page, notebookName);
+  await expect(notebooksDrawer).toHaveCount(0);
+  await notebooksButton.click();
+  await expect(notebooksDrawer).toBeVisible();
+  const mobileNotebookRow = notebooksDrawer.getByTestId(buildNotebookTestId("drag", notebookName)).locator(".bb-tree-row");
+  await expect(mobileNotebookRow).toBeVisible();
+  await expect
+    .poll(async () => (await mobileNotebookRow.boundingBox())?.height ?? 0)
+    .toBeGreaterThan(46);
+  await notebooksDrawer.getByTestId(buildNotebookTestId("drag", notebookName)).locator(".bb-tree-row__content").click();
+  await expect(notebooksDrawer).toHaveCount(0);
+
+  await expect(newNoteButton).toBeEnabled();
+  await newNoteButton.click();
+  const titleInput = page.getByRole("textbox", { name: "Title" }).first();
+  const textarea = page.getByPlaceholder("Write in Markdown").first();
+  await expect(titleInput).toHaveValue("");
+  const initialUpdatedStatusText = await waitForUpdatedStatus(page);
+  await titleInput.fill(noteTitle);
+  await textarea.fill(noteBody);
+  await waitForUpdatedStatus(page, initialUpdatedStatusText);
+  await expect
+    .poll(async () => parseFloat(await titleInput.evaluate((element) => getComputedStyle(element).fontSize)))
+    .toBeGreaterThanOrEqual(16);
+  await expect
+    .poll(async () => parseFloat(await textarea.evaluate((element) => getComputedStyle(element).fontSize)))
+    .toBeGreaterThanOrEqual(16);
+
+  await notesButton.click();
+  const notesDrawer = page.getByTestId("mobile-notes-drawer");
+  await expect(notesDrawer).toBeVisible();
+  await expect
+    .poll(async () => {
+      const box = await notesDrawer.boundingBox();
+      if (!box || !viewport) {
+        return Number.POSITIVE_INFINITY;
+      }
+      return Math.abs(box.x + box.width - viewport.width);
+    })
+    .toBeLessThan(2);
+  await expect
+    .poll(async () => {
+      const box = await notesDrawer.boundingBox();
+      if (!box || !viewport) {
+        return Number.POSITIVE_INFINITY;
+      }
+      return Math.abs(box.y + box.height - viewport.height);
+    })
+    .toBeLessThan(2);
+  await expect
+    .poll(async () =>
+      parseFloat(await notesDrawer.locator(".bb-search-shell input").evaluate((element) => getComputedStyle(element).fontSize))
+    )
+    .toBeGreaterThanOrEqual(16);
+
+  const mobileNoteCard = notesDrawer.getByTestId(buildNoteTestId("drag", noteTitle));
+  await expect(mobileNoteCard).toBeVisible();
+  await expect
+    .poll(async () => (await mobileNoteCard.boundingBox())?.height ?? 0)
+    .toBeGreaterThan(62);
+  await mobileNoteCard.click();
+  await expect(notesDrawer).toHaveCount(0);
+  await expect(page.getByRole("textbox", { name: "Title" }).first()).toHaveValue(noteTitle);
 });
 
 test("shows a branded 404 page instead of the router default error screen", async ({ page }) => {
