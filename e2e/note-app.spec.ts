@@ -320,6 +320,8 @@ test.describe("mobile workspace", () => {
     const viewport = page.viewportSize();
     const emptyState = mobileEditorPanel.locator(".bb-empty-state");
     const mobileToolbarImageButton = page.getByRole("button", { name: /^add image$/i }).first();
+    const topbarTitleField = page.getByTestId("page-nav-title-input");
+    const userMenuButton = page.getByRole("button", { name: /open user menu/i }).first();
 
     await expect(mobileActions).toBeVisible();
     await expect(mobileEditorPanel).toBeVisible();
@@ -460,6 +462,18 @@ test.describe("mobile workspace", () => {
     await expect
       .poll(async () => parseFloat(await focusedNewNoteButton.evaluate((element) => getComputedStyle(element).fontSize)))
       .toBeLessThan(13.5);
+    await expect
+      .poll(async () => {
+        const titleBox = await topbarTitleField.boundingBox();
+        const menuBox = await userMenuButton.boundingBox();
+        if (!titleBox || !menuBox) {
+          return Number.POSITIVE_INFINITY;
+        }
+        const titleCenterY = titleBox.y + titleBox.height / 2;
+        const menuCenterY = menuBox.y + menuBox.height / 2;
+        return Math.abs(titleCenterY - menuCenterY);
+      })
+      .toBeLessThan(16);
 
     await focusedNewNoteButton.click();
     await expect(titleInput).toHaveValue("");
@@ -521,6 +535,8 @@ test.describe("mobile workspace", () => {
     const notebookName = `Large phone ${suffix}`;
     const noteTitle = `Large phone note ${suffix}`;
     const noteBody = `Wider phone body ${suffix}\n\nThis should still feel app-sized.`;
+    const topbarTitleField = page.getByTestId("page-nav-title-input");
+    const userMenuButton = page.getByRole("button", { name: /open user menu/i }).first();
 
     await login(page);
     await page.setViewportSize({ width: 540, height: 960 });
@@ -590,6 +606,18 @@ test.describe("mobile workspace", () => {
         return textareaBox.height / editorBox.height;
       })
       .toBeGreaterThan(0.52);
+    await expect
+      .poll(async () => {
+        const titleBox = await topbarTitleField.boundingBox();
+        const menuBox = await userMenuButton.boundingBox();
+        if (!titleBox || !menuBox) {
+          return Number.POSITIVE_INFINITY;
+        }
+        const titleCenterY = titleBox.y + titleBox.height / 2;
+        const menuCenterY = menuBox.y + menuBox.height / 2;
+        return Math.abs(titleCenterY - menuCenterY);
+      })
+      .toBeLessThan(16);
 
     await focusedNotesButton.click();
     await expect(notesDrawer).toBeVisible();

@@ -3252,29 +3252,27 @@ button:disabled {
   }
 
   .bb-topbar--with-title {
-    grid-template-areas:
-      "nav menu"
-      "title title";
-    min-height: auto;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    column-gap: 0.5rem;
   }
 
   .bb-topbar--with-title .bb-topbar__nav {
-    grid-area: nav;
+    width: auto;
+    grid-column: 1;
   }
 
   .bb-topbar--with-title .bb-topbar__menu {
-    grid-area: menu;
-  }
-
-  .bb-topbar__titlebar {
-    position: static;
-    width: 100%;
-    max-width: none;
-    transform: none;
+    grid-column: 3;
   }
 
   .bb-topbar--with-title .bb-topbar__titlebar {
-    grid-area: title;
+    position: static;
+    width: 100%;
+    max-width: none;
+    min-width: 0;
+    transform: none;
+    grid-column: 2;
   }
 
   .bb-route-error__hero {
