@@ -15,5 +15,7 @@ declare module "fastify" {
 
   interface Session {
     userId?: string;
+    refreshToken?: string;
+    accessTokenExpiresAt?: string;
   }
 }

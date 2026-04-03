@@ -1,19 +1,12 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
 import type { AppConfig } from "./configService.js";
 import { OIDC_STATE_COOKIE_NAME, OIDC_VERIFIER_COOKIE_NAME, authCookieOptions } from "./authConstants.js";
-
-export interface OidcTokenResponse {
-  token: {
-    access_token: string;
-    expires_at?: Date;
-    expires_in?: number;
-    id_token?: string;
-  };
-}
+import type { OidcToken, OidcTokenResponse } from "./oidcService.js";
 
 export interface OidcOAuth2NamespaceLike {
   generateAuthorizationUri(request: FastifyRequest, reply: FastifyReply): Promise<string>;
   getAccessTokenFromAuthorizationCodeFlow(request: FastifyRequest, reply: FastifyReply): Promise<OidcTokenResponse>;
+  getNewAccessTokenUsingRefreshToken(refreshToken: OidcToken, params: Record<string, never>): Promise<OidcTokenResponse>;
   userinfo(tokenSetOrToken: { access_token?: string } | string): Promise<Record<string, unknown>>;
 }
 
@@ -44,17 +37,54 @@ interface MutableMockClaims extends Record<string, unknown> {
 const TEST_ACCESS_TOKEN = "test-access-token";
 const TEST_AUTH_CODE = "test-auth-code";
 const TEST_ID_TOKEN = "test-id-token";
+const TEST_REFRESH_TOKEN = "test-refresh-token";
 const TEST_STATE = "test-state";
 const TEST_VERIFIER = "test-code-verifier";
 
-export function createMutableMockOidcProvider(config: AppConfig, initialIdentity: TestOidcIdentity) {
+export interface MockOidcOptions {
+  accessTokenExpiresInSeconds?: number;
+  includeRefreshToken?: boolean;
+  refreshTokenExpiresInSeconds?: number;
+}
+
+export function createMutableMockOidcProvider(
+  config: AppConfig,
+  initialIdentity: TestOidcIdentity,
+  options: MockOidcOptions = {}
+) {
   let currentIdentity = initialIdentity;
   let currentVerifierError: Error | null = null;
   let currentClaimsOverrides: Partial<MutableMockClaims> = {};
   let shouldOmitIdToken = false;
+  let currentAccessTokenExpiresInSeconds = options.accessTokenExpiresInSeconds ?? 3600;
+  let currentIncludeRefreshToken = options.includeRefreshToken ?? true;
+  let currentRefreshTokenExpiresInSeconds = options.refreshTokenExpiresInSeconds;
+  let currentRefreshError: Error | null = null;
+  let refreshCallCount = 0;
+  let tokenVersion = 0;
 
   const secureCookies = config.appBaseUrl.startsWith("https://");
   const cookieOptions = authCookieOptions(secureCookies);
+
+  function buildTokenSet(version = tokenVersion): OidcToken {
+    const token: OidcToken = {
+      access_token: version === 0 ? TEST_ACCESS_TOKEN : `${TEST_ACCESS_TOKEN}-${version}`,
+      expires_in: currentAccessTokenExpiresInSeconds
+    };
+
+    if (!shouldOmitIdToken) {
+      token.id_token = version === 0 ? TEST_ID_TOKEN : `${TEST_ID_TOKEN}-${version}`;
+    }
+
+    if (currentIncludeRefreshToken) {
+      token.refresh_token = version === 0 ? TEST_REFRESH_TOKEN : `${TEST_REFRESH_TOKEN}-${version}`;
+      if (typeof currentRefreshTokenExpiresInSeconds === "number") {
+        token.refresh_expires_in = currentRefreshTokenExpiresInSeconds;
+      }
+    }
+
+    return token;
+  }
 
   function buildClaims(): MutableMockClaims {
     const issuer = normalizeIssuer(currentIdentity.issuer ?? config.oidcIssuerUrl);
@@ -103,21 +133,39 @@ export function createMutableMockOidcProvider(config: AppConfig, initialIdentity
       reply.clearCookie(OIDC_VERIFIER_COOKIE_NAME, cookieOptions);
 
       return {
-        token: shouldOmitIdToken
-          ? {
-              access_token: TEST_ACCESS_TOKEN,
-              expires_in: 3600
-            }
-          : {
-              access_token: TEST_ACCESS_TOKEN,
-              expires_in: 3600,
-              id_token: TEST_ID_TOKEN
-            }
+        token: buildTokenSet()
+      };
+    },
+
+    async getNewAccessTokenUsingRefreshToken(refreshToken) {
+      if (!currentIncludeRefreshToken) {
+        throw new Error("Unexpected refresh token request.");
+      }
+      if (currentRefreshError) {
+        throw currentRefreshError;
+      }
+
+      const expectedRefreshToken = tokenVersion === 0 ? TEST_REFRESH_TOKEN : `${TEST_REFRESH_TOKEN}-${tokenVersion}`;
+      if (refreshToken.refresh_token !== expectedRefreshToken) {
+        throw new Error("Unexpected refresh token.");
+      }
+
+      refreshCallCount += 1;
+      tokenVersion += 1;
+
+      return {
+        token: buildTokenSet(tokenVersion)
       };
     },
 
     async userinfo(tokenSetOrToken) {
-      if (extractAccessToken(tokenSetOrToken) !== TEST_ACCESS_TOKEN) {
+      const accessToken = extractAccessToken(tokenSetOrToken);
+      const validAccessTokens = new Set<string>([TEST_ACCESS_TOKEN]);
+      for (let version = 1; version <= tokenVersion; version += 1) {
+        validAccessTokens.add(`${TEST_ACCESS_TOKEN}-${version}`);
+      }
+
+      if (!validAccessTokens.has(accessToken)) {
         throw new Error("Unexpected access token.");
       }
 
@@ -127,7 +175,13 @@ export function createMutableMockOidcProvider(config: AppConfig, initialIdentity
 
   const jwtVerifier: JwtVerifierLike = {
     async verify(token) {
-      if (token !== TEST_ID_TOKEN && token !== TEST_ACCESS_TOKEN) {
+      const validTokens = new Set<string>([TEST_ACCESS_TOKEN, TEST_ID_TOKEN]);
+      for (let version = 1; version <= tokenVersion; version += 1) {
+        validTokens.add(`${TEST_ACCESS_TOKEN}-${version}`);
+        validTokens.add(`${TEST_ID_TOKEN}-${version}`);
+      }
+
+      if (!validTokens.has(token)) {
         throw new Error(`Unexpected token: ${token}`);
       }
       if (currentVerifierError) {
@@ -151,13 +205,34 @@ export function createMutableMockOidcProvider(config: AppConfig, initialIdentity
       currentIdentity = identity;
       currentClaimsOverrides = {};
       currentVerifierError = null;
+      currentRefreshError = null;
       shouldOmitIdToken = false;
+      currentAccessTokenExpiresInSeconds = options.accessTokenExpiresInSeconds ?? 3600;
+      currentIncludeRefreshToken = options.includeRefreshToken ?? true;
+      currentRefreshTokenExpiresInSeconds = options.refreshTokenExpiresInSeconds;
+      refreshCallCount = 0;
+      tokenVersion = 0;
+    },
+    setAccessTokenExpiresInSeconds(value: number) {
+      currentAccessTokenExpiresInSeconds = value;
+    },
+    setIncludeRefreshToken(value: boolean) {
+      currentIncludeRefreshToken = value;
+    },
+    setRefreshError(error: Error | null) {
+      currentRefreshError = error;
+    },
+    setRefreshTokenExpiresInSeconds(value: number | undefined) {
+      currentRefreshTokenExpiresInSeconds = value;
     },
     setMissingIdToken(value: boolean) {
       shouldOmitIdToken = value;
     },
     setVerifierError(error: Error | null) {
       currentVerifierError = error;
+    },
+    getRefreshCallCount() {
+      return refreshCallCount;
     }
   };
 }

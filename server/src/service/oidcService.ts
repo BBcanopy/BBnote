@@ -17,13 +17,19 @@ interface JwksDocument {
 
 type JsonWebKeyLike = Record<string, unknown>;
 
+export interface OidcToken {
+  access_token: string;
+  expires_at?: Date | string | number;
+  expires_in?: number;
+  id_token?: string;
+  refresh_expires_at?: Date | string | number;
+  refresh_expires_in?: number;
+  refresh_token?: string;
+  [key: string]: unknown;
+}
+
 export interface OidcTokenResponse {
-  token: {
-    access_token: string;
-    expires_at?: Date;
-    expires_in?: number;
-    id_token?: string;
-  };
+  token: OidcToken;
 }
 
 export interface OidcIdentity {
@@ -49,6 +55,19 @@ export class OidcService {
 
   async exchangeAuthorizationCode(request: FastifyRequest, reply: FastifyReply): Promise<OidcTokenResponse> {
     return this.requireApp().oidc.getAccessTokenFromAuthorizationCodeFlow(request, reply) as Promise<OidcTokenResponse>;
+  }
+
+  async refreshAccessToken(refreshToken: string): Promise<OidcTokenResponse> {
+    return this.requireApp().oidc.getNewAccessTokenUsingRefreshToken(
+      {
+        access_token: "",
+        expires_at: new Date(0),
+        expires_in: 0,
+        refresh_token: refreshToken,
+        token_type: "Bearer"
+      },
+      {}
+    ) as Promise<OidcTokenResponse>;
   }
 
   async userinfo(tokenSetOrToken: { access_token?: string } | string) {

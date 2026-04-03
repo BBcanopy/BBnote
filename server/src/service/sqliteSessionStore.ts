@@ -18,6 +18,12 @@ export class SqliteSessionStore {
       if (!ownerId) {
         throw new Error("Cannot persist a session without a userId.");
       }
+      const refreshToken = typeof (session as { refreshToken?: unknown }).refreshToken === "string"
+        ? (session as { refreshToken: string }).refreshToken
+        : null;
+      const accessTokenExpiresAt = typeof (session as { accessTokenExpiresAt?: unknown }).accessTokenExpiresAt === "string"
+        ? (session as { accessTokenExpiresAt: string }).accessTokenExpiresAt
+        : null;
 
       const expiresAt = session.cookie?.expires instanceof Date
         ? session.cookie.expires
@@ -36,6 +42,8 @@ export class SqliteSessionStore {
         owner_id: ownerId,
         created_at: existing?.created_at ?? now,
         updated_at: now,
+        refresh_token: refreshToken,
+        access_token_expires_at: accessTokenExpiresAt,
         expires_at: expiresAt.toISOString()
       });
       callback();
@@ -62,6 +70,8 @@ export class SqliteSessionStore {
 
       callback(null, {
         userId: row.owner_id,
+        ...(row.refresh_token ? { refreshToken: row.refresh_token } : {}),
+        ...(row.access_token_expires_at ? { accessTokenExpiresAt: row.access_token_expires_at } : {}),
         cookie: {
           ...this.cookieOptions,
           expires,

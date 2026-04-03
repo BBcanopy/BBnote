@@ -30,3 +30,4 @@ The app is available at `http://localhost:8082` by default.
 ## Configuration note
 
 - `ATTACHMENT_MAX_BYTES` controls the maximum attachment upload size in bytes and defaults to `104857600` (`100 MiB`).
+- Include `offline_access` in `OIDC_SCOPES` if you want BBNote to use refresh tokens to keep browser sessions alive across access-token expiry.

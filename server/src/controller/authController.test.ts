@@ -7,7 +7,7 @@ import type { FastifyInstance } from "fastify";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { buildApp } from "../app.js";
 import { OIDC_STATE_COOKIE_NAME, OIDC_VERIFIER_COOKIE_NAME, RETURN_TO_COOKIE_NAME, SESSION_COOKIE_NAME } from "../service/authConstants.js";
-import { createTestAuthProvider, createTestConfig } from "../test-helpers.js";
+import { createTestAuthProvider, createTestConfig, loginWithOidc } from "../test-helpers.js";
 
 describe("authController integration", () => {
   let app: FastifyInstance | undefined;
@@ -133,6 +133,49 @@ describe("authController integration", () => {
         theme: "midnight"
       }
     });
+  });
+
+  it("refreshes an expired oidc access token to keep the app session alive", async () => {
+    const refreshConfig = createTestConfig(tempRoot, {
+      appBaseUrl: baseUrl
+    });
+    const refreshingOidc = createTestAuthProvider(
+      refreshConfig,
+      {
+        email: "refresh@example.com",
+        name: "Refresh User",
+        subject: "refresh-user"
+      },
+      {
+        accessTokenExpiresInSeconds: 0,
+        refreshTokenExpiresInSeconds: 7200
+      }
+    );
+    const refreshApp = await buildApp({
+      authTesting: refreshingOidc.authTesting,
+      config: refreshConfig
+    });
+
+    try {
+      const { sessionCookie } = await loginWithOidc(refreshApp);
+
+      const foldersResponse = await refreshApp.inject({
+        method: "GET",
+        url: "/api/v1/folders",
+        cookies: {
+          [SESSION_COOKIE_NAME]: sessionCookie
+        }
+      });
+
+      expect(foldersResponse.statusCode).toBe(200);
+      expect(foldersResponse.json()).toEqual([]);
+      expect(refreshingOidc.getRefreshCallCount()).toBe(1);
+      expect(
+        foldersResponse.cookies.find((cookie) => cookie.name === SESSION_COOKIE_NAME)?.expires
+      ).toBeDefined();
+    } finally {
+      await refreshApp.close();
+    }
   });
 
   it("writes a secure session cookie when https is forwarded by a trusted proxy", async () => {

@@ -5,6 +5,8 @@ export interface SessionRow {
   owner_id: string;
   created_at: string;
   updated_at: string;
+  refresh_token: string | null;
+  access_token_expires_at: string | null;
   expires_at: string;
 }
 
@@ -15,11 +17,13 @@ export class SessionDb {
     this.connection
       .prepare(
         `
-        insert into sessions (id, owner_id, created_at, updated_at, expires_at)
-        values (@id, @owner_id, @created_at, @updated_at, @expires_at)
+        insert into sessions (id, owner_id, created_at, updated_at, refresh_token, access_token_expires_at, expires_at)
+        values (@id, @owner_id, @created_at, @updated_at, @refresh_token, @access_token_expires_at, @expires_at)
         on conflict(id) do update set
           owner_id = excluded.owner_id,
           updated_at = excluded.updated_at,
+          refresh_token = excluded.refresh_token,
+          access_token_expires_at = excluded.access_token_expires_at,
           expires_at = excluded.expires_at
       `
       )
