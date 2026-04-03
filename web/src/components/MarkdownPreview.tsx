@@ -1,4 +1,4 @@
-import { MusicNotesSimple } from "@phosphor-icons/react";
+import { MusicNotesSimple, PencilSimple } from "@phosphor-icons/react";
 import { isValidElement, useEffect, useState, type ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -16,6 +16,14 @@ export function MarkdownPreview(props: { bodyMarkdown: string; attachments?: Att
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
+          pre: ({ children, node: _node, ...props }) => {
+            const scratchContent = extractScratchBlockContent(children);
+            if (scratchContent !== null) {
+              return <ScratchPreview content={scratchContent} />;
+            }
+
+            return <pre {...props}>{children}</pre>;
+          },
           img: ({ src, alt }) => <SecureAttachmentImage src={src} alt={alt ?? ""} />,
           a: ({ href, children }) => {
             const attachment = href ? attachmentsByUrl.get(normalizeAttachmentUrl(href)) : undefined;
@@ -36,6 +44,22 @@ export function MarkdownPreview(props: { bodyMarkdown: string; attachments?: Att
       >
         {props.bodyMarkdown}
       </ReactMarkdown>
+    </div>
+  );
+}
+
+function ScratchPreview(props: { content: string }) {
+  return (
+    <div className="bb-markdown__scratch-card" data-testid="markdown-scratch">
+      <div className="bb-markdown__scratch-head">
+        <span className="bb-markdown__scratch-icon" aria-hidden="true">
+          <PencilSimple size={18} />
+        </span>
+        <span className="bb-markdown__scratch-label">Scratch</span>
+      </div>
+      <pre className="bb-markdown__scratch-body" data-testid="markdown-scratch-body">
+        {props.content}
+      </pre>
     </div>
   );
 }
@@ -181,6 +205,33 @@ function normalizeAttachmentUrl(value?: string) {
 function extractMarkdownMediaLabel(content: ReactNode, fallbackLabel: string) {
   const flattenedText = flattenReactText(content).trim();
   return flattenedText || fallbackLabel;
+}
+
+function extractScratchBlockContent(content: ReactNode): string | null {
+  const scratchNode = unwrapSingleReactChild(content);
+  if (!scratchNode || !isValidElement<{ className?: string; children?: ReactNode }>(scratchNode)) {
+    return null;
+  }
+
+  const className = String(scratchNode.props.className ?? "");
+  if (!className.split(/\s+/).includes("language-scratch")) {
+    return null;
+  }
+
+  return flattenReactText(scratchNode.props.children).replace(/\n$/, "");
+}
+
+function unwrapSingleReactChild(content: ReactNode): ReactNode | null {
+  if (Array.isArray(content)) {
+    const meaningfulChildren = content.filter((child) => child !== null && child !== undefined && child !== false);
+    if (meaningfulChildren.length !== 1) {
+      return null;
+    }
+
+    return meaningfulChildren[0];
+  }
+
+  return content ?? null;
 }
 
 function flattenReactText(content: ReactNode): string {

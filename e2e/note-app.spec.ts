@@ -1309,7 +1309,7 @@ test("reorders notes when the drop lands in the note-lane gap", async ({ page })
   await expectNoteOrderInLane(page, [secondNoteTitle, firstNoteTitle, thirdNoteTitle]);
 });
 
-test("shows the note title in the topbar above the editor lane, keeps folder and note drag cursors distinct, and supports table insertion, fullscreen editing, and markdown formatting tools", async ({
+test("shows the note title in the topbar above the editor lane, keeps folder and note drag cursors distinct, and supports scratch and table insertion, fullscreen editing, and markdown formatting tools", async ({
   page
 }) => {
   await page.setViewportSize({ width: 1900, height: 1000 });
@@ -1551,6 +1551,27 @@ test("shows the note title in the topbar above the editor lane, keeps folder and
   await editorPanel.getByRole("button", { name: /^quote$/i }).click();
   await expect(textarea).toHaveValue("> line one\n> line two");
 
+  await textarea.fill("draft idea");
+  await selectTextRange(textarea, 0, 10);
+  await editorPanel.getByRole("button", { name: /^scratch$/i }).click();
+  await expect(textarea).toHaveValue("```scratch\ndraft idea\n```");
+  await expect
+    .poll(async () =>
+      textarea.evaluate((element) => {
+        const textareaElement = element as HTMLTextAreaElement;
+        return {
+          selectionStart: textareaElement.selectionStart,
+          selectionEnd: textareaElement.selectionEnd,
+          selectedText: textareaElement.value.slice(textareaElement.selectionStart, textareaElement.selectionEnd)
+        };
+      })
+    )
+    .toEqual({
+      selectionStart: 11,
+      selectionEnd: 21,
+      selectedText: "draft idea"
+    });
+
   await textarea.fill("");
   await editorPanel.getByRole("button", { name: /^insert table$/i }).click();
   const tablePicker = page.getByRole("dialog", { name: /^insert table$/i });
@@ -1614,6 +1635,50 @@ test("shows the note title in the topbar above the editor lane, keeps folder and
   await expect
     .poll(async () => Math.abs(((await editorPanel.boundingBox())?.width ?? 0) - editorWidthBeforeFullscreen))
     .toBeLessThan(48);
+});
+
+test("persists inline scratch blocks across reload and renders them in preview", async ({ page }) => {
+  await page.setViewportSize({ width: 1900, height: 1000 });
+  const suffix = createTestSuffix();
+  const notebookName = `Scratch ${suffix}`;
+  const noteTitle = `Inline scratch ${suffix}`;
+  const scratchBody = `Draft line one ${suffix}\nDraft line two ${suffix}`;
+
+  await login(page);
+  await createNotebookWithDialog(page, notebookName);
+  await notebookRow(page, notebookName).click();
+  await createNoteWithContent(page, noteTitle, "draft");
+
+  const editorPanel = page.getByTestId("editor-panel-desktop");
+  const textarea = editorPanel.getByPlaceholder("Write in Markdown");
+  const previousStatus = await waitForUpdatedStatus(page);
+
+  await selectTextRange(textarea, 0, 5);
+  await editorPanel.getByRole("button", { name: /^scratch$/i }).click();
+  await expect(textarea).toHaveValue("```scratch\ndraft\n```");
+  await expect
+    .poll(async () =>
+      textarea.evaluate((element) => {
+        const textareaElement = element as HTMLTextAreaElement;
+        return textareaElement.value.slice(textareaElement.selectionStart, textareaElement.selectionEnd);
+      })
+    )
+    .toBe("draft");
+
+  await page.keyboard.type(scratchBody);
+  await expect(textarea).toHaveValue(`\`\`\`scratch\n${scratchBody}\n\`\`\``);
+  await waitForUpdatedStatus(page, previousStatus);
+
+  await page.reload();
+  await expect(textarea).toHaveValue(`\`\`\`scratch\n${scratchBody}\n\`\`\``);
+
+  await page.getByRole("button", { name: /^preview$/i }).click();
+  const scratchCard = activeEditorPanel(page).getByTestId("markdown-scratch");
+  await expect(scratchCard).toBeVisible();
+  await expect(scratchCard).toContainText("Scratch");
+  await expect
+    .poll(async () => ((await activeEditorPanel(page).getByTestId("markdown-scratch-body").textContent()) ?? ""))
+    .toBe(scratchBody);
 });
 
 test("auto-saves voice notes on stop, inserts them into the editor, keeps delete available, and shows live recorder progress", async ({

@@ -42,6 +42,30 @@ describe("formatMarkdownSelection", () => {
     });
   });
 
+  it("wraps selected text in a scratch block", () => {
+    expect(formatMarkdownSelection("draft idea", 0, 10, "scratch")).toEqual({
+      nextValue: "```scratch\ndraft idea\n```",
+      nextSelectionStart: 11,
+      nextSelectionEnd: 21
+    });
+  });
+
+  it("inserts a scratch placeholder at the cursor and selects it", () => {
+    expect(formatMarkdownSelection("", 0, 0, "scratch")).toEqual({
+      nextValue: "```scratch\nScratch notes\n```",
+      nextSelectionStart: 11,
+      nextSelectionEnd: 24
+    });
+  });
+
+  it("adds block boundaries around scratch blocks when inserting into existing text", () => {
+    expect(formatMarkdownSelection("alpha\nbeta", 6, 6, "scratch")).toEqual({
+      nextValue: "alpha\n\n```scratch\nScratch notes\n```\n\nbeta",
+      nextSelectionStart: 18,
+      nextSelectionEnd: 31
+    });
+  });
+
   it("inserts a markdown table template at the cursor", () => {
     expect(formatMarkdownSelection("alpha", 5, 5, "table")).toEqual({
       nextValue: "alpha\n\n| Column 1 | Column 2 |\n| --- | --- |\n|  |  |",

@@ -28,6 +28,33 @@ describe("MarkdownPreview", () => {
     vi.restoreAllMocks();
   });
 
+  it("renders scratch fences as inline scratch cards and preserves line breaks", () => {
+    render(
+      <MarkdownPreview
+        bodyMarkdown={"```scratch\nDraft line one\nDraft line two\n```"}
+      />
+    );
+
+    expect(screen.getByTestId("markdown-scratch")).toBeInTheDocument();
+    expect(screen.getByText("Scratch")).toBeInTheDocument();
+    expect(screen.getByTestId("markdown-scratch-body").textContent).toBe("Draft line one\nDraft line two");
+    expect(screen.queryByText("language-scratch")).not.toBeInTheDocument();
+  });
+
+  it("keeps regular fenced code blocks as code blocks", () => {
+    const { container } = render(
+      <MarkdownPreview
+        bodyMarkdown={"```ts\nconst count = 1;\n```"}
+      />
+    );
+
+    const codeElement = container.querySelector("pre code");
+    expect(codeElement).toBeInTheDocument();
+    expect(codeElement).toHaveClass("language-ts");
+    expect(codeElement).toHaveTextContent("const count = 1;");
+    expect(screen.queryByTestId("markdown-scratch")).not.toBeInTheDocument();
+  });
+
   it("renders inline audio and video players for attachment links when metadata is available", async () => {
     fetchAttachmentBlob.mockImplementation(async (attachmentUrl: string) => {
       if (attachmentUrl.includes("audio-1")) {

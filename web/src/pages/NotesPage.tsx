@@ -2090,6 +2090,14 @@ function EditorPanel(props: {
         preserveFocus
         onClick={() => handleApplyMarkdownFormat("bulleted-list")}
       />
+      <MediaToolbarButton
+        label="Scratch"
+        icon={<PencilSimple size={17} />}
+        disabled={formatActionsDisabled}
+        disabledTitle={formatToolbarDisabledTitle}
+        preserveFocus
+        onClick={() => handleApplyMarkdownFormat("scratch")}
+      />
       <div className="bb-toolbar-popover-shell" ref={tablePickerRef}>
         <button
           type="button"
