@@ -2,7 +2,7 @@ import path from "node:path";
 import type { FastifyInstance } from "fastify";
 import type { AppConfig } from "./service/configService.js";
 import { OIDC_STATE_COOKIE_NAME, OIDC_VERIFIER_COOKIE_NAME, SESSION_COOKIE_NAME } from "./service/authConstants.js";
-import { createMutableMockOidcProvider, type TestOidcIdentity } from "./service/oidcTesting.js";
+import { createMutableMockOidcProvider, type MockOidcOptions, type TestOidcIdentity } from "./service/oidcTesting.js";
 
 export function createTestConfig(tempRoot: string, overrides: Partial<AppConfig> = {}): AppConfig {
   return {
@@ -23,8 +23,8 @@ export function createTestConfig(tempRoot: string, overrides: Partial<AppConfig>
   };
 }
 
-export function createTestAuthProvider(config: AppConfig, identity: TestOidcIdentity) {
-  return createMutableMockOidcProvider(config, identity);
+export function createTestAuthProvider(config: AppConfig, identity: TestOidcIdentity, options: MockOidcOptions = {}) {
+  return createMutableMockOidcProvider(config, identity, options);
 }
 
 export function authHeaders(token: string) {

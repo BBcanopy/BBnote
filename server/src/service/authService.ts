@@ -3,17 +3,27 @@ import type { FastifyReply, FastifyRequest } from "fastify";
 import type { AppConfig } from "./configService.js";
 import { OIDC_STATE_COOKIE_NAME, OIDC_VERIFIER_COOKIE_NAME, RETURN_TO_COOKIE_NAME, SESSION_COOKIE_NAME, authCookieOptions } from "./authConstants.js";
 import type { AuthenticatedUser, AuthSessionView, UserTheme } from "./models.js";
-import type { OidcIdentity, OidcService } from "./oidcService.js";
+import type { OidcIdentity, OidcService, OidcToken } from "./oidcService.js";
 import type { UserDb } from "../db/userDb.js";
 
+const ACCESS_TOKEN_REFRESH_WINDOW_MS = 60_000;
+const DEFAULT_REFRESH_SESSION_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
+
+type RefreshSessionOutcome =
+  | { type: "refreshed"; reloadSession: boolean }
+  | { type: "transient-failure" }
+  | { type: "invalid-session"; error: unknown };
+
 export class AuthService {
+  private readonly refreshesInFlight = new Map<string, Promise<RefreshSessionOutcome>>();
+
   constructor(
     private readonly config: AppConfig,
     private readonly users: UserDb,
     private readonly oidcService: OidcService
   ) {}
 
-  async authenticateRequest(request: FastifyRequest): Promise<AuthenticatedUser> {
+  async authenticateRequest(request: FastifyRequest, reply?: FastifyReply): Promise<AuthenticatedUser> {
     const authorization = request.headers.authorization;
     if (authorization?.startsWith("Bearer ")) {
       const token = authorization.slice("Bearer ".length);
@@ -21,14 +31,17 @@ export class AuthService {
       return this.syncIdentity(identity);
     }
 
-    const ownerId = request.session.get("userId");
+    await this.refreshSessionIfNeeded(request, reply);
+
+    const ownerId = request.session.userId;
     if (!ownerId) {
+      await this.invalidateSession(request, reply);
       throw new Error("Missing session.");
     }
 
     const user = this.users.getById(ownerId);
     if (!user) {
-      await request.session.destroy();
+      await this.invalidateSession(request, reply);
       throw new Error("Session user not found.");
     }
 
@@ -85,12 +98,7 @@ export class AuthService {
     const authUser = await this.syncIdentity(mergeIdentity(verifiedIdentity, userinfoIdentity));
     const returnTo = sanitizeReturnTo(request.cookies[RETURN_TO_COOKIE_NAME]);
 
-    request.session.set("userId", authUser.ownerId);
-    request.session.options({
-      maxAge: sessionMaxAgeMs(tokens.token)
-    });
-    await request.session.regenerate(["userId"]);
-    await request.session.save();
+    await this.persistSession(request, authUser.ownerId, tokens.token);
     reply.setCookie(SESSION_COOKIE_NAME, request.session.encryptedSessionId, {
       ...authCookieOptions(this.secureCookies()),
       expires: request.session.cookie.expires ?? undefined
@@ -114,9 +122,9 @@ export class AuthService {
     reply.clearCookie(SESSION_COOKIE_NAME, authCookieOptions(this.secureCookies()));
   }
 
-  async getSessionState(request: FastifyRequest): Promise<AuthSessionView> {
+  async getSessionState(request: FastifyRequest, reply?: FastifyReply): Promise<AuthSessionView> {
     try {
-      const user = await this.authenticateRequest(request);
+      const user = await this.authenticateRequest(request, reply);
       return {
         authenticated: true,
         user: {
@@ -143,8 +151,8 @@ export class AuthService {
     reply.clearCookie(SESSION_COOKIE_NAME, authCookieOptions(this.secureCookies()));
   }
 
-  async updateTheme(request: FastifyRequest, theme: UserTheme): Promise<AuthSessionView> {
-    const user = await this.authenticateRequest(request);
+  async updateTheme(request: FastifyRequest, reply: FastifyReply, theme: UserTheme): Promise<AuthSessionView> {
+    const user = await this.authenticateRequest(request, reply);
     const updatedUser = this.users.updateTheme(user.ownerId, theme);
 
     return {
@@ -163,6 +171,108 @@ export class AuthService {
     }
 
     return this.oidcService.normalizeIdentity((await this.oidcService.userinfo(token)) as Record<string, unknown>);
+  }
+
+  private async persistSession(request: FastifyRequest, ownerId: string, token: OidcToken) {
+    const maxAge = sessionLifetimeMs(token);
+
+    request.session.options({ maxAge });
+    request.session.userId = ownerId;
+    request.session.refreshToken = typeof token.refresh_token === "string" && token.refresh_token ? token.refresh_token : undefined;
+    request.session.accessTokenExpiresAt = accessTokenExpiresAt(token).toISOString();
+
+    await request.session.regenerate(["userId", "refreshToken", "accessTokenExpiresAt"]);
+    await request.session.save();
+  }
+
+  private async refreshSessionIfNeeded(request: FastifyRequest, reply?: FastifyReply) {
+    const refreshToken = request.session.refreshToken;
+    if (!refreshToken) {
+      return;
+    }
+
+    const accessTokenExpiresAtIso = request.session.accessTokenExpiresAt;
+    if (!shouldRefreshAccessToken(accessTokenExpiresAtIso)) {
+      return;
+    }
+
+    const outcome = await this.refreshSessionWithLock(request, refreshToken);
+    if (outcome.type === "refreshed") {
+      if (outcome.reloadSession) {
+        await request.session.reload();
+      }
+      return;
+    }
+
+    if (outcome.type === "transient-failure") {
+      return;
+    }
+
+    await this.invalidateSession(request, reply);
+    throw outcome.error;
+  }
+
+  private async refreshSessionWithLock(request: FastifyRequest, refreshToken: string) {
+    const sessionId = request.session.sessionId;
+    const existingRefresh = this.refreshesInFlight.get(sessionId);
+    if (existingRefresh) {
+      const outcome = await existingRefresh;
+      return outcome.type === "refreshed"
+        ? {
+            ...outcome,
+            reloadSession: true
+          }
+        : outcome;
+    }
+
+    const refreshPromise = this.performSessionRefresh(request, refreshToken);
+    this.refreshesInFlight.set(sessionId, refreshPromise);
+
+    try {
+      return await refreshPromise;
+    } finally {
+      if (this.refreshesInFlight.get(sessionId) === refreshPromise) {
+        this.refreshesInFlight.delete(sessionId);
+      }
+    }
+  }
+
+  private async performSessionRefresh(request: FastifyRequest, refreshToken: string): Promise<RefreshSessionOutcome> {
+    try {
+      const refreshed = await this.oidcService.refreshAccessToken(refreshToken);
+      const nextRefreshToken =
+        typeof refreshed.token.refresh_token === "string" && refreshed.token.refresh_token
+          ? refreshed.token.refresh_token
+          : refreshToken;
+
+      const maxAge = sessionLifetimeMs({
+        ...refreshed.token,
+        refresh_token: nextRefreshToken
+      });
+      request.session.refreshToken = nextRefreshToken;
+      request.session.accessTokenExpiresAt = accessTokenExpiresAt(refreshed.token).toISOString();
+      request.session.options({ maxAge });
+      await request.session.save();
+      return {
+        type: "refreshed",
+        reloadSession: false
+      };
+    } catch (error) {
+      if (shouldInvalidateRefreshSession(error)) {
+        await request.session.reload();
+        if (didAnotherRequestRefreshSession(request, refreshToken)) {
+          return {
+            type: "refreshed",
+            reloadSession: false
+          };
+        }
+
+        return { type: "invalid-session", error };
+      }
+
+      request.log.warn({ err: error }, "OIDC refresh failed; continuing with the existing session.");
+      return { type: "transient-failure" };
+    }
   }
 
   private async syncIdentity(identity: OidcIdentity): Promise<AuthenticatedUser> {
@@ -199,6 +309,18 @@ export class AuthService {
     reply.clearCookie(OIDC_VERIFIER_COOKIE_NAME, options);
   }
 
+  private async invalidateSession(request: FastifyRequest, reply?: FastifyReply) {
+    try {
+      await request.session.destroy();
+    } catch {
+      // Best-effort cleanup only.
+    }
+
+    if (reply) {
+      reply.clearCookie(SESSION_COOKIE_NAME, authCookieOptions(this.secureCookies()));
+    }
+  }
+
   private secureCookies() {
     return this.config.appBaseUrl.startsWith("https://");
   }
@@ -229,10 +351,119 @@ function absoluteAppUrl(appBaseUrl: string, returnTo: string) {
   return `${appBaseUrl.replace(/\/$/, "")}${returnTo}`;
 }
 
-function sessionMaxAgeMs(token: { expires_at?: Date; expires_in?: number }) {
-  if (token.expires_at instanceof Date && !Number.isNaN(token.expires_at.valueOf())) {
-    return Math.max(token.expires_at.valueOf() - Date.now(), 60_000);
+function sessionLifetimeMs(token: OidcToken) {
+  if (token.refresh_token) {
+    return refreshTokenLifetimeMs(token) ?? DEFAULT_REFRESH_SESSION_MAX_AGE_MS;
   }
 
-  return Math.max((token.expires_in ?? 3600) * 1000, 60_000);
+  return accessTokenLifetimeMs(token);
+}
+
+function accessTokenExpiresAt(token: OidcToken) {
+  return resolveTokenExpiry(token.expires_at, token.expires_in) ?? new Date(Date.now() + 3600_000);
+}
+
+function shouldRefreshAccessToken(expiresAtIso: string | undefined) {
+  if (!expiresAtIso) {
+    return true;
+  }
+
+  const expiresAt = new Date(expiresAtIso);
+  if (Number.isNaN(expiresAt.valueOf())) {
+    return true;
+  }
+
+  return expiresAt.valueOf() - Date.now() <= ACCESS_TOKEN_REFRESH_WINDOW_MS;
+}
+
+function accessTokenLifetimeMs(token: OidcToken) {
+  const expiresAt = accessTokenExpiresAt(token);
+  return Math.max(expiresAt.valueOf() - Date.now(), 60_000);
+}
+
+function refreshTokenLifetimeMs(token: OidcToken) {
+  const expiresAt = resolveTokenExpiry(token.refresh_expires_at, token.refresh_expires_in);
+  if (!expiresAt) {
+    return null;
+  }
+
+  return Math.max(expiresAt.valueOf() - Date.now(), 60_000);
+}
+
+function resolveTokenExpiry(expiresAtValue: unknown, expiresInValue: unknown) {
+  const expiresAt = normalizeDate(expiresAtValue);
+  if (expiresAt) {
+    return expiresAt;
+  }
+
+  if (typeof expiresInValue === "number" && Number.isFinite(expiresInValue)) {
+    return new Date(Date.now() + expiresInValue * 1000);
+  }
+
+  return null;
+}
+
+function normalizeDate(value: unknown) {
+  if (value instanceof Date && !Number.isNaN(value.valueOf())) {
+    return value;
+  }
+
+  if (typeof value === "string" || typeof value === "number") {
+    const numericValue = typeof value === "string" && value.trim() ? Number(value) : value;
+    const timestamp = typeof numericValue === "number" && Number.isFinite(numericValue) && numericValue < 10_000_000_000
+      ? numericValue * 1000
+      : value;
+    const parsed = new Date(timestamp);
+    if (!Number.isNaN(parsed.valueOf())) {
+      return parsed;
+    }
+  }
+
+  return null;
+}
+
+function shouldInvalidateRefreshSession(error: unknown) {
+  const oauthError = findOauthErrorCode(error);
+  return oauthError === "invalid_grant" || oauthError === "invalid_token";
+}
+
+function didAnotherRequestRefreshSession(request: FastifyRequest, attemptedRefreshToken: string) {
+  if (!request.session.userId) {
+    return false;
+  }
+
+  return (
+    (typeof request.session.refreshToken === "string" && request.session.refreshToken !== attemptedRefreshToken) ||
+    !shouldRefreshAccessToken(request.session.accessTokenExpiresAt)
+  );
+}
+
+function findOauthErrorCode(error: unknown): string | null {
+  if (!error || typeof error !== "object") {
+    return null;
+  }
+
+  const queue: unknown[] = [error];
+  const visited = new Set<unknown>();
+
+  while (queue.length > 0) {
+    const current = queue.shift();
+    if (!current || typeof current !== "object" || visited.has(current)) {
+      continue;
+    }
+
+    visited.add(current);
+    const record = current as Record<string, unknown>;
+    if (typeof record.error === "string" && record.error) {
+      return record.error;
+    }
+
+    for (const value of Object.values(record)) {
+      if (value && typeof value === "object") {
+        queue.push(value);
+      }
+    }
+  }
+
+  return null;
 }

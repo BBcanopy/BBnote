@@ -7,7 +7,7 @@ import type { FastifyInstance } from "fastify";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { buildApp } from "../app.js";
 import { OIDC_STATE_COOKIE_NAME, OIDC_VERIFIER_COOKIE_NAME, RETURN_TO_COOKIE_NAME, SESSION_COOKIE_NAME } from "../service/authConstants.js";
-import { createTestAuthProvider, createTestConfig } from "../test-helpers.js";
+import { createTestAuthProvider, createTestConfig, loginWithOidc } from "../test-helpers.js";
 
 describe("authController integration", () => {
   let app: FastifyInstance | undefined;
@@ -133,6 +133,285 @@ describe("authController integration", () => {
         theme: "midnight"
       }
     });
+  });
+
+  it("refreshes an expired oidc access token to keep the app session alive", async () => {
+    const refreshConfig = createTestConfig(tempRoot, {
+      appBaseUrl: baseUrl
+    });
+    const refreshingOidc = createTestAuthProvider(
+      refreshConfig,
+      {
+        email: "refresh@example.com",
+        name: "Refresh User",
+        subject: "refresh-user"
+      },
+      {
+        accessTokenExpiresInSeconds: 0,
+        refreshTokenExpiresInSeconds: 7200
+      }
+    );
+    const refreshApp = await buildApp({
+      authTesting: refreshingOidc.authTesting,
+      config: refreshConfig
+    });
+
+    try {
+      const { sessionCookie } = await loginWithOidc(refreshApp);
+
+      const foldersResponse = await refreshApp.inject({
+        method: "GET",
+        url: "/api/v1/folders",
+        cookies: {
+          [SESSION_COOKIE_NAME]: sessionCookie
+        }
+      });
+
+      expect(foldersResponse.statusCode).toBe(200);
+      expect(foldersResponse.json()).toEqual([]);
+      expect(refreshingOidc.getRefreshCallCount()).toBe(1);
+      expect(
+        foldersResponse.cookies.find((cookie) => cookie.name === SESSION_COOKIE_NAME)?.expires
+      ).toBeDefined();
+    } finally {
+      await refreshApp.close();
+    }
+  });
+
+  it("treats numeric oidc refresh expiry timestamps as epoch seconds", async () => {
+    const refreshConfig = createTestConfig(tempRoot, {
+      appBaseUrl: baseUrl
+    });
+    const refreshExpirySeconds = Math.floor(Date.now() / 1000) + 7200;
+    const refreshingOidc = createTestAuthProvider(
+      refreshConfig,
+      {
+        email: "epoch@example.com",
+        name: "Epoch User",
+        subject: "epoch-user"
+      },
+      {
+        accessTokenExpiresInSeconds: 0,
+        refreshTokenExpiresAt: refreshExpirySeconds
+      }
+    );
+    const refreshApp = await buildApp({
+      authTesting: refreshingOidc.authTesting,
+      config: refreshConfig
+    });
+
+    try {
+      const { callbackResponse } = await loginWithOidc(refreshApp);
+      const sessionCookie = callbackResponse.cookies.find((cookie) => cookie.name === SESSION_COOKIE_NAME);
+      const expiresAt = sessionCookie?.expires ? new Date(sessionCookie.expires) : null;
+
+      expect(expiresAt).not.toBeNull();
+      expect(expiresAt!.valueOf()).toBeGreaterThan(Date.now() + 60 * 60 * 1000);
+    } finally {
+      await refreshApp.close();
+    }
+  });
+
+  it("treats stringified oidc refresh expiry timestamps as epoch seconds", async () => {
+    const refreshConfig = createTestConfig(tempRoot, {
+      appBaseUrl: baseUrl
+    });
+    const refreshExpirySeconds = String(Math.floor(Date.now() / 1000) + 7200);
+    const refreshingOidc = createTestAuthProvider(
+      refreshConfig,
+      {
+        email: "epoch-string@example.com",
+        name: "Epoch String User",
+        subject: "epoch-string-user"
+      },
+      {
+        accessTokenExpiresInSeconds: 0,
+        refreshTokenExpiresAt: refreshExpirySeconds
+      }
+    );
+    const refreshApp = await buildApp({
+      authTesting: refreshingOidc.authTesting,
+      config: refreshConfig
+    });
+
+    try {
+      const { callbackResponse } = await loginWithOidc(refreshApp);
+      const sessionCookie = callbackResponse.cookies.find((cookie) => cookie.name === SESSION_COOKIE_NAME);
+      const expiresAt = sessionCookie?.expires ? new Date(sessionCookie.expires) : null;
+
+      expect(expiresAt).not.toBeNull();
+      expect(expiresAt!.valueOf()).toBeGreaterThan(Date.now() + 60 * 60 * 1000);
+    } finally {
+      await refreshApp.close();
+    }
+  });
+
+  it("continues serving requests across transient refresh failures so a later retry can recover", async () => {
+    const refreshConfig = createTestConfig(tempRoot, {
+      appBaseUrl: baseUrl
+    });
+    const refreshingOidc = createTestAuthProvider(
+      refreshConfig,
+      {
+        email: "retry@example.com",
+        name: "Retry User",
+        subject: "retry-user"
+      },
+      {
+        accessTokenExpiresInSeconds: 0,
+        refreshTokenExpiresInSeconds: 7200
+      }
+    );
+    const refreshApp = await buildApp({
+      authTesting: refreshingOidc.authTesting,
+      config: refreshConfig
+    });
+
+    try {
+      const { sessionCookie } = await loginWithOidc(refreshApp);
+      refreshingOidc.setRefreshError(new Error("temporary oidc outage"));
+
+      const failedResponse = await refreshApp.inject({
+        method: "GET",
+        url: "/api/v1/folders",
+        cookies: {
+          [SESSION_COOKIE_NAME]: sessionCookie
+        }
+      });
+
+      expect(failedResponse.statusCode).toBe(200);
+      expect(failedResponse.json()).toEqual([]);
+      expect(failedResponse.cookies.find((cookie) => cookie.name === SESSION_COOKIE_NAME)).toBeUndefined();
+
+      refreshingOidc.setRefreshError(null);
+
+      const recoveredResponse = await refreshApp.inject({
+        method: "GET",
+        url: "/api/v1/folders",
+        cookies: {
+          [SESSION_COOKIE_NAME]: sessionCookie
+        }
+      });
+
+      expect(recoveredResponse.statusCode).toBe(200);
+      expect(recoveredResponse.json()).toEqual([]);
+      expect(refreshingOidc.getRefreshCallCount()).toBe(1);
+    } finally {
+      await refreshApp.close();
+    }
+  });
+
+  it("serializes concurrent refreshes so token rotation does not invalidate the session", async () => {
+    const refreshConfig = createTestConfig(tempRoot, {
+      appBaseUrl: baseUrl
+    });
+    const refreshingOidc = createTestAuthProvider(
+      refreshConfig,
+      {
+        email: "parallel@example.com",
+        name: "Parallel User",
+        subject: "parallel-user"
+      },
+      {
+        accessTokenExpiresInSeconds: 0,
+        refreshTokenExpiresInSeconds: 7200
+      }
+    );
+    const refreshApp = await buildApp({
+      authTesting: refreshingOidc.authTesting,
+      config: refreshConfig
+    });
+
+    try {
+      const { sessionCookie } = await loginWithOidc(refreshApp);
+      refreshingOidc.pauseRefresh();
+
+      const firstResponsePromise = refreshApp.inject({
+        method: "GET",
+        url: "/api/v1/folders",
+        cookies: {
+          [SESSION_COOKIE_NAME]: sessionCookie
+        }
+      });
+      await refreshingOidc.waitForRefreshAttemptCount(1);
+
+      const secondResponsePromise = refreshApp.inject({
+        method: "GET",
+        url: "/api/v1/folders",
+        cookies: {
+          [SESSION_COOKIE_NAME]: sessionCookie
+        }
+      });
+
+      refreshingOidc.releaseRefresh();
+
+      const [firstResponse, secondResponse] = await Promise.all([firstResponsePromise, secondResponsePromise]);
+      expect(firstResponse.statusCode).toBe(200);
+      expect(firstResponse.json()).toEqual([]);
+      expect(secondResponse.statusCode).toBe(200);
+      expect(secondResponse.json()).toEqual([]);
+      expect(refreshingOidc.getRefreshCallCount()).toBe(1);
+    } finally {
+      refreshingOidc.releaseRefresh();
+      await refreshApp.close();
+    }
+  });
+
+  it("clears the session when refresh fails with invalid_grant", async () => {
+    const refreshConfig = createTestConfig(tempRoot, {
+      appBaseUrl: baseUrl
+    });
+    const refreshingOidc = createTestAuthProvider(
+      refreshConfig,
+      {
+        email: "invalid-grant@example.com",
+        name: "Invalid Grant User",
+        subject: "invalid-grant-user"
+      },
+      {
+        accessTokenExpiresInSeconds: 0,
+        refreshTokenExpiresInSeconds: 7200
+      }
+    );
+    const refreshApp = await buildApp({
+      authTesting: refreshingOidc.authTesting,
+      config: refreshConfig
+    });
+
+    try {
+      const { sessionCookie } = await loginWithOidc(refreshApp);
+      const invalidGrantError = new Error("refresh token is invalid") as Error & {
+        error: string;
+      };
+      invalidGrantError.error = "invalid_grant";
+      refreshingOidc.setRefreshError(invalidGrantError);
+
+      const failedResponse = await refreshApp.inject({
+        method: "GET",
+        url: "/api/v1/folders",
+        cookies: {
+          [SESSION_COOKIE_NAME]: sessionCookie
+        }
+      });
+
+      expect(failedResponse.statusCode).toBe(401);
+
+      const followupSessionResponse = await refreshApp.inject({
+        method: "GET",
+        url: "/api/v1/auth/session",
+        cookies: {
+          [SESSION_COOKIE_NAME]: sessionCookie
+        }
+      });
+
+      expect(followupSessionResponse.statusCode).toBe(200);
+      expect(followupSessionResponse.json()).toEqual({
+        authenticated: false,
+        user: null
+      });
+    } finally {
+      await refreshApp.close();
+    }
   });
 
   it("writes a secure session cookie when https is forwarded by a trusted proxy", async () => {

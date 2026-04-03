@@ -105,8 +105,8 @@ export function registerAuthController(app: FastifyInstance, services: AppServic
         200: authSessionSchema
       }
     }
-  }, async (request) => {
-    return services.authService.getSessionState(request);
+  }, async (request, reply) => {
+    return services.authService.getSessionState(request, reply);
   });
 
   app.patch("/api/v1/auth/theme", {
@@ -133,7 +133,7 @@ export function registerAuthController(app: FastifyInstance, services: AppServic
     const body = updateThemeBodySchema.parse(request.body);
 
     try {
-      return await services.authService.updateTheme(request, body.theme);
+      return await services.authService.updateTheme(request, reply, body.theme);
     } catch {
       return reply.code(401).send({ message: "Authentication required." });
     }

@@ -14,10 +14,12 @@ export class SqliteSessionStore {
 
   set(sessionId: string, session: Fastify.Session, callback: (error?: unknown) => void) {
     try {
-      const ownerId = typeof (session as { userId?: unknown }).userId === "string" ? (session as { userId: string }).userId : null;
+      const ownerId = session.userId ?? null;
       if (!ownerId) {
         throw new Error("Cannot persist a session without a userId.");
       }
+      const refreshToken = session.refreshToken ?? null;
+      const accessTokenExpiresAt = session.accessTokenExpiresAt ?? null;
 
       const expiresAt = session.cookie?.expires instanceof Date
         ? session.cookie.expires
@@ -36,6 +38,8 @@ export class SqliteSessionStore {
         owner_id: ownerId,
         created_at: existing?.created_at ?? now,
         updated_at: now,
+        refresh_token: refreshToken,
+        access_token_expires_at: accessTokenExpiresAt,
         expires_at: expiresAt.toISOString()
       });
       callback();
@@ -62,6 +66,8 @@ export class SqliteSessionStore {
 
       callback(null, {
         userId: row.owner_id,
+        ...(row.refresh_token ? { refreshToken: row.refresh_token } : {}),
+        ...(row.access_token_expires_at ? { accessTokenExpiresAt: row.access_token_expires_at } : {}),
         cookie: {
           ...this.cookieOptions,
           expires,

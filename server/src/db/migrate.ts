@@ -93,6 +93,8 @@ export function runMigrations(connection: Database.Database) {
       owner_id text not null,
       created_at text not null,
       updated_at text not null,
+      refresh_token text,
+      access_token_expires_at text,
       expires_at text not null,
       foreign key(owner_id) references users(id) on delete cascade
     );
@@ -129,6 +131,19 @@ export function runMigrations(connection: Database.Database) {
 
   if (!folderColumns.includes("icon")) {
     connection.exec("alter table folders add column icon text not null default 'folder';");
+  }
+
+  const sessionColumns = connection
+    .prepare<[], { name: string }>("pragma table_info(sessions)")
+    .all()
+    .map((column) => column.name);
+
+  if (!sessionColumns.includes("refresh_token")) {
+    connection.exec("alter table sessions add column refresh_token text;");
+  }
+
+  if (!sessionColumns.includes("access_token_expires_at")) {
+    connection.exec("alter table sessions add column access_token_expires_at text;");
   }
 
   const noteColumns = connection

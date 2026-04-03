@@ -204,4 +204,44 @@ describe("runMigrations", () => {
       .get();
     expect(row?.icon).toBe("folder");
   });
+
+  it("adds refresh-token session columns for existing databases", () => {
+    const connection = new Database(":memory:");
+    connections.push(connection);
+
+    connection.exec(`
+      pragma foreign_keys = ON;
+
+      create table users (
+        id text primary key,
+        issuer text not null,
+        subject text not null,
+        email text,
+        display_name text,
+        theme text not null default 'sea',
+        created_at text not null,
+        updated_at text not null,
+        unique(issuer, subject)
+      );
+
+      create table sessions (
+        id text primary key,
+        owner_id text not null,
+        created_at text not null,
+        updated_at text not null,
+        expires_at text not null,
+        foreign key(owner_id) references users(id) on delete cascade
+      );
+    `);
+
+    runMigrations(connection);
+
+    const columns = connection
+      .prepare<[], { name: string }>("pragma table_info(sessions)")
+      .all()
+      .map((column) => column.name);
+
+    expect(columns).toContain("refresh_token");
+    expect(columns).toContain("access_token_expires_at");
+  });
 });
