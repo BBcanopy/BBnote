@@ -9,7 +9,14 @@ import type { UserDb } from "../db/userDb.js";
 const ACCESS_TOKEN_REFRESH_WINDOW_MS = 60_000;
 const DEFAULT_REFRESH_SESSION_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 
+type RefreshSessionOutcome =
+  | { type: "refreshed"; reloadSession: boolean }
+  | { type: "transient-failure" }
+  | { type: "invalid-session"; error: unknown };
+
 export class AuthService {
+  private readonly refreshesInFlight = new Map<string, Promise<RefreshSessionOutcome>>();
+
   constructor(
     private readonly config: AppConfig,
     private readonly users: UserDb,
@@ -189,6 +196,48 @@ export class AuthService {
       return;
     }
 
+    const outcome = await this.refreshSessionWithLock(request, refreshToken);
+    if (outcome.type === "refreshed") {
+      if (outcome.reloadSession) {
+        await request.session.reload();
+      }
+      return;
+    }
+
+    if (outcome.type === "transient-failure") {
+      return;
+    }
+
+    await this.invalidateSession(request, reply);
+    throw outcome.error;
+  }
+
+  private async refreshSessionWithLock(request: FastifyRequest, refreshToken: string) {
+    const sessionId = request.session.sessionId;
+    const existingRefresh = this.refreshesInFlight.get(sessionId);
+    if (existingRefresh) {
+      const outcome = await existingRefresh;
+      return outcome.type === "refreshed"
+        ? {
+            ...outcome,
+            reloadSession: true
+          }
+        : outcome;
+    }
+
+    const refreshPromise = this.performSessionRefresh(request, refreshToken);
+    this.refreshesInFlight.set(sessionId, refreshPromise);
+
+    try {
+      return await refreshPromise;
+    } finally {
+      if (this.refreshesInFlight.get(sessionId) === refreshPromise) {
+        this.refreshesInFlight.delete(sessionId);
+      }
+    }
+  }
+
+  private async performSessionRefresh(request: FastifyRequest, refreshToken: string): Promise<RefreshSessionOutcome> {
     try {
       const refreshed = await this.oidcService.refreshAccessToken(refreshToken);
       const nextRefreshToken =
@@ -204,11 +253,25 @@ export class AuthService {
       request.session.accessTokenExpiresAt = accessTokenExpiresAt(refreshed.token).toISOString();
       request.session.options({ maxAge });
       await request.session.save();
+      return {
+        type: "refreshed",
+        reloadSession: false
+      };
     } catch (error) {
       if (shouldInvalidateRefreshSession(error)) {
-        await this.invalidateSession(request, reply);
+        await request.session.reload();
+        if (didAnotherRequestRefreshSession(request, refreshToken)) {
+          return {
+            type: "refreshed",
+            reloadSession: false
+          };
+        }
+
+        return { type: "invalid-session", error };
       }
-      throw error;
+
+      request.log.warn({ err: error }, "OIDC refresh failed; continuing with the existing session.");
+      return { type: "transient-failure" };
     }
   }
 
@@ -362,6 +425,17 @@ function normalizeDate(value: unknown) {
 function shouldInvalidateRefreshSession(error: unknown) {
   const oauthError = findOauthErrorCode(error);
   return oauthError === "invalid_grant" || oauthError === "invalid_token";
+}
+
+function didAnotherRequestRefreshSession(request: FastifyRequest, attemptedRefreshToken: string) {
+  if (!request.session.userId) {
+    return false;
+  }
+
+  return (
+    (typeof request.session.refreshToken === "string" && request.session.refreshToken !== attemptedRefreshToken) ||
+    !shouldRefreshAccessToken(request.session.accessTokenExpiresAt)
+  );
 }
 
 function findOauthErrorCode(error: unknown): string | null {

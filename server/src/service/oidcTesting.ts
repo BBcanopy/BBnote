@@ -62,6 +62,13 @@ export function createMutableMockOidcProvider(
   let currentIncludeRefreshToken = options.includeRefreshToken ?? true;
   let currentRefreshTokenExpiresInSeconds = options.refreshTokenExpiresInSeconds;
   let currentRefreshError: Error | null = null;
+  let currentRefreshGate: Promise<void> | null = null;
+  let releaseCurrentRefreshGate: (() => void) | null = null;
+  let refreshAttemptCount = 0;
+  const refreshAttemptWaiters: Array<{
+    target: number;
+    resolve: () => void;
+  }> = [];
   let refreshCallCount = 0;
   let tokenVersion = 0;
 
@@ -150,6 +157,11 @@ export function createMutableMockOidcProvider(
       if (!currentIncludeRefreshToken) {
         throw new Error("Unexpected refresh token request.");
       }
+      refreshAttemptCount += 1;
+      flushRefreshAttemptWaiters();
+      if (currentRefreshGate) {
+        await currentRefreshGate;
+      }
       if (currentRefreshError) {
         throw currentRefreshError;
       }
@@ -220,7 +232,27 @@ export function createMutableMockOidcProvider(
       currentIncludeRefreshToken = options.includeRefreshToken ?? true;
       currentRefreshTokenExpiresInSeconds = options.refreshTokenExpiresInSeconds;
       refreshCallCount = 0;
+      refreshAttemptCount = 0;
+      currentRefreshGate = null;
+      releaseCurrentRefreshGate = null;
+      refreshAttemptWaiters.splice(0, refreshAttemptWaiters.length);
       tokenVersion = 0;
+    },
+    pauseRefresh() {
+      if (currentRefreshGate) {
+        return;
+      }
+
+      currentRefreshGate = new Promise<void>((resolve) => {
+        releaseCurrentRefreshGate = () => {
+          currentRefreshGate = null;
+          releaseCurrentRefreshGate = null;
+          resolve();
+        };
+      });
+    },
+    releaseRefresh() {
+      releaseCurrentRefreshGate?.();
     },
     setAccessTokenExpiresInSeconds(value: number) {
       currentAccessTokenExpiresInSeconds = value;
@@ -242,8 +274,29 @@ export function createMutableMockOidcProvider(
     },
     getRefreshCallCount() {
       return refreshCallCount;
+    },
+    waitForRefreshAttemptCount(target: number) {
+      if (refreshAttemptCount >= target) {
+        return Promise.resolve();
+      }
+
+      return new Promise<void>((resolve) => {
+        refreshAttemptWaiters.push({
+          target,
+          resolve
+        });
+      });
     }
   };
+
+  function flushRefreshAttemptWaiters() {
+    for (let index = refreshAttemptWaiters.length - 1; index >= 0; index -= 1) {
+      if (refreshAttemptCount >= refreshAttemptWaiters[index]!.target) {
+        refreshAttemptWaiters[index]!.resolve();
+        refreshAttemptWaiters.splice(index, 1);
+      }
+    }
+  }
 }
 
 export function createEnvTestAuth(config: AppConfig) {

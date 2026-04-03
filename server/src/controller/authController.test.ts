@@ -246,7 +246,7 @@ describe("authController integration", () => {
     }
   });
 
-  it("preserves the session across transient refresh failures so a later retry can recover", async () => {
+  it("continues serving requests across transient refresh failures so a later retry can recover", async () => {
     const refreshConfig = createTestConfig(tempRoot, {
       appBaseUrl: baseUrl
     });
@@ -279,7 +279,8 @@ describe("authController integration", () => {
         }
       });
 
-      expect(failedResponse.statusCode).toBe(401);
+      expect(failedResponse.statusCode).toBe(200);
+      expect(failedResponse.json()).toEqual([]);
       expect(failedResponse.cookies.find((cookie) => cookie.name === SESSION_COOKIE_NAME)).toBeUndefined();
 
       refreshingOidc.setRefreshError(null);
@@ -296,6 +297,62 @@ describe("authController integration", () => {
       expect(recoveredResponse.json()).toEqual([]);
       expect(refreshingOidc.getRefreshCallCount()).toBe(1);
     } finally {
+      await refreshApp.close();
+    }
+  });
+
+  it("serializes concurrent refreshes so token rotation does not invalidate the session", async () => {
+    const refreshConfig = createTestConfig(tempRoot, {
+      appBaseUrl: baseUrl
+    });
+    const refreshingOidc = createTestAuthProvider(
+      refreshConfig,
+      {
+        email: "parallel@example.com",
+        name: "Parallel User",
+        subject: "parallel-user"
+      },
+      {
+        accessTokenExpiresInSeconds: 0,
+        refreshTokenExpiresInSeconds: 7200
+      }
+    );
+    const refreshApp = await buildApp({
+      authTesting: refreshingOidc.authTesting,
+      config: refreshConfig
+    });
+
+    try {
+      const { sessionCookie } = await loginWithOidc(refreshApp);
+      refreshingOidc.pauseRefresh();
+
+      const firstResponsePromise = refreshApp.inject({
+        method: "GET",
+        url: "/api/v1/folders",
+        cookies: {
+          [SESSION_COOKIE_NAME]: sessionCookie
+        }
+      });
+      await refreshingOidc.waitForRefreshAttemptCount(1);
+
+      const secondResponsePromise = refreshApp.inject({
+        method: "GET",
+        url: "/api/v1/folders",
+        cookies: {
+          [SESSION_COOKIE_NAME]: sessionCookie
+        }
+      });
+
+      refreshingOidc.releaseRefresh();
+
+      const [firstResponse, secondResponse] = await Promise.all([firstResponsePromise, secondResponsePromise]);
+      expect(firstResponse.statusCode).toBe(200);
+      expect(firstResponse.json()).toEqual([]);
+      expect(secondResponse.statusCode).toBe(200);
+      expect(secondResponse.json()).toEqual([]);
+      expect(refreshingOidc.getRefreshCallCount()).toBe(1);
+    } finally {
+      refreshingOidc.releaseRefresh();
       await refreshApp.close();
     }
   });
