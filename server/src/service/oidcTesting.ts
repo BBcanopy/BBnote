@@ -43,7 +43,9 @@ const TEST_VERIFIER = "test-code-verifier";
 
 export interface MockOidcOptions {
   accessTokenExpiresInSeconds?: number;
+  accessTokenExpiresAt?: Date | string | number;
   includeRefreshToken?: boolean;
+  refreshTokenExpiresAt?: Date | string | number;
   refreshTokenExpiresInSeconds?: number;
 }
 
@@ -68,9 +70,14 @@ export function createMutableMockOidcProvider(
 
   function buildTokenSet(version = tokenVersion): OidcToken {
     const token: OidcToken = {
-      access_token: version === 0 ? TEST_ACCESS_TOKEN : `${TEST_ACCESS_TOKEN}-${version}`,
-      expires_in: currentAccessTokenExpiresInSeconds
+      access_token: version === 0 ? TEST_ACCESS_TOKEN : `${TEST_ACCESS_TOKEN}-${version}`
     };
+
+    if (options.accessTokenExpiresAt !== undefined) {
+      token.expires_at = options.accessTokenExpiresAt;
+    } else {
+      token.expires_in = currentAccessTokenExpiresInSeconds;
+    }
 
     if (!shouldOmitIdToken) {
       token.id_token = version === 0 ? TEST_ID_TOKEN : `${TEST_ID_TOKEN}-${version}`;
@@ -78,7 +85,9 @@ export function createMutableMockOidcProvider(
 
     if (currentIncludeRefreshToken) {
       token.refresh_token = version === 0 ? TEST_REFRESH_TOKEN : `${TEST_REFRESH_TOKEN}-${version}`;
-      if (typeof currentRefreshTokenExpiresInSeconds === "number") {
+      if (options.refreshTokenExpiresAt !== undefined) {
+        token.refresh_expires_at = options.refreshTokenExpiresAt;
+      } else if (typeof currentRefreshTokenExpiresInSeconds === "number") {
         token.refresh_expires_in = currentRefreshTokenExpiresInSeconds;
       }
     }

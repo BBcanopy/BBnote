@@ -178,6 +178,40 @@ describe("authController integration", () => {
     }
   });
 
+  it("treats numeric oidc refresh expiry timestamps as epoch seconds", async () => {
+    const refreshConfig = createTestConfig(tempRoot, {
+      appBaseUrl: baseUrl
+    });
+    const refreshExpirySeconds = Math.floor(Date.now() / 1000) + 7200;
+    const refreshingOidc = createTestAuthProvider(
+      refreshConfig,
+      {
+        email: "epoch@example.com",
+        name: "Epoch User",
+        subject: "epoch-user"
+      },
+      {
+        accessTokenExpiresInSeconds: 0,
+        refreshTokenExpiresAt: refreshExpirySeconds
+      }
+    );
+    const refreshApp = await buildApp({
+      authTesting: refreshingOidc.authTesting,
+      config: refreshConfig
+    });
+
+    try {
+      const { callbackResponse } = await loginWithOidc(refreshApp);
+      const sessionCookie = callbackResponse.cookies.find((cookie) => cookie.name === SESSION_COOKIE_NAME);
+      const expiresAt = sessionCookie?.expires ? new Date(sessionCookie.expires) : null;
+
+      expect(expiresAt).not.toBeNull();
+      expect(expiresAt!.valueOf()).toBeGreaterThan(Date.now() + 60 * 60 * 1000);
+    } finally {
+      await refreshApp.close();
+    }
+  });
+
   it("writes a secure session cookie when https is forwarded by a trusted proxy", async () => {
     const secureConfig = createTestConfig(tempRoot, {
       appBaseUrl: "https://note.example.test"

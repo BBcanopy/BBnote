@@ -26,7 +26,7 @@ export class AuthService {
 
     await this.refreshSessionIfNeeded(request, reply);
 
-    const ownerId = request.session.get("userId");
+    const ownerId = request.session.userId;
     if (!ownerId) {
       await this.invalidateSession(request, reply);
       throw new Error("Missing session.");
@@ -170,12 +170,9 @@ export class AuthService {
     const maxAge = sessionLifetimeMs(token);
 
     request.session.options({ maxAge });
-    request.session.set("userId", ownerId);
-    request.session.set(
-      "refreshToken",
-      typeof token.refresh_token === "string" && token.refresh_token ? token.refresh_token : undefined
-    );
-    request.session.set("accessTokenExpiresAt", accessTokenExpiresAt(token).toISOString());
+    request.session.userId = ownerId;
+    request.session.refreshToken = typeof token.refresh_token === "string" && token.refresh_token ? token.refresh_token : undefined;
+    request.session.accessTokenExpiresAt = accessTokenExpiresAt(token).toISOString();
 
     await request.session.regenerate(["userId", "refreshToken", "accessTokenExpiresAt"]);
     request.session.cookie.maxAge = maxAge;
@@ -183,12 +180,12 @@ export class AuthService {
   }
 
   private async refreshSessionIfNeeded(request: FastifyRequest, reply?: FastifyReply) {
-    const refreshToken = request.session.get("refreshToken");
+    const refreshToken = request.session.refreshToken;
     if (!refreshToken) {
       return;
     }
 
-    const accessTokenExpiresAtIso = request.session.get("accessTokenExpiresAt");
+    const accessTokenExpiresAtIso = request.session.accessTokenExpiresAt;
     if (!shouldRefreshAccessToken(accessTokenExpiresAtIso)) {
       return;
     }
@@ -200,8 +197,8 @@ export class AuthService {
           ? refreshed.token.refresh_token
           : refreshToken;
 
-      request.session.set("refreshToken", nextRefreshToken);
-      request.session.set("accessTokenExpiresAt", accessTokenExpiresAt(refreshed.token).toISOString());
+      request.session.refreshToken = nextRefreshToken;
+      request.session.accessTokenExpiresAt = accessTokenExpiresAt(refreshed.token).toISOString();
       request.session.cookie.maxAge = sessionLifetimeMs({
         ...refreshed.token,
         refresh_token: nextRefreshToken
@@ -347,7 +344,7 @@ function normalizeDate(value: unknown) {
   }
 
   if (typeof value === "string" || typeof value === "number") {
-    const parsed = new Date(value);
+    const parsed = new Date(typeof value === "number" && value < 10_000_000_000 ? value * 1000 : value);
     if (!Number.isNaN(parsed.valueOf())) {
       return parsed;
     }
