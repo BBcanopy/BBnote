@@ -175,7 +175,6 @@ export class AuthService {
     request.session.accessTokenExpiresAt = accessTokenExpiresAt(token).toISOString();
 
     await request.session.regenerate(["userId", "refreshToken", "accessTokenExpiresAt"]);
-    request.session.cookie.maxAge = maxAge;
     await request.session.save();
   }
 
@@ -197,15 +196,18 @@ export class AuthService {
           ? refreshed.token.refresh_token
           : refreshToken;
 
-      request.session.refreshToken = nextRefreshToken;
-      request.session.accessTokenExpiresAt = accessTokenExpiresAt(refreshed.token).toISOString();
-      request.session.cookie.maxAge = sessionLifetimeMs({
+      const maxAge = sessionLifetimeMs({
         ...refreshed.token,
         refresh_token: nextRefreshToken
       });
+      request.session.refreshToken = nextRefreshToken;
+      request.session.accessTokenExpiresAt = accessTokenExpiresAt(refreshed.token).toISOString();
+      request.session.options({ maxAge });
       await request.session.save();
     } catch (error) {
-      await this.invalidateSession(request, reply);
+      if (shouldInvalidateRefreshSession(error)) {
+        await this.invalidateSession(request, reply);
+      }
       throw error;
     }
   }
@@ -344,9 +346,48 @@ function normalizeDate(value: unknown) {
   }
 
   if (typeof value === "string" || typeof value === "number") {
-    const parsed = new Date(typeof value === "number" && value < 10_000_000_000 ? value * 1000 : value);
+    const numericValue = typeof value === "string" && value.trim() ? Number(value) : value;
+    const timestamp = typeof numericValue === "number" && Number.isFinite(numericValue) && numericValue < 10_000_000_000
+      ? numericValue * 1000
+      : value;
+    const parsed = new Date(timestamp);
     if (!Number.isNaN(parsed.valueOf())) {
       return parsed;
+    }
+  }
+
+  return null;
+}
+
+function shouldInvalidateRefreshSession(error: unknown) {
+  const oauthError = findOauthErrorCode(error);
+  return oauthError === "invalid_grant" || oauthError === "invalid_token";
+}
+
+function findOauthErrorCode(error: unknown): string | null {
+  if (!error || typeof error !== "object") {
+    return null;
+  }
+
+  const queue: unknown[] = [error];
+  const visited = new Set<unknown>();
+
+  while (queue.length > 0) {
+    const current = queue.shift();
+    if (!current || typeof current !== "object" || visited.has(current)) {
+      continue;
+    }
+
+    visited.add(current);
+    const record = current as Record<string, unknown>;
+    if (typeof record.error === "string" && record.error) {
+      return record.error;
+    }
+
+    for (const value of Object.values(record)) {
+      if (value && typeof value === "object") {
+        queue.push(value);
+      }
     }
   }
 
