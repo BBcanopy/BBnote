@@ -88,6 +88,9 @@ const MIN_NOTE_PANE_WIDTH = 280;
 const MAX_NOTE_PANE_WIDTH = 480;
 const KEYBOARD_RESIZE_STEP = 24;
 const MEDIA_PLACEHOLDER_TITLE = "Untitled note";
+const SKETCH_BACKGROUND_COLOR = "#ffffff";
+const SKETCH_STROKE_COLOR = "#16393d";
+const SKETCH_STROKE_WIDTH = 3;
 
 type MediaInsertBehavior = "image" | "link" | "none";
 type RecorderPhase = "closed" | "starting" | "recording" | "paused" | "processing" | "saving" | "recorded" | "error";
@@ -109,6 +112,11 @@ interface PendingNoteDelete {
 interface TextSelectionRange {
   start: number;
   end: number;
+}
+
+interface CanvasPoint {
+  x: number;
+  y: number;
 }
 
 interface NotesQueryContext {
@@ -1515,6 +1523,9 @@ function EditorPanel(props: {
   const audioInputRef = useRef<HTMLInputElement | null>(null);
   const videoInputRef = useRef<HTMLInputElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const sketchCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const sketchPointerIdRef = useRef<number | null>(null);
+  const sketchLastPointRef = useRef<CanvasPoint | null>(null);
   const bodyTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const formatSelectionFrameRef = useRef<number | null>(null);
   const tablePickerId = useId();
@@ -1540,6 +1551,10 @@ function EditorPanel(props: {
   });
   const [recordingElapsedMs, setRecordingElapsedMs] = useState(0);
   const [savingRecording, setSavingRecording] = useState(false);
+  const [sketchOpen, setSketchOpen] = useState(false);
+  const [sketchHasInk, setSketchHasInk] = useState(false);
+  const [sketchSaving, setSketchSaving] = useState(false);
+  const [sketchError, setSketchError] = useState<string | null>(null);
   const [tablePickerOpen, setTablePickerOpen] = useState(false);
   const [tableDimensions, setTableDimensions] = useState<MarkdownTableDimensions>({
     columns: DEFAULT_MARKDOWN_TABLE_COLUMNS,
@@ -1547,7 +1562,7 @@ function EditorPanel(props: {
   });
   const [tableHoverDimensions, setTableHoverDimensions] = useState<MarkdownTableDimensions | null>(null);
   const editorActionsDisabled = props.loading || props.refreshing;
-  const mediaActionsDisabled = editorActionsDisabled || props.uploadingAttachment || savingRecording || !props.canUseMediaActions;
+  const mediaActionsDisabled = editorActionsDisabled || props.uploadingAttachment || savingRecording || sketchSaving || !props.canUseMediaActions;
   const formatActionsDisabled = editorActionsDisabled || !props.editorNote || props.editorPane !== "markdown";
   const hasAttachments = (props.editorNote?.attachments.length ?? 0) > 0;
   const headerStatusText = props.suppressHeaderStatus ? null : props.statusText.startsWith("Updated at ") ? props.statusText : null;
@@ -1559,11 +1574,32 @@ function EditorPanel(props: {
       if (formatSelectionFrameRef.current !== null) {
         window.cancelAnimationFrame(formatSelectionFrameRef.current);
       }
+      sketchPointerIdRef.current = null;
+      sketchLastPointRef.current = null;
       discardRecordingRef.current = true;
       stopRecorder();
       clearRecorderClip();
     };
   }, []);
+
+  useEffect(() => {
+    if (!sketchOpen) {
+      return;
+    }
+
+    const frameId = window.requestAnimationFrame(() => {
+      const prepared = prepareSketchCanvas(sketchCanvasRef.current);
+      if (!prepared) {
+        setSketchError("Scratch canvas is not available in this browser.");
+        return;
+      }
+
+      setSketchHasInk(false);
+      setSketchError(null);
+    });
+
+    return () => window.cancelAnimationFrame(frameId);
+  }, [sketchOpen]);
 
   useEffect(() => {
     if (recorderState.phase !== "recording") {
@@ -1674,6 +1710,136 @@ function EditorPanel(props: {
     }
 
     await props.onUploadSelectedFile(file, insertBehavior);
+  }
+
+  function closeSketchPanel() {
+    sketchPointerIdRef.current = null;
+    sketchLastPointRef.current = null;
+    setSketchOpen(false);
+    setSketchHasInk(false);
+    setSketchError(null);
+  }
+
+  function handleSketchToggle() {
+    if (mediaActionsDisabled) {
+      return;
+    }
+
+    if (sketchOpen) {
+      closeSketchPanel();
+      return;
+    }
+
+    setSketchError(null);
+    setSketchOpen(true);
+  }
+
+  function handleSketchPointerDown(event: ReactPointerEvent<HTMLCanvasElement>) {
+    if (sketchSaving) {
+      return;
+    }
+
+    const canvas = sketchCanvasRef.current;
+    if (!canvas) {
+      return;
+    }
+
+    const context = canvas.getContext("2d");
+    if (!context) {
+      setSketchError("Scratch canvas is not available in this browser.");
+      return;
+    }
+
+    event.preventDefault();
+    const point = resolveCanvasPoint(canvas, event.clientX, event.clientY);
+    sketchPointerIdRef.current = event.pointerId;
+    sketchLastPointRef.current = point;
+    canvas.setPointerCapture(event.pointerId);
+    drawSketchDot(context, point);
+    setSketchHasInk(true);
+    setSketchError(null);
+  }
+
+  function handleSketchPointerMove(event: ReactPointerEvent<HTMLCanvasElement>) {
+    if (sketchSaving || sketchPointerIdRef.current !== event.pointerId) {
+      return;
+    }
+
+    const canvas = sketchCanvasRef.current;
+    const lastPoint = sketchLastPointRef.current;
+    if (!canvas || !lastPoint) {
+      return;
+    }
+
+    const context = canvas.getContext("2d");
+    if (!context) {
+      setSketchError("Scratch canvas is not available in this browser.");
+      return;
+    }
+
+    event.preventDefault();
+    const nextPoint = resolveCanvasPoint(canvas, event.clientX, event.clientY);
+    drawSketchStroke(context, lastPoint, nextPoint);
+    sketchLastPointRef.current = nextPoint;
+    setSketchHasInk(true);
+  }
+
+  function handleSketchPointerEnd(event: ReactPointerEvent<HTMLCanvasElement>) {
+    if (sketchPointerIdRef.current !== event.pointerId) {
+      return;
+    }
+
+    event.preventDefault();
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    sketchPointerIdRef.current = null;
+    sketchLastPointRef.current = null;
+  }
+
+  function handleClearSketch() {
+    const prepared = prepareSketchCanvas(sketchCanvasRef.current);
+    if (!prepared) {
+      setSketchError("Scratch canvas could not be reset.");
+      return;
+    }
+
+    setSketchHasInk(false);
+    setSketchError(null);
+  }
+
+  async function handleSaveSketch() {
+    if (!sketchHasInk || !sketchCanvasRef.current) {
+      return;
+    }
+
+    setSketchSaving(true);
+    setSketchError(null);
+
+    try {
+      const blob = await exportCanvasPng(sketchCanvasRef.current);
+      if (!blob) {
+        setSketchError("Scratch sketch could not be saved.");
+        return;
+      }
+
+      const fileName = `scratch-${new Date().toISOString().replace(/[^\d]/g, "").slice(0, 14)}.png`;
+      const uploaded = await props.onUploadSelectedFile(
+        new File([blob], fileName, {
+          type: "image/png"
+        }),
+        "image"
+      );
+
+      if (uploaded) {
+        closeSketchPanel();
+        return;
+      }
+
+      setSketchError("Scratch sketch could not be attached. Try again.");
+    } finally {
+      setSketchSaving(false);
+    }
   }
 
   async function handleStartRecording() {
@@ -2016,6 +2182,14 @@ function EditorPanel(props: {
         onClick={() => openFilePicker(imageInputRef)}
       />
       <MediaToolbarButton
+        label="Scratch"
+        icon={<PencilSimple size={17} />}
+        disabled={mediaActionsDisabled}
+        disabledTitle={props.mediaActionDisabledReason}
+        active={sketchOpen}
+        onClick={handleSketchToggle}
+      />
+      <MediaToolbarButton
         label="Add audio"
         icon={<MusicNotesSimple size={17} />}
         disabled={mediaActionsDisabled}
@@ -2108,14 +2282,6 @@ function EditorPanel(props: {
         disabledTitle={formatToolbarDisabledTitle}
         preserveFocus
         onClick={() => handleApplyMarkdownFormat("bulleted-list")}
-      />
-      <MediaToolbarButton
-        label="Scratch"
-        icon={<PencilSimple size={17} />}
-        disabled={formatActionsDisabled}
-        disabledTitle={formatToolbarDisabledTitle}
-        preserveFocus
-        onClick={() => handleApplyMarkdownFormat("scratch")}
       />
       <div className="bb-toolbar-popover-shell" ref={tablePickerRef}>
         <button
@@ -2223,6 +2389,50 @@ function EditorPanel(props: {
             </div>
           </div>
         ) : null}
+      </div>
+    </div>
+  ) : null;
+  const sketchPanel = sketchOpen ? (
+    <div className="bb-panel-note">
+      <div className="bb-sketch-panel" data-testid="scratch-panel">
+        <div className="bb-sketch-panel__copy">
+          <p className="text-sm font-medium tracking-tight text-[color:var(--ink)]">Scratch sketch</p>
+          <p className="text-sm text-[color:var(--ink-soft)]">Draw with mouse, pen, or touch, then save it into the note as an inline image.</p>
+        </div>
+        {sketchError ? <p className="bb-error-banner text-sm">{sketchError}</p> : null}
+        <div className="bb-sketch-panel__surface">
+          <canvas
+            ref={sketchCanvasRef}
+            data-testid="scratch-canvas"
+            aria-label="Scratch canvas"
+            className="bb-sketch-panel__canvas"
+            onPointerDown={handleSketchPointerDown}
+            onPointerMove={handleSketchPointerMove}
+            onPointerUp={handleSketchPointerEnd}
+            onPointerCancel={handleSketchPointerEnd}
+          />
+        </div>
+        <div className="bb-sketch-panel__actions">
+          <button
+            type="button"
+            onClick={handleClearSketch}
+            disabled={!sketchHasInk || props.refreshing || sketchSaving}
+            className={buttonSecondary}
+          >
+            Clear
+          </button>
+          <button type="button" onClick={closeSketchPanel} disabled={sketchSaving} className={buttonSecondary}>
+            Close
+          </button>
+          <button
+            type="button"
+            onClick={() => void handleSaveSketch()}
+            disabled={!sketchHasInk || props.refreshing || sketchSaving || props.uploadingAttachment}
+            className={buttonPrimary}
+          >
+            {sketchSaving ? "Saving sketch" : "Save sketch"}
+          </button>
+        </div>
       </div>
     </div>
   ) : null;
@@ -2410,6 +2620,8 @@ function EditorPanel(props: {
         <div className="bb-editor-panel__content bb-editor-panel__content--empty">
           <div className="bb-editor-toolbar-row">{mediaToolbar}</div>
 
+          {sketchPanel}
+
           {recorderPanel}
 
           <div className="bb-empty-state bb-empty-state--center px-6 py-8">
@@ -2438,6 +2650,8 @@ function EditorPanel(props: {
               {formattingToolbar ? <span className="bb-editor-toolbar-divider" aria-hidden="true" /> : null}
               {formattingToolbar}
             </div>
+
+            {sketchPanel}
 
             {recorderPanel}
 
@@ -2696,6 +2910,63 @@ function extensionForMimeType(mimeType: string) {
   }
 
   return ".webm";
+}
+
+function prepareSketchCanvas(canvas: HTMLCanvasElement | null) {
+  if (!canvas) {
+    return false;
+  }
+
+  const rect = canvas.getBoundingClientRect();
+  if (rect.width <= 0 || rect.height <= 0) {
+    return false;
+  }
+
+  const scale = Math.max(1, window.devicePixelRatio || 1);
+  canvas.width = Math.max(1, Math.round(rect.width * scale));
+  canvas.height = Math.max(1, Math.round(rect.height * scale));
+
+  const context = canvas.getContext("2d");
+  if (!context) {
+    return false;
+  }
+
+  context.scale(scale, scale);
+  context.fillStyle = SKETCH_BACKGROUND_COLOR;
+  context.fillRect(0, 0, rect.width, rect.height);
+  context.strokeStyle = SKETCH_STROKE_COLOR;
+  context.fillStyle = SKETCH_STROKE_COLOR;
+  context.lineWidth = SKETCH_STROKE_WIDTH;
+  context.lineCap = "round";
+  context.lineJoin = "round";
+  return true;
+}
+
+function resolveCanvasPoint(canvas: HTMLCanvasElement, clientX: number, clientY: number): CanvasPoint {
+  const rect = canvas.getBoundingClientRect();
+  return {
+    x: clientX - rect.left,
+    y: clientY - rect.top
+  };
+}
+
+function drawSketchDot(context: CanvasRenderingContext2D, point: CanvasPoint) {
+  context.beginPath();
+  context.arc(point.x, point.y, SKETCH_STROKE_WIDTH / 2, 0, Math.PI * 2);
+  context.fill();
+}
+
+function drawSketchStroke(context: CanvasRenderingContext2D, from: CanvasPoint, to: CanvasPoint) {
+  context.beginPath();
+  context.moveTo(from.x, from.y);
+  context.lineTo(to.x, to.y);
+  context.stroke();
+}
+
+function exportCanvasPng(canvas: HTMLCanvasElement) {
+  return new Promise<Blob | null>((resolve) => {
+    canvas.toBlob((blob) => resolve(blob), "image/png");
+  });
 }
 
 function getRecorderTitle(phase: RecorderPhase) {

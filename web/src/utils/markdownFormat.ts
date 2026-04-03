@@ -6,14 +6,12 @@ export type MarkdownFormatKind =
   | "code"
   | "quote"
   | "bulleted-list"
-  | "scratch"
   | "table";
 
 export const DEFAULT_MARKDOWN_TABLE_COLUMNS = 2;
 export const DEFAULT_MARKDOWN_TABLE_ROWS = 1;
 export const MIN_MARKDOWN_TABLE_DIMENSION = 1;
 export const MAX_MARKDOWN_TABLE_DIMENSION = 8;
-export const DEFAULT_MARKDOWN_SCRATCH_PLACEHOLDER = "Scratch notes";
 
 export interface MarkdownTableDimensions {
   columns: number;
@@ -52,17 +50,13 @@ export function formatMarkdownSelection(
     return applyTableFormat(value, safeStart, safeEnd, options?.table);
   }
 
-  if (kind === "scratch") {
-    return applyScratchFormat(value, safeStart, safeEnd);
-  }
-
   const wrappers = {
     bold: { prefix: "**", suffix: "**", placeholder: "bold text" },
     italic: { prefix: "*", suffix: "*", placeholder: "italic text" },
     underline: { prefix: "<u>", suffix: "</u>", placeholder: "underlined text" },
     strikethrough: { prefix: "~~", suffix: "~~", placeholder: "crossed text" },
     code: { prefix: "`", suffix: "`", placeholder: "inline code" }
-  } satisfies Record<Exclude<MarkdownFormatKind, "quote" | "bulleted-list" | "scratch" | "table">, { prefix: string; suffix: string; placeholder: string }>;
+  } satisfies Record<Exclude<MarkdownFormatKind, "quote" | "bulleted-list" | "table">, { prefix: string; suffix: string; placeholder: string }>;
 
   return applyWrapFormat(value, safeStart, safeEnd, wrappers[kind]);
 }
@@ -146,25 +140,6 @@ function applyTableFormat(
     nextValue: `${value.slice(0, selectionStart)}${prefix}${tableMarkdown}${suffix}${value.slice(selectionEnd)}`,
     nextSelectionStart: selectionStart + prefix.length + 2,
     nextSelectionEnd: selectionStart + prefix.length + 2 + firstHeaderCell.length
-  };
-}
-
-function applyScratchFormat(
-  value: string,
-  selectionStart: number,
-  selectionEnd: number
-): MarkdownSelectionResult {
-  const selectedText = value.slice(selectionStart, selectionEnd);
-  const content = selectedText || DEFAULT_MARKDOWN_SCRATCH_PLACEHOLDER;
-  const scratchMarkdown = `\`\`\`scratch\n${content}\n\`\`\``;
-  const prefix = getBlockBoundaryPrefix(value.slice(0, selectionStart));
-  const suffix = getBlockBoundarySuffix(value.slice(selectionEnd));
-  const contentStart = selectionStart + prefix.length + "```scratch\n".length;
-
-  return {
-    nextValue: `${value.slice(0, selectionStart)}${prefix}${scratchMarkdown}${suffix}${value.slice(selectionEnd)}`,
-    nextSelectionStart: contentStart,
-    nextSelectionEnd: contentStart + content.length
   };
 }
 
