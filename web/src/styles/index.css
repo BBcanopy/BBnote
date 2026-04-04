@@ -2259,44 +2259,36 @@ button:disabled {
   max-width: 22rem;
 }
 
-.bb-sketch-panel {
-  display: grid;
-  gap: 0.85rem;
-}
-
-.bb-sketch-panel__copy {
-  display: grid;
-  gap: 0.2rem;
-}
-
-.bb-sketch-panel__copy p {
-  margin: 0;
-}
-
-.bb-sketch-panel__surface {
-  width: min(100%, 34rem);
-}
-
-.bb-sketch-panel__canvas {
-  width: 100%;
-  height: auto;
-  display: block;
-  aspect-ratio: 16 / 9;
-  border: 1px solid color-mix(in srgb, var(--line-strong) 72%, white);
+.bb-scratch-overlay__toolbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.8rem;
+  flex-wrap: wrap;
+  padding: 0.95rem 1rem 1rem;
+  border: 1px solid color-mix(in srgb, var(--line) 88%, transparent);
   border-radius: 1.35rem;
   background:
-    linear-gradient(180deg, color-mix(in srgb, var(--surface-highlight) 65%, white), var(--surface-input));
+    linear-gradient(180deg, color-mix(in srgb, var(--surface-strong) 96%, white), var(--surface-input));
   box-shadow:
     inset 0 1px 0 var(--surface-highlight-strong),
     0 18px 30px -28px rgba(18, 34, 36, 0.3);
-  cursor: crosshair;
-  touch-action: none;
 }
 
-.bb-sketch-panel__actions {
+.bb-scratch-overlay__copy {
+  display: grid;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.bb-scratch-overlay__copy p {
+  margin: 0;
+}
+
+.bb-scratch-overlay__actions {
   display: flex;
-  flex-wrap: wrap;
   gap: 0.65rem;
+  flex-wrap: wrap;
 }
 
 @keyframes bb-recorder-progress-sweep {
@@ -3164,59 +3156,38 @@ button:disabled {
   color: color-mix(in srgb, var(--ink-soft) 84%, transparent);
 }
 
-.bb-markdown__scratch-card {
-  display: grid;
-  gap: 0.85rem;
-  width: min(100%, 34rem);
-  padding: 0.95rem 1rem 1rem;
-  border: 1px solid color-mix(in srgb, var(--line) 88%, transparent);
-  border-radius: 1.35rem;
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--surface-strong) 96%, white), var(--surface-input));
-  box-shadow:
-    inset 0 1px 0 var(--surface-highlight-strong),
-    0 18px 30px -28px rgba(18, 34, 36, 0.3);
+.bb-editor-overlay-shell {
+  position: relative;
+  min-height: 0;
+  flex: 1 1 auto;
 }
 
-.bb-markdown__scratch-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  flex-wrap: wrap;
+.bb-scratch-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
 }
 
-.bb-markdown__scratch-copy {
-  display: grid;
-  gap: 0.12rem;
-  min-width: 0;
-}
-
-.bb-markdown__scratch-label {
-  color: var(--ink-soft);
-  font-size: 0.7rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.bb-markdown__scratch-meta {
-  color: var(--ink);
-  font-size: 0.96rem;
-  font-weight: 600;
-  letter-spacing: -0.02em;
-}
-
-.bb-markdown__scratch-svg {
+.bb-scratch-overlay.is-visible {
   display: block;
+}
+
+.bb-scratch-overlay.is-active {
+  pointer-events: auto;
+}
+
+.bb-scratch-overlay__canvas {
   width: 100%;
-  height: auto;
-  aspect-ratio: 16 / 9;
-  border: 1px solid color-mix(in srgb, var(--line-strong) 72%, white);
-  border-radius: 1.05rem;
-  background: #ffffff;
-  box-shadow: inset 0 1px 0 var(--surface-highlight-strong);
-  overflow: hidden;
+  height: 100%;
+  display: block;
+  pointer-events: none;
+  touch-action: none;
+}
+
+.bb-scratch-overlay.is-active .bb-scratch-overlay__canvas {
+  pointer-events: auto;
+  cursor: crosshair;
 }
 
 .bb-markdown__audio-card {

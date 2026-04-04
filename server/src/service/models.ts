@@ -42,6 +42,7 @@ export interface NoteRecord {
   folderId: string;
   title: string;
   filePath: string;
+  scratchpadJson: string | null;
   sortOrder: number;
   createdAt: string;
   updatedAt: string;
@@ -103,6 +104,25 @@ export interface AttachmentView {
   embedded: boolean;
 }
 
+export interface ScratchPoint {
+  x: number;
+  y: number;
+}
+
+export interface ScratchStroke {
+  color: string;
+  points: ScratchPoint[];
+  width: number;
+}
+
+export interface ScratchDocument {
+  height: number;
+  id: string;
+  strokes: ScratchStroke[];
+  version: 1;
+  width: number;
+}
+
 export interface NoteSummary {
   id: string;
   folderId: string;
@@ -118,6 +138,7 @@ export interface NoteDetail {
   folderId: string;
   title: string;
   bodyMarkdown: string;
+  scratchpad: ScratchDocument | null;
   sortOrder: number;
   createdAt: string;
   updatedAt: string;

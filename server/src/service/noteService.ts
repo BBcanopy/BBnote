@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { FolderDb } from "../db/folderDb.js";
 import type { NoteDb } from "../db/noteDb.js";
-import type { AttachmentRecord, NoteDetail, NoteSummary, PaginatedNotes } from "./models.js";
+import type { AttachmentRecord, NoteDetail, NoteSummary, PaginatedNotes, ScratchDocument, ScratchPoint, ScratchStroke } from "./models.js";
 import { decodeCursor, encodeCursor } from "./paginationService.js";
 import type { StorageService } from "./storageService.js";
 
@@ -76,6 +76,7 @@ export class NoteService {
       folderId: record.folderId,
       title: record.title,
       filePath: record.filePath,
+      scratchpadJson: record.scratchpadJson,
       sortOrder: null,
       updatedAt: record.updatedAt,
       lastOpenedAt: new Date().toISOString()
@@ -85,6 +86,7 @@ export class NoteService {
       folderId: record.folderId,
       title: record.title,
       bodyMarkdown,
+      scratchpad: parseScratchpadJson(record.scratchpadJson),
       sortOrder: record.sortOrder,
       createdAt: record.createdAt,
       updatedAt: record.updatedAt,
@@ -104,6 +106,7 @@ export class NoteService {
     folderId: string;
     title: string;
     bodyMarkdown: string;
+    scratchpad?: ScratchDocument | null;
     createdAt?: string;
     updatedAt?: string;
     sourceApp?: string | null;
@@ -134,6 +137,7 @@ export class NoteService {
         folderId: folder.id,
         title: trimmedTitle,
         filePath,
+        scratchpadJson: serializeScratchpad(input.scratchpad ?? null),
         sortOrder,
         createdAt,
         updatedAt,
@@ -162,6 +166,7 @@ export class NoteService {
     folderId: string;
     title: string;
     bodyMarkdown: string;
+    scratchpad?: ScratchDocument | null;
   }) {
     const record = this.noteDb.getById(input.ownerId, input.noteId);
     if (!record) {
@@ -196,6 +201,7 @@ export class NoteService {
         folderId: folder.id,
         title: trimmedTitle,
         filePath: nextFilePath,
+        scratchpadJson: serializeScratchpad(input.scratchpad ?? null),
         sortOrder,
         updatedAt,
         lastOpenedAt: new Date().toISOString()
@@ -233,7 +239,8 @@ export class NoteService {
       noteId: input.noteId,
       folderId: input.folderId,
       title: record.title,
-      bodyMarkdown
+      bodyMarkdown,
+      scratchpad: parseScratchpadJson(record.scratchpadJson)
     });
   }
 
@@ -293,4 +300,63 @@ function stripMarkdown(markdown: string) {
 
 function excerptFromMarkdown(markdown: string) {
   return stripMarkdown(markdown).slice(0, 180);
+}
+
+function serializeScratchpad(scratchpad: ScratchDocument | null) {
+  return scratchpad ? JSON.stringify(scratchpad) : null;
+}
+
+function parseScratchpadJson(value: string | null): ScratchDocument | null {
+  if (!value) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    return isScratchDocument(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function isScratchDocument(value: unknown): value is ScratchDocument {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const candidate = value as Partial<ScratchDocument>;
+  return (
+    candidate.version === 1 &&
+    typeof candidate.id === "string" &&
+    typeof candidate.width === "number" &&
+    candidate.width > 0 &&
+    typeof candidate.height === "number" &&
+    candidate.height > 0 &&
+    Array.isArray(candidate.strokes) &&
+    candidate.strokes.every((stroke) => isScratchStroke(stroke))
+  );
+}
+
+function isScratchStroke(value: unknown): value is ScratchStroke {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const candidate = value as Partial<ScratchStroke>;
+  return (
+    typeof candidate.color === "string" &&
+    typeof candidate.width === "number" &&
+    candidate.width > 0 &&
+    Array.isArray(candidate.points) &&
+    candidate.points.every((point) => isScratchPoint(point))
+  );
+}
+
+function isScratchPoint(value: unknown): value is ScratchPoint {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const candidate = value as Partial<ScratchPoint>;
+  return typeof candidate.x === "number" && typeof candidate.y === "number";
 }

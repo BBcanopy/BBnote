@@ -35,6 +35,7 @@ export function runMigrations(connection: Database.Database) {
       folder_id text not null,
       title text not null,
       file_path text not null,
+      scratchpad_json text,
       sort_order integer not null default 0,
       created_at text not null,
       updated_at text not null,
@@ -157,6 +158,10 @@ export function runMigrations(connection: Database.Database) {
     connection.exec("create index if not exists idx_notes_owner_folder_sort on notes(owner_id, folder_id, sort_order asc);");
   } else {
     connection.exec("create index if not exists idx_notes_owner_folder_sort on notes(owner_id, folder_id, sort_order asc);");
+  }
+
+  if (!noteColumns.includes("scratchpad_json")) {
+    connection.exec("alter table notes add column scratchpad_json text;");
   }
 }
 

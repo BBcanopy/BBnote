@@ -236,6 +236,89 @@ describe("noteController integration", () => {
     await expect(fs.readFile(updatedRow!.filePath, "utf8")).resolves.toContain("still blank title");
   });
 
+  it("stores scratchpad overlays separately from markdown body content", async () => {
+    const notebookResponse = await app.inject({
+      method: "POST",
+      url: "/api/v1/folders",
+      headers: authHeaders(token),
+      payload: {
+        name: "Sketchbook",
+        parentId: null
+      }
+    });
+    expect(notebookResponse.statusCode).toBe(201);
+    const notebook = notebookResponse.json();
+
+    const scratchpad = {
+      version: 1 as const,
+      id: "scratch-1",
+      width: 1000,
+      height: 1000,
+      strokes: [
+        {
+          color: "#16393d",
+          width: 5,
+          points: [
+            { x: 120, y: 240 },
+            { x: 180, y: 320 }
+          ]
+        }
+      ]
+    };
+
+    const createResponse = await app.inject({
+      method: "POST",
+      url: "/api/v1/notes",
+      headers: authHeaders(token),
+      payload: {
+        folderId: notebook.id,
+        title: "Overlay note",
+        bodyMarkdown: "Visible body only",
+        scratchpad
+      }
+    });
+    expect(createResponse.statusCode).toBe(201);
+    expect(createResponse.json()).toMatchObject({
+      bodyMarkdown: "Visible body only",
+      scratchpad
+    });
+
+    const created = createResponse.json();
+    const noteFilePath = app.bbnote.database.connection
+      .prepare<[string], { filePath: string }>("select file_path as filePath from notes where id = ?")
+      .get(created.id)?.filePath;
+    await expect(fs.readFile(noteFilePath!, "utf8")).resolves.toBe("Visible body only");
+
+    const getResponse = await app.inject({
+      method: "GET",
+      url: `/api/v1/notes/${created.id}`,
+      headers: authHeaders(token)
+    });
+    expect(getResponse.statusCode).toBe(200);
+    expect(getResponse.json()).toMatchObject({
+      id: created.id,
+      bodyMarkdown: "Visible body only",
+      scratchpad
+    });
+
+    const updateResponse = await app.inject({
+      method: "PUT",
+      url: `/api/v1/notes/${created.id}`,
+      headers: authHeaders(token),
+      payload: {
+        folderId: notebook.id,
+        title: "Overlay note",
+        bodyMarkdown: "Still plain markdown",
+        scratchpad: null
+      }
+    });
+    expect(updateResponse.statusCode).toBe(200);
+    expect(updateResponse.json()).toMatchObject({
+      bodyMarkdown: "Still plain markdown",
+      scratchpad: null
+    });
+  });
+
   it("reorders notes within a notebook and rejects incomplete reorder payloads", async () => {
     const notebookResponse = await app.inject({
       method: "POST",

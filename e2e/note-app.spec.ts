@@ -1616,7 +1616,7 @@ test("shows the note title in the topbar above the editor lane, keeps folder and
     .toBeLessThan(48);
 });
 
-test("opens an inline scratch canvas, keeps it editable after reload, and updates the same sketch", async ({ page }) => {
+test("draws scratch as an editor overlay without changing raw markdown and keeps it editable after reload", async ({ page }) => {
   await page.setViewportSize({ width: 1900, height: 1000 });
   const suffix = createTestSuffix();
   const notebookName = `Scratch ${suffix}`;
@@ -1629,17 +1629,16 @@ test("opens an inline scratch canvas, keeps it editable after reload, and update
 
   const editorPanel = page.getByTestId("editor-panel-desktop");
   const scratchButton = editorPanel.getByRole("button", { name: /^scratch$/i });
-  const scratchPanel = editorPanel.getByTestId("scratch-panel");
-  const scratchCanvas = scratchPanel.getByTestId("scratch-canvas");
   const textarea = editorPanel.getByPlaceholder("Write in Markdown");
   const previousStatus = await waitForUpdatedStatus(page);
   const previewToggle = page.getByRole("button", { name: /^preview$/i });
 
   async function drawStroke(startXRatio: number, startYRatio: number, offsets: Array<[number, number]>) {
+    const scratchCanvas = activeEditorPanel(page).getByTestId("scratch-canvas");
     const canvasBox = await scratchCanvas.boundingBox();
     expect(canvasBox).not.toBeNull();
     if (!canvasBox) {
-      throw new Error("Expected the scratch canvas to be visible.");
+      throw new Error("Expected the scratch overlay canvas to be visible.");
     }
 
     const startX = canvasBox.x + canvasBox.width * startXRatio;
@@ -1655,43 +1654,41 @@ test("opens an inline scratch canvas, keeps it editable after reload, and update
   }
 
   await scratchButton.click();
-  await expect(scratchPanel).toBeVisible();
+  await expect(editorPanel.getByTestId("scratch-overlay-toolbar")).toBeVisible();
   await expect(scratchButton).toHaveClass(/bb-icon-button--is-active/);
   await drawStroke(0.22, 0.35, [
     [120, 28],
     [40, 88],
     [150, 110]
   ]);
-
-  await scratchPanel.getByRole("button", { name: /^save sketch$/i }).click();
   await waitForUpdatedStatus(page, previousStatus);
-  await expect(scratchPanel).toHaveCount(0);
+  await expect(activeEditorPanel(page).getByTestId("scratch-overlay")).toHaveAttribute("data-scratch-strokes", "1");
+  await expect(textarea).toHaveValue("Sketch goes here.");
+  await editorPanel.getByRole("button", { name: /^done$/i }).click();
+  await expect(editorPanel.getByTestId("scratch-overlay-toolbar")).toHaveCount(0);
   await expect(scratchButton).not.toHaveClass(/bb-icon-button--is-active/);
   await expect(editorPanel.locator(".bb-attachment-card")).toHaveCount(0);
-  await expect(textarea).toHaveValue(/```scratch[\s\S]+"strokes":\[/i);
 
   await previewToggle.click();
-  await expect(activeEditorPanel(page).getByTestId("markdown-scratch")).toContainText("1 stroke");
-  await expect(activeEditorPanel(page).getByRole("button", { name: /^edit sketch$/i })).toBeVisible();
+  await expect(activeEditorPanel(page).getByTestId("scratch-overlay")).toHaveAttribute("data-scratch-strokes", "1");
 
   await page.reload();
   const reloadedEditorPanel = page.getByTestId("editor-panel-desktop");
   const reloadedPreviewToggle = page.getByRole("button", { name: /^preview$/i });
   const reloadedTextarea = reloadedEditorPanel.getByPlaceholder("Write in Markdown");
-  await expect(reloadedTextarea).toHaveValue(/```scratch[\s\S]+"strokes":\[/i);
+  await expect(reloadedTextarea).toHaveValue("Sketch goes here.");
   await reloadedPreviewToggle.click();
-  await expect(activeEditorPanel(page).getByTestId("markdown-scratch")).toContainText("1 stroke");
+  await expect(activeEditorPanel(page).getByTestId("scratch-overlay")).toHaveAttribute("data-scratch-strokes", "1");
 
   const reloadedStatus = await waitForUpdatedStatus(page);
-  await activeEditorPanel(page).getByRole("button", { name: /^edit sketch$/i }).click();
-  await expect(reloadedEditorPanel.getByTestId("scratch-panel")).toBeVisible();
+  await reloadedEditorPanel.getByRole("button", { name: /^scratch$/i }).click();
+  await expect(reloadedEditorPanel.getByTestId("scratch-overlay-toolbar")).toBeVisible();
   await drawStroke(0.58, 0.32, [
     [36, 84],
     [128, 126]
   ]);
-  await reloadedEditorPanel.getByRole("button", { name: /^update sketch$/i }).click();
   await waitForUpdatedStatus(page, reloadedStatus);
-  await expect(activeEditorPanel(page).getByTestId("markdown-scratch")).toContainText("2 strokes");
+  await expect(activeEditorPanel(page).getByTestId("scratch-overlay")).toHaveAttribute("data-scratch-strokes", "2");
 });
 
 test("auto-saves voice notes on stop, inserts them into the editor, keeps delete available, and shows live recorder progress", async ({

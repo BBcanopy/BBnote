@@ -1,57 +1,55 @@
 import { describe, expect, it } from "vitest";
 import {
-  buildScratchMarkdown,
+  cloneScratchDocument,
   createEmptyScratchDocument,
-  insertScratchMarkdown,
-  parseScratchDocument,
-  replaceScratchMarkdown
+  denormalizeScratchStrokeWidth,
+  hasScratchInk,
+  normalizeScratchStrokeWidth,
+  serializeScratchpad
 } from "./scratch";
 
 describe("scratch utils", () => {
-  it("parses a serialized scratch document", () => {
+  it("clones a scratch document without sharing nested arrays", () => {
     const scratch = createEmptyScratchDocument("scratch-1");
     scratch.strokes.push({
       color: "#16393d",
       points: [
-        { x: 1, y: 2 },
-        { x: 3, y: 4 }
+        { x: 100, y: 120 },
+        { x: 180, y: 220 }
       ],
-      width: 3
+      width: 8
     });
 
-    expect(parseScratchDocument(JSON.stringify(scratch))).toEqual(scratch);
+    const cloned = cloneScratchDocument(scratch);
+    expect(cloned).toEqual(scratch);
+
+    cloned!.strokes[0].points[0].x = 999;
+    expect(scratch.strokes[0].points[0].x).toBe(100);
   });
 
-  it("returns null for invalid scratch payloads", () => {
-    expect(parseScratchDocument("{\"version\":1}")).toBeNull();
-    expect(parseScratchDocument("not json")).toBeNull();
-  });
-
-  it("inserts a scratch block with block boundaries", () => {
-    const scratch = createEmptyScratchDocument("scratch-1");
-
-    expect(insertScratchMarkdown("alpha\nbeta", 6, 6, scratch)).toBe(
-      `alpha\n\n${buildScratchMarkdown(scratch)}\n\nbeta`
-    );
-  });
-
-  it("replaces an existing scratch block in place", () => {
-    const original = createEmptyScratchDocument("scratch-1");
-    const updated = createEmptyScratchDocument("scratch-1");
-    updated.strokes.push({
+  it("tracks whether a scratchpad has ink", () => {
+    const empty = createEmptyScratchDocument("scratch-1");
+    const inked = createEmptyScratchDocument("scratch-2");
+    inked.strokes.push({
       color: "#16393d",
-      points: [
-        { x: 10, y: 12 },
-        { x: 18, y: 22 }
-      ],
-      width: 3
+      points: [{ x: 10, y: 20 }],
+      width: 6
     });
 
-    const originalMarkdown = buildScratchMarkdown(original);
-    const value = `before\n\n${originalMarkdown}\n\nafter`;
-    const start = value.indexOf(originalMarkdown);
-    const end = start + originalMarkdown.length;
+    expect(hasScratchInk(null)).toBe(false);
+    expect(hasScratchInk(empty)).toBe(false);
+    expect(hasScratchInk(inked)).toBe(true);
+  });
 
-    expect(replaceScratchMarkdown(value, start, end, updated)).toBe(`before\n\n${buildScratchMarkdown(updated)}\n\nafter`);
+  it("serializes nullable scratchpad content for autosave keys", () => {
+    expect(serializeScratchpad(null)).toBe("null");
+    expect(serializeScratchpad(createEmptyScratchDocument("scratch-1"))).toContain("\"id\":\"scratch-1\"");
+  });
+
+  it("normalizes stroke width across different surface widths", () => {
+    const normalized = normalizeScratchStrokeWidth(3, 600, 1000);
+
+    expect(normalized).toBeCloseTo(5);
+    expect(denormalizeScratchStrokeWidth(normalized, 600, 1000)).toBeCloseTo(3);
   });
 });

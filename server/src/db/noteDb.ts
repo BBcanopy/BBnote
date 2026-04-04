@@ -25,11 +25,11 @@ export class NoteDb {
     this.connection
       .prepare(`
         insert into notes (
-          id, owner_id, folder_id, title, file_path, sort_order, created_at, updated_at,
+          id, owner_id, folder_id, title, file_path, scratchpad_json, sort_order, created_at, updated_at,
           last_opened_at, source_app, source_id, source_tags_json
         )
         values (
-          @id, @ownerId, @folderId, @title, @filePath, @sortOrder, @createdAt, @updatedAt,
+          @id, @ownerId, @folderId, @title, @filePath, @scratchpadJson, @sortOrder, @createdAt, @updatedAt,
           @lastOpenedAt, @sourceApp, @sourceId, @sourceTagsJson
         )
       `)
@@ -46,6 +46,7 @@ export class NoteDb {
             folder_id as folderId,
             title,
             file_path as filePath,
+            scratchpad_json as scratchpadJson,
             sort_order as sortOrder,
             created_at as createdAt,
             updated_at as updatedAt,
@@ -63,7 +64,15 @@ export class NoteDb {
   update(
     ownerId: string,
     id: string,
-    input: { folderId: string; title: string; filePath: string; sortOrder: number | null; updatedAt: string; lastOpenedAt: string | null }
+    input: {
+      folderId: string;
+      title: string;
+      filePath: string;
+      scratchpadJson: string | null;
+      sortOrder: number | null;
+      updatedAt: string;
+      lastOpenedAt: string | null;
+    }
   ) {
     this.connection
       .prepare(`
@@ -72,6 +81,7 @@ export class NoteDb {
           folder_id = @folderId,
           title = @title,
           file_path = @filePath,
+          scratchpad_json = @scratchpadJson,
           sort_order = coalesce(@sortOrder, sort_order),
           updated_at = @updatedAt,
           last_opened_at = @lastOpenedAt
@@ -94,6 +104,7 @@ export class NoteDb {
             folder_id as folderId,
             title,
             file_path as filePath,
+            scratchpad_json as scratchpadJson,
             sort_order as sortOrder,
             created_at as createdAt,
             updated_at as updatedAt,
@@ -119,6 +130,7 @@ export class NoteDb {
             folder_id as folderId,
             title,
             file_path as filePath,
+            scratchpad_json as scratchpadJson,
             sort_order as sortOrder,
             created_at as createdAt,
             updated_at as updatedAt,
@@ -152,6 +164,7 @@ export class NoteDb {
             folder_id as folderId,
             title,
             file_path as filePath,
+            scratchpad_json as scratchpadJson,
             sort_order as sortOrder,
             created_at as createdAt,
             updated_at as updatedAt,
@@ -183,6 +196,7 @@ export class NoteDb {
             notes.folder_id as folderId,
             notes.title,
             notes.file_path as filePath,
+            notes.scratchpad_json as scratchpadJson,
             notes.sort_order as sortOrder,
             notes.created_at as createdAt,
             notes.updated_at as updatedAt,
@@ -250,6 +264,7 @@ export class NoteDb {
             folder_id as folderId,
             title,
             file_path as filePath,
+            scratchpad_json as scratchpadJson,
             sort_order as sortOrder,
             created_at as createdAt,
             updated_at as updatedAt,

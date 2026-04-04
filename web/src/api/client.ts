@@ -9,6 +9,7 @@ import type {
   PaginatedNotes,
   UserTheme
 } from "./types";
+import type { ScratchDocument } from "../utils/scratch";
 
 interface RequestOptions {
   method?: string;
@@ -100,7 +101,7 @@ export function listNotes(params: {
   return request<PaginatedNotes>(`/api/v1/notes?${search.toString()}`);
 }
 
-export function createNote(payload: { folderId: string; title: string; bodyMarkdown: string }) {
+export function createNote(payload: { folderId: string; title: string; bodyMarkdown: string; scratchpad?: ScratchDocument | null }) {
   return request<NoteDetail>("/api/v1/notes", {
     method: "POST",
     body: JSON.stringify(payload)
@@ -111,7 +112,7 @@ export function getNote(noteId: string) {
   return request<NoteDetail>(`/api/v1/notes/${noteId}`);
 }
 
-export function updateNote(noteId: string, payload: { folderId: string; title: string; bodyMarkdown: string }) {
+export function updateNote(noteId: string, payload: { folderId: string; title: string; bodyMarkdown: string; scratchpad?: ScratchDocument | null }) {
   return request<NoteDetail>(`/api/v1/notes/${noteId}`, {
     method: "PUT",
     body: JSON.stringify(payload)

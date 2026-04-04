@@ -12,7 +12,28 @@ import type { AppServices } from "../service/serviceFactory.js";
 const noteBodySchema = z.object({
   folderId: z.string().uuid(),
   title: z.string().trim(),
-  bodyMarkdown: z.string()
+  bodyMarkdown: z.string(),
+  scratchpad: z
+    .object({
+      version: z.literal(1),
+      id: z.string().min(1),
+      width: z.number().positive(),
+      height: z.number().positive(),
+      strokes: z.array(
+        z.object({
+          color: z.string().min(1),
+          width: z.number().positive(),
+          points: z.array(
+            z.object({
+              x: z.number(),
+              y: z.number()
+            })
+          )
+        })
+      )
+    })
+    .nullable()
+    .optional()
 });
 
 const noteListQuerySchema = z.object({
@@ -121,7 +142,12 @@ export function registerNoteController(app: FastifyInstance, services: AppServic
         properties: {
           folderId: { type: "string", format: "uuid" },
           title: { type: "string" },
-          bodyMarkdown: { type: "string" }
+          bodyMarkdown: { type: "string" },
+          scratchpad: {
+            type: "object",
+            nullable: true,
+            additionalProperties: true
+          }
         }
       },
       response: {
@@ -139,7 +165,8 @@ export function registerNoteController(app: FastifyInstance, services: AppServic
       ownerId: request.auth!.ownerId,
       folderId: body.folderId,
       title: body.title,
-      bodyMarkdown: body.bodyMarkdown
+      bodyMarkdown: body.bodyMarkdown,
+      scratchpad: body.scratchpad ?? null
     });
     return reply.code(201).send(note);
   });
@@ -170,7 +197,12 @@ export function registerNoteController(app: FastifyInstance, services: AppServic
         properties: {
           folderId: { type: "string", format: "uuid" },
           title: { type: "string" },
-          bodyMarkdown: { type: "string" }
+          bodyMarkdown: { type: "string" },
+          scratchpad: {
+            type: "object",
+            nullable: true,
+            additionalProperties: true
+          }
         }
       },
       response: {
@@ -190,7 +222,8 @@ export function registerNoteController(app: FastifyInstance, services: AppServic
       noteId: params.id,
       folderId: body.folderId,
       title: body.title,
-      bodyMarkdown: body.bodyMarkdown
+      bodyMarkdown: body.bodyMarkdown,
+      scratchpad: body.scratchpad ?? null
     });
   });
 
