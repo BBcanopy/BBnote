@@ -4,9 +4,16 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { fetchAttachmentBlob } from "../api/client";
 import type { AttachmentRef } from "../api/types";
+import { buttonSecondary } from "./buttonStyles";
+import { parseScratchDocument, SCRATCH_FENCE_LANGUAGE, type ScratchDocument, type ScratchEditTarget } from "../utils/scratch";
 
-export function MarkdownPreview(props: { bodyMarkdown: string; attachments?: AttachmentRef[] }) {
+export function MarkdownPreview(props: {
+  bodyMarkdown: string;
+  attachments?: AttachmentRef[];
+  onEditScratch?(target: ScratchEditTarget): void;
+}) {
   const attachmentsByUrl = new Map<string, AttachmentRef>();
+  const scratchSearchState = { nextStart: 0 };
   for (const attachment of props.attachments ?? []) {
     attachmentsByUrl.set(normalizeAttachmentUrl(attachment.url), attachment);
   }
@@ -16,6 +23,19 @@ export function MarkdownPreview(props: { bodyMarkdown: string; attachments?: Att
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
+          pre: ({ children, node: _node, ...preProps }) => {
+            const scratchTarget = extractScratchTarget(children, props.bodyMarkdown, scratchSearchState);
+            if (!scratchTarget) {
+              return <pre {...preProps}>{children}</pre>;
+            }
+
+            return (
+              <ScratchPreviewCard
+                document={scratchTarget.document}
+                onEdit={props.onEditScratch ? () => props.onEditScratch?.(scratchTarget) : undefined}
+              />
+            );
+          },
           img: ({ src, alt }) => <SecureAttachmentImage src={src} alt={alt ?? ""} />,
           a: ({ href, children }) => {
             const attachment = href ? attachmentsByUrl.get(normalizeAttachmentUrl(href)) : undefined;
@@ -36,6 +56,47 @@ export function MarkdownPreview(props: { bodyMarkdown: string; attachments?: Att
       >
         {props.bodyMarkdown}
       </ReactMarkdown>
+    </div>
+  );
+}
+
+function ScratchPreviewCard(props: { document: ScratchDocument; onEdit?(): void }) {
+  return (
+    <div className="bb-markdown__scratch-card" data-testid="markdown-scratch">
+      <div className="bb-markdown__scratch-head">
+        <div className="bb-markdown__scratch-copy">
+          <span className="bb-markdown__scratch-label">Scratch</span>
+          <span className="bb-markdown__scratch-meta">
+            {props.document.strokes.length} stroke{props.document.strokes.length === 1 ? "" : "s"}
+          </span>
+        </div>
+        {props.onEdit ? (
+          <button type="button" onClick={props.onEdit} className={`${buttonSecondary} bb-inline-button`}>
+            Edit sketch
+          </button>
+        ) : null}
+      </div>
+      <svg
+        viewBox={`0 0 ${props.document.width} ${props.document.height}`}
+        className="bb-markdown__scratch-svg"
+        role="img"
+        aria-label="Scratch sketch preview"
+      >
+        <rect width={props.document.width} height={props.document.height} fill="#ffffff" rx="20" ry="20" />
+        {props.document.strokes.map((stroke, index) =>
+          stroke.points.length > 0 ? (
+            <polyline
+              key={`${props.document.id}-${index}`}
+              points={stroke.points.map((point) => `${point.x},${point.y}`).join(" ")}
+              fill="none"
+              stroke={stroke.color}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={stroke.width}
+            />
+          ) : null
+        )}
+      </svg>
     </div>
   );
 }
@@ -181,6 +242,65 @@ function normalizeAttachmentUrl(value?: string) {
 function extractMarkdownMediaLabel(content: ReactNode, fallbackLabel: string) {
   const flattenedText = flattenReactText(content).trim();
   return flattenedText || fallbackLabel;
+}
+
+function extractScratchTarget(
+  content: ReactNode,
+  bodyMarkdown: string,
+  searchState: { nextStart: number }
+): ScratchEditTarget | null {
+  const scratchNode = unwrapSingleReactChild(content);
+  if (!scratchNode || !isValidElement<{ className?: string; children?: ReactNode }>(scratchNode)) {
+    return null;
+  }
+
+  const className = String(scratchNode.props.className ?? "");
+  if (!className.split(/\s+/).includes(`language-${SCRATCH_FENCE_LANGUAGE}`)) {
+    return null;
+  }
+
+  const source = flattenReactText(scratchNode.props.children).replace(/\n$/, "");
+  const document = parseScratchDocument(source);
+  if (!document) {
+    return null;
+  }
+
+  const blockSource = `\`\`\`${SCRATCH_FENCE_LANGUAGE}\n${source}\n\`\`\``;
+  const startOffset = findScratchBlockOffset(bodyMarkdown, blockSource, searchState.nextStart);
+  if (startOffset < 0) {
+    return null;
+  }
+
+  const endOffset = startOffset + blockSource.length;
+  searchState.nextStart = endOffset;
+
+  return {
+    document,
+    endOffset,
+    startOffset
+  };
+}
+
+function findScratchBlockOffset(bodyMarkdown: string, blockSource: string, searchStart: number) {
+  const nextOffset = bodyMarkdown.indexOf(blockSource, Math.max(0, searchStart));
+  if (nextOffset >= 0) {
+    return nextOffset;
+  }
+
+  return bodyMarkdown.indexOf(blockSource);
+}
+
+function unwrapSingleReactChild(content: ReactNode): ReactNode | null {
+  if (Array.isArray(content)) {
+    const meaningfulChildren = content.filter((child) => child !== null && child !== undefined && child !== false);
+    if (meaningfulChildren.length !== 1) {
+      return null;
+    }
+
+    return meaningfulChildren[0];
+  }
+
+  return content ?? null;
 }
 
 function flattenReactText(content: ReactNode): string {
