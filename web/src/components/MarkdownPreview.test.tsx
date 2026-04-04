@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import { MarkdownPreview } from "./MarkdownPreview";
 
 const { fetchAttachmentBlob } = vi.hoisted(() => ({
@@ -28,39 +28,11 @@ describe("MarkdownPreview", () => {
     vi.restoreAllMocks();
   });
 
-  it("renders scratch blocks as editable sketch cards", () => {
-    const onEditScratch = vi.fn();
-
-    render(
-      <MarkdownPreview
-        bodyMarkdown={'```scratch\n{"version":1,"id":"scratch-1","width":640,"height":360,"strokes":[{"color":"#16393d","width":3,"points":[{"x":10,"y":12},{"x":40,"y":48}]}]}\n```'}
-        onEditScratch={onEditScratch}
-      />
-    );
-
-    expect(screen.getByTestId("markdown-scratch")).toBeInTheDocument();
-    expect(screen.getByRole("img", { name: /scratch sketch preview/i })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /edit sketch/i }));
-
-    expect(onEditScratch).toHaveBeenCalledTimes(1);
-    expect(onEditScratch).toHaveBeenCalledWith(
-      expect.objectContaining({
-        document: expect.objectContaining({
-          id: "scratch-1",
-          strokes: expect.any(Array)
-        }),
-        endOffset: expect.any(Number),
-        startOffset: expect.any(Number)
-      })
-    );
-  });
-
   it("keeps regular code fences as code blocks", () => {
     const { container } = render(<MarkdownPreview bodyMarkdown={"```ts\nconsole.log('hi')\n```"} />);
 
     expect(container.querySelector("pre")).toBeInTheDocument();
     expect(screen.getByText("console.log('hi')")).toBeInTheDocument();
-    expect(screen.queryByTestId("markdown-scratch")).not.toBeInTheDocument();
   });
 
   it("renders inline audio and video players for attachment links when metadata is available", async () => {

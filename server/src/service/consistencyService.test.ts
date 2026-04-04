@@ -99,6 +99,7 @@ describe("consistencyService", () => {
         folderId: "folder-1",
         title: "Case check",
         filePath: notePath,
+        scratchpadJson: null,
         sortOrder: 0,
         createdAt: "2026-03-22T00:00:00.000Z",
         updatedAt: "2026-03-22T00:00:00.000Z",
