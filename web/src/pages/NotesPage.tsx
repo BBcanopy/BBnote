@@ -62,6 +62,17 @@ import {
   type MarkdownFormatOptions,
   type MarkdownTableDimensions
 } from "../utils/markdownFormat";
+import {
+  createEmptyScratchDocument,
+  DEFAULT_SCRATCH_STROKE_COLOR,
+  DEFAULT_SCRATCH_STROKE_WIDTH,
+  insertScratchMarkdown,
+  replaceScratchMarkdown,
+  type ScratchDocument,
+  type ScratchEditTarget,
+  type ScratchPoint,
+  type ScratchStroke
+} from "../utils/scratch";
 import { buildNotesPath } from "../utils/noteRoute";
 import { buildNoteOrderIds, moveNotes, type NoteMoveInstruction } from "../utils/noteOrder";
 
@@ -87,9 +98,7 @@ const MIN_NOTE_PANE_WIDTH = 280;
 const MAX_NOTE_PANE_WIDTH = 480;
 const KEYBOARD_RESIZE_STEP = 24;
 const MEDIA_PLACEHOLDER_TITLE = "Untitled note";
-const SKETCH_BACKGROUND_COLOR = "#ffffff";
-const SKETCH_STROKE_COLOR = "#16393d";
-const SKETCH_STROKE_WIDTH = 3;
+const SCRATCH_CANVAS_BACKGROUND_COLOR = "#ffffff";
 
 type MediaInsertBehavior = "image" | "link" | "none";
 type RecorderPhase = "closed" | "starting" | "recording" | "paused" | "processing" | "saving" | "recorded" | "error";
@@ -110,11 +119,6 @@ interface PendingNoteDelete {
 interface TextSelectionRange {
   start: number;
   end: number;
-}
-
-interface CanvasPoint {
-  x: number;
-  y: number;
 }
 
 interface NotesQueryContext {
@@ -1506,7 +1510,7 @@ function EditorPanel(props: {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const sketchCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const sketchPointerIdRef = useRef<number | null>(null);
-  const sketchLastPointRef = useRef<CanvasPoint | null>(null);
+  const sketchCurrentStrokeRef = useRef<ScratchStroke | null>(null);
   const bodyTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const formatSelectionFrameRef = useRef<number | null>(null);
   const tablePickerId = useId();
@@ -1533,9 +1537,10 @@ function EditorPanel(props: {
   const [recordingElapsedMs, setRecordingElapsedMs] = useState(0);
   const [savingRecording, setSavingRecording] = useState(false);
   const [sketchOpen, setSketchOpen] = useState(false);
-  const [sketchHasInk, setSketchHasInk] = useState(false);
   const [sketchSaving, setSketchSaving] = useState(false);
   const [sketchError, setSketchError] = useState<string | null>(null);
+  const [sketchDocument, setSketchDocument] = useState<ScratchDocument>(() => createEmptyScratchDocument());
+  const [sketchEditTarget, setSketchEditTarget] = useState<ScratchEditTarget | null>(null);
   const [tablePickerOpen, setTablePickerOpen] = useState(false);
   const [tableDimensions, setTableDimensions] = useState<MarkdownTableDimensions>({
     columns: DEFAULT_MARKDOWN_TABLE_COLUMNS,
@@ -1549,6 +1554,7 @@ function EditorPanel(props: {
   const headerStatusText = props.suppressHeaderStatus ? null : props.statusText.startsWith("Updated at ") ? props.statusText : null;
   const footerStatusText = headerStatusText ? null : props.statusText;
   const activeTableDimensions = tableHoverDimensions ?? tableDimensions;
+  const sketchHasInk = sketchDocument.strokes.length > 0;
 
   useEffect(() => {
     return () => {
@@ -1556,7 +1562,7 @@ function EditorPanel(props: {
         window.cancelAnimationFrame(formatSelectionFrameRef.current);
       }
       sketchPointerIdRef.current = null;
-      sketchLastPointRef.current = null;
+      sketchCurrentStrokeRef.current = null;
       discardRecordingRef.current = true;
       stopRecorder();
       clearRecorderClip();
@@ -1564,23 +1570,13 @@ function EditorPanel(props: {
   }, []);
 
   useEffect(() => {
-    if (!sketchOpen) {
-      return;
-    }
-
-    const frameId = window.requestAnimationFrame(() => {
-      const prepared = prepareSketchCanvas(sketchCanvasRef.current);
-      if (!prepared) {
-        setSketchError("Scratch canvas is not available in this browser.");
-        return;
-      }
-
-      setSketchHasInk(false);
-      setSketchError(null);
-    });
-
-    return () => window.cancelAnimationFrame(frameId);
-  }, [sketchOpen]);
+    sketchPointerIdRef.current = null;
+    sketchCurrentStrokeRef.current = null;
+    setSketchOpen(false);
+    setSketchError(null);
+    setSketchEditTarget(null);
+    setSketchDocument(createEmptyScratchDocument());
+  }, [props.editorNote?.noteId]);
 
   useEffect(() => {
     if (recorderState.phase !== "recording") {
@@ -1695,10 +1691,20 @@ function EditorPanel(props: {
 
   function closeSketchPanel() {
     sketchPointerIdRef.current = null;
-    sketchLastPointRef.current = null;
+    sketchCurrentStrokeRef.current = null;
     setSketchOpen(false);
-    setSketchHasInk(false);
     setSketchError(null);
+    setSketchEditTarget(null);
+    setSketchDocument(createEmptyScratchDocument());
+  }
+
+  function openScratchPanel(document: ScratchDocument, editTarget: ScratchEditTarget | null) {
+    sketchPointerIdRef.current = null;
+    sketchCurrentStrokeRef.current = null;
+    setSketchError(null);
+    setSketchEditTarget(editTarget);
+    setSketchDocument(cloneScratchDocument(document));
+    setSketchOpen(true);
   }
 
   function handleSketchToggle() {
@@ -1711,8 +1717,11 @@ function EditorPanel(props: {
       return;
     }
 
-    setSketchError(null);
-    setSketchOpen(true);
+    openScratchPanel(createEmptyScratchDocument(), null);
+  }
+
+  function handleEditScratchRequest(target: ScratchEditTarget) {
+    openScratchPanel(target.document, target);
   }
 
   function handleSketchPointerDown(event: ReactPointerEvent<HTMLCanvasElement>) {
@@ -1732,12 +1741,15 @@ function EditorPanel(props: {
     }
 
     event.preventDefault();
-    const point = resolveCanvasPoint(canvas, event.clientX, event.clientY);
+    const point = resolveCanvasPoint(canvas, event.clientX, event.clientY, sketchDocument);
     sketchPointerIdRef.current = event.pointerId;
-    sketchLastPointRef.current = point;
+    sketchCurrentStrokeRef.current = {
+      color: DEFAULT_SCRATCH_STROKE_COLOR,
+      points: [point],
+      width: DEFAULT_SCRATCH_STROKE_WIDTH
+    };
     canvas.setPointerCapture(event.pointerId);
-    drawSketchDot(context, point);
-    setSketchHasInk(true);
+    drawScratchSegment(canvas, context, sketchDocument, point, point, DEFAULT_SCRATCH_STROKE_COLOR, DEFAULT_SCRATCH_STROKE_WIDTH);
     setSketchError(null);
   }
 
@@ -1747,8 +1759,9 @@ function EditorPanel(props: {
     }
 
     const canvas = sketchCanvasRef.current;
-    const lastPoint = sketchLastPointRef.current;
-    if (!canvas || !lastPoint) {
+    const stroke = sketchCurrentStrokeRef.current;
+    const lastPoint = stroke?.points.at(-1);
+    if (!canvas || !stroke || !lastPoint) {
       return;
     }
 
@@ -1759,10 +1772,9 @@ function EditorPanel(props: {
     }
 
     event.preventDefault();
-    const nextPoint = resolveCanvasPoint(canvas, event.clientX, event.clientY);
-    drawSketchStroke(context, lastPoint, nextPoint);
-    sketchLastPointRef.current = nextPoint;
-    setSketchHasInk(true);
+    const nextPoint = resolveCanvasPoint(canvas, event.clientX, event.clientY, sketchDocument);
+    stroke.points.push(nextPoint);
+    drawScratchSegment(canvas, context, sketchDocument, lastPoint, nextPoint, stroke.color, stroke.width);
   }
 
   function handleSketchPointerEnd(event: ReactPointerEvent<HTMLCanvasElement>) {
@@ -1775,22 +1787,27 @@ function EditorPanel(props: {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
     sketchPointerIdRef.current = null;
-    sketchLastPointRef.current = null;
+    if (sketchCurrentStrokeRef.current) {
+      const completedStroke = sketchCurrentStrokeRef.current;
+      setSketchDocument((current) => ({
+        ...current,
+        strokes: [...current.strokes, completedStroke]
+      }));
+    }
+    sketchCurrentStrokeRef.current = null;
   }
 
   function handleClearSketch() {
-    const prepared = prepareSketchCanvas(sketchCanvasRef.current);
-    if (!prepared) {
-      setSketchError("Scratch canvas could not be reset.");
-      return;
-    }
-
-    setSketchHasInk(false);
+    sketchCurrentStrokeRef.current = null;
+    setSketchDocument((current) => ({
+      ...current,
+      strokes: []
+    }));
     setSketchError(null);
   }
 
   async function handleSaveSketch() {
-    if (!sketchHasInk || !sketchCanvasRef.current) {
+    if (!sketchHasInk || !props.editorNote) {
       return;
     }
 
@@ -1798,30 +1815,41 @@ function EditorPanel(props: {
     setSketchError(null);
 
     try {
-      const blob = await exportCanvasPng(sketchCanvasRef.current);
-      if (!blob) {
-        setSketchError("Scratch sketch could not be saved.");
-        return;
-      }
+      const nextBodyMarkdown = sketchEditTarget
+        ? replaceScratchMarkdown(props.editorNote.bodyMarkdown, sketchEditTarget.startOffset, sketchEditTarget.endOffset, sketchDocument)
+        : insertScratchMarkdown(
+            props.editorNote.bodyMarkdown,
+            bodyTextareaRef.current?.selectionStart ?? props.editorNote.bodyMarkdown.length,
+            bodyTextareaRef.current?.selectionEnd ?? props.editorNote.bodyMarkdown.length,
+            sketchDocument
+          );
 
-      const fileName = `scratch-${new Date().toISOString().replace(/[^\d]/g, "").slice(0, 14)}.png`;
-      const uploaded = await props.onUploadSelectedFile(
-        new File([blob], fileName, {
-          type: "image/png"
-        }),
-        "image"
-      );
-
-      if (uploaded) {
-        closeSketchPanel();
-        return;
-      }
-
-      setSketchError("Scratch sketch could not be attached. Try again.");
+      props.onBodyChange(nextBodyMarkdown);
+      closeSketchPanel();
+    } catch {
+      setSketchError("Scratch sketch could not be saved. Try again.");
     } finally {
       setSketchSaving(false);
     }
   }
+
+  useEffect(() => {
+    if (!sketchOpen) {
+      return;
+    }
+
+    const frameId = window.requestAnimationFrame(() => {
+      const prepared = prepareSketchCanvas(sketchCanvasRef.current);
+      if (!prepared || !drawScratchDocument(sketchCanvasRef.current, sketchDocument)) {
+        setSketchError("Scratch canvas is not available in this browser.");
+        return;
+      }
+
+      setSketchError(null);
+    });
+
+    return () => window.cancelAnimationFrame(frameId);
+  }, [sketchDocument, sketchOpen]);
 
   async function handleStartRecording() {
     if (mediaActionsDisabled) {
@@ -2378,7 +2406,7 @@ function EditorPanel(props: {
       <div className="bb-sketch-panel" data-testid="scratch-panel">
         <div className="bb-sketch-panel__copy">
           <p className="text-sm font-medium tracking-tight text-[color:var(--ink)]">Scratch sketch</p>
-          <p className="text-sm text-[color:var(--ink-soft)]">Draw with mouse, pen, or touch, then save it into the note as an inline image.</p>
+          <p className="text-sm text-[color:var(--ink-soft)]">Draw with mouse, pen, or touch, then save it into the note as an editable sketch.</p>
         </div>
         {sketchError ? <p className="bb-error-banner text-sm">{sketchError}</p> : null}
         <div className="bb-sketch-panel__surface">
@@ -2408,10 +2436,10 @@ function EditorPanel(props: {
           <button
             type="button"
             onClick={() => void handleSaveSketch()}
-            disabled={!sketchHasInk || props.refreshing || sketchSaving || props.uploadingAttachment}
+            disabled={!sketchHasInk || props.refreshing || sketchSaving}
             className={buttonPrimary}
           >
-            {sketchSaving ? "Saving sketch" : "Save sketch"}
+            {sketchSaving ? (sketchEditTarget ? "Updating sketch" : "Saving sketch") : sketchEditTarget ? "Update sketch" : "Save sketch"}
           </button>
         </div>
       </div>
@@ -2650,7 +2678,11 @@ function EditorPanel(props: {
                 </label>
               ) : (
                 <div className={`bb-pane-card bb-editor-preview bb-editor-preview--grow${props.refreshing ? " is-disabled" : ""}`}>
-                  <MarkdownPreview bodyMarkdown={props.editorNote.bodyMarkdown} attachments={props.editorNote.attachments} />
+                  <MarkdownPreview
+                    bodyMarkdown={props.editorNote.bodyMarkdown}
+                    attachments={props.editorNote.attachments}
+                    onEditScratch={handleEditScratchRequest}
+                  />
                 </div>
               )}
 
@@ -2913,41 +2945,114 @@ function prepareSketchCanvas(canvas: HTMLCanvasElement | null) {
   }
 
   context.scale(scale, scale);
-  context.fillStyle = SKETCH_BACKGROUND_COLOR;
+  context.fillStyle = SCRATCH_CANVAS_BACKGROUND_COLOR;
   context.fillRect(0, 0, rect.width, rect.height);
-  context.strokeStyle = SKETCH_STROKE_COLOR;
-  context.fillStyle = SKETCH_STROKE_COLOR;
-  context.lineWidth = SKETCH_STROKE_WIDTH;
-  context.lineCap = "round";
-  context.lineJoin = "round";
   return true;
 }
 
-function resolveCanvasPoint(canvas: HTMLCanvasElement, clientX: number, clientY: number): CanvasPoint {
+function resolveCanvasPoint(canvas: HTMLCanvasElement, clientX: number, clientY: number, document: ScratchDocument): ScratchPoint {
   const rect = canvas.getBoundingClientRect();
   return {
-    x: clientX - rect.left,
-    y: clientY - rect.top
+    x: clampScratchCoordinate(((clientX - rect.left) / rect.width) * document.width, document.width),
+    y: clampScratchCoordinate(((clientY - rect.top) / rect.height) * document.height, document.height)
   };
 }
 
-function drawSketchDot(context: CanvasRenderingContext2D, point: CanvasPoint) {
+function drawScratchDocument(canvas: HTMLCanvasElement | null, document: ScratchDocument) {
+  if (!canvas) {
+    return false;
+  }
+
+  const context = canvas.getContext("2d");
+  if (!context) {
+    return false;
+  }
+
+  const rect = canvas.getBoundingClientRect();
+  if (rect.width <= 0 || rect.height <= 0) {
+    return false;
+  }
+
+  context.fillStyle = SCRATCH_CANVAS_BACKGROUND_COLOR;
+  context.fillRect(0, 0, rect.width, rect.height);
+
+  for (const stroke of document.strokes) {
+    if (stroke.points.length === 0) {
+      continue;
+    }
+
+    if (stroke.points.length === 1) {
+      const point = mapScratchPointToCanvas(stroke.points[0], rect, document);
+      drawScratchDot(context, point, stroke.color, scaleScratchStrokeWidth(rect, document, stroke.width));
+      continue;
+    }
+
+    for (let index = 1; index < stroke.points.length; index += 1) {
+      drawScratchSegment(canvas, context, document, stroke.points[index - 1], stroke.points[index], stroke.color, stroke.width);
+    }
+  }
+
+  return true;
+}
+
+function drawScratchDot(context: CanvasRenderingContext2D, point: ScratchPoint, color: string, lineWidth: number) {
+  context.fillStyle = color;
   context.beginPath();
-  context.arc(point.x, point.y, SKETCH_STROKE_WIDTH / 2, 0, Math.PI * 2);
+  context.arc(point.x, point.y, Math.max(0.75, lineWidth / 2), 0, Math.PI * 2);
   context.fill();
 }
 
-function drawSketchStroke(context: CanvasRenderingContext2D, from: CanvasPoint, to: CanvasPoint) {
+function drawScratchSegment(
+  canvas: HTMLCanvasElement,
+  context: CanvasRenderingContext2D,
+  document: ScratchDocument,
+  from: ScratchPoint,
+  to: ScratchPoint,
+  color: string,
+  width: number
+) {
+  const rect = canvas.getBoundingClientRect();
+  const lineWidth = scaleScratchStrokeWidth(rect, document, width);
+  const start = mapScratchPointToCanvas(from, rect, document);
+  const end = mapScratchPointToCanvas(to, rect, document);
+
+  drawScratchStroke(context, start, end, color, lineWidth);
+}
+
+function drawScratchStroke(context: CanvasRenderingContext2D, from: ScratchPoint, to: ScratchPoint, color: string, lineWidth: number) {
+  context.strokeStyle = color;
+  context.lineWidth = lineWidth;
+  context.lineCap = "round";
+  context.lineJoin = "round";
   context.beginPath();
   context.moveTo(from.x, from.y);
   context.lineTo(to.x, to.y);
   context.stroke();
 }
 
-function exportCanvasPng(canvas: HTMLCanvasElement) {
-  return new Promise<Blob | null>((resolve) => {
-    canvas.toBlob((blob) => resolve(blob), "image/png");
-  });
+function mapScratchPointToCanvas(point: ScratchPoint, rect: DOMRect, document: ScratchDocument): ScratchPoint {
+  return {
+    x: (point.x / document.width) * rect.width,
+    y: (point.y / document.height) * rect.height
+  };
+}
+
+function scaleScratchStrokeWidth(rect: DOMRect, document: ScratchDocument, width: number) {
+  return Math.max(1, Math.min(rect.width / document.width, rect.height / document.height) * width);
+}
+
+function clampScratchCoordinate(value: number, max: number) {
+  return Math.max(0, Math.min(value, max));
+}
+
+function cloneScratchDocument(document: ScratchDocument): ScratchDocument {
+  return {
+    ...document,
+    strokes: document.strokes.map((stroke) => ({
+      ...stroke,
+      points: stroke.points.map((point) => ({ ...point }))
+    }))
+  };
 }
 
 function getRecorderTitle(phase: RecorderPhase) {

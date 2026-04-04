@@ -1616,12 +1616,11 @@ test("shows the note title in the topbar above the editor lane, keeps folder and
     .toBeLessThan(48);
 });
 
-test("opens an inline scratch canvas, saves the sketch into the note, and keeps it visible after reload", async ({ page }) => {
+test("opens an inline scratch canvas, keeps it editable after reload, and updates the same sketch", async ({ page }) => {
   await page.setViewportSize({ width: 1900, height: 1000 });
   const suffix = createTestSuffix();
   const notebookName = `Scratch ${suffix}`;
   const noteTitle = `Inline scratch ${suffix}`;
-  const scratchFileNamePattern = /^scratch-\d{14}\.png$/i;
 
   await login(page);
   await createNotebookWithDialog(page, notebookName);
@@ -1636,41 +1635,63 @@ test("opens an inline scratch canvas, saves the sketch into the note, and keeps 
   const previousStatus = await waitForUpdatedStatus(page);
   const previewToggle = page.getByRole("button", { name: /^preview$/i });
 
+  async function drawStroke(startXRatio: number, startYRatio: number, offsets: Array<[number, number]>) {
+    const canvasBox = await scratchCanvas.boundingBox();
+    expect(canvasBox).not.toBeNull();
+    if (!canvasBox) {
+      throw new Error("Expected the scratch canvas to be visible.");
+    }
+
+    const startX = canvasBox.x + canvasBox.width * startXRatio;
+    const startY = canvasBox.y + canvasBox.height * startYRatio;
+    await page.mouse.move(startX, startY);
+    await page.mouse.down();
+
+    for (const [deltaX, deltaY] of offsets) {
+      await page.mouse.move(startX + deltaX, startY + deltaY, { steps: 10 });
+    }
+
+    await page.mouse.up();
+  }
+
   await scratchButton.click();
   await expect(scratchPanel).toBeVisible();
   await expect(scratchButton).toHaveClass(/bb-icon-button--is-active/);
-
-  const canvasBox = await scratchCanvas.boundingBox();
-  expect(canvasBox).not.toBeNull();
-  if (!canvasBox) {
-    throw new Error("Expected the scratch canvas to be visible.");
-  }
-
-  const startX = canvasBox.x + canvasBox.width * 0.22;
-  const startY = canvasBox.y + canvasBox.height * 0.35;
-  await page.mouse.move(startX, startY);
-  await page.mouse.down();
-  await page.mouse.move(startX + 120, startY + 28, { steps: 10 });
-  await page.mouse.move(startX + 40, startY + 88, { steps: 10 });
-  await page.mouse.move(startX + 150, startY + 110, { steps: 10 });
-  await page.mouse.up();
+  await drawStroke(0.22, 0.35, [
+    [120, 28],
+    [40, 88],
+    [150, 110]
+  ]);
 
   await scratchPanel.getByRole("button", { name: /^save sketch$/i }).click();
   await waitForUpdatedStatus(page, previousStatus);
   await expect(scratchPanel).toHaveCount(0);
   await expect(scratchButton).not.toHaveClass(/bb-icon-button--is-active/);
-
-  const scratchAttachmentName = editorPanel.locator(".bb-attachment-card__name").first();
-  await expect(scratchAttachmentName).toHaveText(scratchFileNamePattern);
-  await expect(textarea).toHaveValue(new RegExp(`!\\[scratch-\\d{14}\\.png\\]\\(.*/attachments/.*\\)`, "i"));
+  await expect(editorPanel.locator(".bb-attachment-card")).toHaveCount(0);
+  await expect(textarea).toHaveValue(/```scratch[\s\S]+"strokes":\[/i);
 
   await previewToggle.click();
-  await expect(activeEditorPanel(page).locator(".bb-editor-preview img")).toBeVisible();
+  await expect(activeEditorPanel(page).getByTestId("markdown-scratch")).toContainText("1 stroke");
+  await expect(activeEditorPanel(page).getByRole("button", { name: /^edit sketch$/i })).toBeVisible();
 
   await page.reload();
-  await expect(textarea).toHaveValue(new RegExp(`!\\[scratch-\\d{14}\\.png\\]\\(.*/attachments/.*\\)`, "i"));
-  await previewToggle.click();
-  await expect(activeEditorPanel(page).locator(".bb-editor-preview img")).toBeVisible();
+  const reloadedEditorPanel = page.getByTestId("editor-panel-desktop");
+  const reloadedPreviewToggle = page.getByRole("button", { name: /^preview$/i });
+  const reloadedTextarea = reloadedEditorPanel.getByPlaceholder("Write in Markdown");
+  await expect(reloadedTextarea).toHaveValue(/```scratch[\s\S]+"strokes":\[/i);
+  await reloadedPreviewToggle.click();
+  await expect(activeEditorPanel(page).getByTestId("markdown-scratch")).toContainText("1 stroke");
+
+  const reloadedStatus = await waitForUpdatedStatus(page);
+  await activeEditorPanel(page).getByRole("button", { name: /^edit sketch$/i }).click();
+  await expect(reloadedEditorPanel.getByTestId("scratch-panel")).toBeVisible();
+  await drawStroke(0.58, 0.32, [
+    [36, 84],
+    [128, 126]
+  ]);
+  await reloadedEditorPanel.getByRole("button", { name: /^update sketch$/i }).click();
+  await waitForUpdatedStatus(page, reloadedStatus);
+  await expect(activeEditorPanel(page).getByTestId("markdown-scratch")).toContainText("2 strokes");
 });
 
 test("auto-saves voice notes on stop, inserts them into the editor, keeps delete available, and shows live recorder progress", async ({
