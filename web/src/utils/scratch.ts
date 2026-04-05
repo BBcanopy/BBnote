@@ -3,6 +3,7 @@ export const DEFAULT_SCRATCH_HEIGHT = 1000;
 export const DEFAULT_SCRATCH_STROKE_COLOR = "#16393d";
 export const DEFAULT_SCRATCH_STROKE_WIDTH_PX = 3;
 export const DEFAULT_SCRATCH_ERASER_WIDTH_PX = 20;
+export const DEFAULT_SCRATCH_LAYOUT_WIDTH_PX = 960;
 
 export type ScratchTool = "draw" | "erase";
 
@@ -21,6 +22,7 @@ export interface ScratchStroke {
 export interface ScratchDocument {
   height: number;
   id: string;
+  layoutWidth?: number;
   strokes: ScratchStroke[];
   version: 1;
   width: number;
@@ -39,6 +41,7 @@ export function createEmptyScratchDocument(id = createScratchId()): ScratchDocum
   return {
     height: DEFAULT_SCRATCH_HEIGHT,
     id,
+    layoutWidth: DEFAULT_SCRATCH_LAYOUT_WIDTH_PX,
     strokes: [],
     version: 1,
     width: DEFAULT_SCRATCH_WIDTH
@@ -77,6 +80,14 @@ export function serializeScratchpad(document: ScratchDocument | null) {
 
 export function getScratchStrokeMode(stroke: Pick<ScratchStroke, "mode">): ScratchTool {
   return stroke.mode === "erase" ? "erase" : "draw";
+}
+
+export function getScratchLayoutWidth(document: ScratchDocument | null, fallbackWidth = DEFAULT_SCRATCH_LAYOUT_WIDTH_PX) {
+  if (document?.layoutWidth && document.layoutWidth > 0) {
+    return document.layoutWidth;
+  }
+
+  return fallbackWidth > 0 ? fallbackWidth : DEFAULT_SCRATCH_LAYOUT_WIDTH_PX;
 }
 
 export function normalizeScratchStrokeWidth(pixelWidth: number, surfaceWidth: number, documentWidth = DEFAULT_SCRATCH_WIDTH) {

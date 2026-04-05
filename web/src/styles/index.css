@@ -3183,6 +3183,35 @@ button:disabled {
   flex: 1 1 auto;
 }
 
+.bb-scratch-stage-viewport {
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.bb-scratch-stage-frame {
+  position: relative;
+  min-height: 100%;
+}
+
+.bb-scratch-stage {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: top left;
+}
+
+.bb-editor-surface--scratch-stage {
+  height: auto;
+  min-height: 30rem;
+  overflow: hidden;
+  resize: none;
+}
+
+.bb-editor-preview--scratch {
+  min-height: 30rem;
+  overflow: visible;
+}
+
 .bb-scratch-overlay {
   position: absolute;
   inset: 0;

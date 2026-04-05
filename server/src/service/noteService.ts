@@ -326,6 +326,7 @@ function normalizeScratchDocument(value: unknown): ScratchDocument | null {
 
   return {
     ...value,
+    layoutWidth: typeof value.layoutWidth === "number" && value.layoutWidth > 0 ? value.layoutWidth : undefined,
     strokes: value.strokes.map((stroke) => ({
       ...stroke,
       mode: stroke.mode === "erase" ? "erase" : "draw"
@@ -342,6 +343,7 @@ function isScratchDocument(value: unknown): value is ScratchDocument {
   return (
     candidate.version === 1 &&
     typeof candidate.id === "string" &&
+    (candidate.layoutWidth === undefined || (typeof candidate.layoutWidth === "number" && candidate.layoutWidth > 0)) &&
     typeof candidate.width === "number" &&
     candidate.width > 0 &&
     typeof candidate.height === "number" &&

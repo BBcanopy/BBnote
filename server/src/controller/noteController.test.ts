@@ -252,6 +252,7 @@ describe("noteController integration", () => {
     const scratchpad = {
       version: 1 as const,
       id: "scratch-1",
+      layoutWidth: 720,
       width: 1000,
       height: 1000,
       strokes: [

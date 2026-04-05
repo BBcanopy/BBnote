@@ -67,20 +67,19 @@ import {
   cloneScratchDocument,
   createEmptyScratchDocument,
   DEFAULT_SCRATCH_ERASER_WIDTH_PX,
+  DEFAULT_SCRATCH_LAYOUT_WIDTH_PX,
   DEFAULT_SCRATCH_STROKE_COLOR,
   DEFAULT_SCRATCH_STROKE_WIDTH_PX,
   denormalizeScratchStrokeWidth,
+  getScratchLayoutWidth,
   getScratchStrokeMode,
   hasScratchInk,
-  mapScratchPointToViewport,
   normalizeScratchStrokeWidth,
-  resolveScratchViewportPoint,
   serializeScratchpad,
   type ScratchDocument,
   type ScratchPoint,
   type ScratchStroke,
-  type ScratchTool,
-  type ScratchViewportMetrics
+  type ScratchTool
 } from "../utils/scratch";
 import { buildNotesPath } from "../utils/noteRoute";
 import { buildNoteOrderIds, moveNotes, type NoteMoveInstruction } from "../utils/noteOrder";
@@ -1536,7 +1535,10 @@ function EditorPanel(props: {
   const videoInputRef = useRef<HTMLInputElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const bodyTextareaRef = useRef<HTMLTextAreaElement | null>(null);
-  const previewSurfaceRef = useRef<HTMLDivElement | null>(null);
+  const markdownViewportRef = useRef<HTMLDivElement | null>(null);
+  const markdownStageRef = useRef<HTMLDivElement | null>(null);
+  const previewViewportRef = useRef<HTMLDivElement | null>(null);
+  const previewStageRef = useRef<HTMLDivElement | null>(null);
   const formatSelectionFrameRef = useRef<number | null>(null);
   const tablePickerId = useId();
   const tablePickerRef = useRef<HTMLDivElement | null>(null);
@@ -1578,6 +1580,7 @@ function EditorPanel(props: {
   const footerStatusText = headerStatusText ? null : props.statusText;
   const activeTableDimensions = tableHoverDimensions ?? tableDimensions;
   const scratchHasInk = hasScratchInk(props.editorNote?.scratchpad ?? null);
+  const scratchSurfaceEnabled = Boolean(props.editorNote && (scratchEditMode || props.editorNote.scratchpad));
 
   useEffect(() => {
     return () => {
@@ -1650,6 +1653,30 @@ function EditorPanel(props: {
 
     closeTablePicker();
   }, [props.editorPane, props.editorNote?.noteId, props.refreshing]);
+
+  useLayoutEffect(() => {
+    if (!scratchSurfaceEnabled || props.editorPane !== "markdown") {
+      return;
+    }
+
+    const textarea = bodyTextareaRef.current;
+    if (!textarea) {
+      return;
+    }
+
+    const syncHeight = () => {
+      textarea.style.height = "0px";
+      textarea.style.height = `${Math.max(textarea.scrollHeight, 480)}px`;
+    };
+
+    syncHeight();
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(syncHeight);
+    if (markdownStageRef.current) {
+      observer?.observe(markdownStageRef.current);
+    }
+
+    return () => observer?.disconnect();
+  }, [props.editorNote?.bodyMarkdown, props.editorPane, scratchSurfaceEnabled]);
 
   function resetRecorderProgress() {
     recordingStartedAtRef.current = null;
@@ -2541,45 +2568,77 @@ function EditorPanel(props: {
 
             <div className="bb-editor-stack bb-editor-stack--fill">
               {props.editorPane === "markdown" ? (
-                <div className="bb-editor-overlay-shell" data-testid="scratch-surface">
-                  <label className="bb-field bb-field--stretch">
-                    <textarea
-                      ref={bodyTextareaRef}
-                      value={props.editorNote.bodyMarkdown}
-                      onChange={(event) => props.onBodyChange(event.target.value)}
-                      placeholder="Write in Markdown"
-                      disabled={!props.editorNote || props.refreshing}
-                      className="bb-textarea bb-editor-surface bb-note-content text-sm leading-7"
-                    />
-                  </label>
-                  <ScratchOverlayCanvas
-                    active={scratchEditMode}
-                    contentVersion={props.editorNote.bodyMarkdown}
+                scratchSurfaceEnabled ? (
+                  <ScratchStageSurface
+                    viewportRef={markdownViewportRef}
+                    stageRef={markdownStageRef}
                     scratchpad={props.editorNote.scratchpad}
-                    tool={scratchTool}
-                    surfaceRef={bodyTextareaRef}
-                    onChange={handleScratchpadChange}
-                    onErrorChange={setScratchError}
-                  />
-                </div>
-              ) : (
-                <div className="bb-editor-overlay-shell" data-testid="scratch-surface">
-                  <div
-                    ref={previewSurfaceRef}
-                    className={`bb-pane-card bb-editor-preview bb-editor-preview--grow${props.refreshing ? " is-disabled" : ""}`}
                   >
-                    <MarkdownPreview bodyMarkdown={props.editorNote.bodyMarkdown} attachments={props.editorNote.attachments} />
+                    <label className="bb-field bb-field--stretch">
+                      <textarea
+                        ref={bodyTextareaRef}
+                        value={props.editorNote.bodyMarkdown}
+                        onChange={(event) => props.onBodyChange(event.target.value)}
+                        placeholder="Write in Markdown"
+                        disabled={!props.editorNote || props.refreshing}
+                        className="bb-textarea bb-editor-surface bb-editor-surface--scratch-stage bb-note-content text-sm leading-7"
+                      />
+                    </label>
+                    <ScratchOverlayCanvas
+                      active={scratchEditMode}
+                      contentVersion={props.editorNote.bodyMarkdown}
+                      scratchpad={props.editorNote.scratchpad}
+                      tool={scratchTool}
+                      viewportRef={markdownViewportRef}
+                      stageRef={markdownStageRef}
+                      onChange={handleScratchpadChange}
+                      onErrorChange={setScratchError}
+                    />
+                  </ScratchStageSurface>
+                ) : (
+                  <div className="bb-editor-overlay-shell" data-testid="scratch-surface">
+                    <label className="bb-field bb-field--stretch">
+                      <textarea
+                        ref={bodyTextareaRef}
+                        value={props.editorNote.bodyMarkdown}
+                        onChange={(event) => props.onBodyChange(event.target.value)}
+                        placeholder="Write in Markdown"
+                        disabled={!props.editorNote || props.refreshing}
+                        className="bb-textarea bb-editor-surface bb-note-content text-sm leading-7"
+                      />
+                    </label>
                   </div>
-                  <ScratchOverlayCanvas
-                    active={scratchEditMode}
-                    contentVersion={props.editorNote.bodyMarkdown}
+                )
+              ) : (
+                scratchSurfaceEnabled ? (
+                  <ScratchStageSurface
+                    viewportRef={previewViewportRef}
+                    stageRef={previewStageRef}
                     scratchpad={props.editorNote.scratchpad}
-                    tool={scratchTool}
-                    surfaceRef={previewSurfaceRef}
-                    onChange={handleScratchpadChange}
-                    onErrorChange={setScratchError}
-                  />
-                </div>
+                  >
+                    <div className={`bb-pane-card bb-editor-preview bb-editor-preview--scratch${props.refreshing ? " is-disabled" : ""}`}>
+                      <MarkdownPreview bodyMarkdown={props.editorNote.bodyMarkdown} attachments={props.editorNote.attachments} />
+                    </div>
+                    <ScratchOverlayCanvas
+                      active={scratchEditMode}
+                      contentVersion={props.editorNote.bodyMarkdown}
+                      scratchpad={props.editorNote.scratchpad}
+                      tool={scratchTool}
+                      viewportRef={previewViewportRef}
+                      stageRef={previewStageRef}
+                      onChange={handleScratchpadChange}
+                      onErrorChange={setScratchError}
+                    />
+                  </ScratchStageSurface>
+                ) : (
+                  <div className="bb-editor-overlay-shell" data-testid="scratch-surface">
+                    <div
+                      className={`bb-pane-card bb-editor-preview bb-editor-preview--grow${props.refreshing ? " is-disabled" : ""}`}
+                    >
+                      <MarkdownPreview bodyMarkdown={props.editorNote.bodyMarkdown} attachments={props.editorNote.attachments} />
+                    </div>
+                  </div>
+                )
               )}
 
               {hasAttachments ? (
@@ -2824,12 +2883,69 @@ function extensionForMimeType(mimeType: string) {
   return ".webm";
 }
 
+function ScratchStageSurface(props: {
+  viewportRef: { readonly current: HTMLDivElement | null };
+  stageRef: { readonly current: HTMLDivElement | null };
+  scratchpad: ScratchDocument | null;
+  children: ReactNode;
+}) {
+  const [viewportWidth, setViewportWidth] = useState(0);
+  const [stageHeight, setStageHeight] = useState(0);
+
+  useLayoutEffect(() => {
+    const updateMetrics = () => {
+      setViewportWidth(props.viewportRef.current?.clientWidth ?? 0);
+      setStageHeight(Math.max(props.stageRef.current?.scrollHeight ?? 0, props.stageRef.current?.offsetHeight ?? 0));
+    };
+
+    updateMetrics();
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(updateMetrics);
+    if (props.viewportRef.current) {
+      observer?.observe(props.viewportRef.current);
+    }
+    if (props.stageRef.current) {
+      observer?.observe(props.stageRef.current);
+    }
+    window.addEventListener("resize", updateMetrics);
+
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("resize", updateMetrics);
+    };
+  }, [props.scratchpad?.layoutWidth, props.stageRef, props.viewportRef]);
+
+  const resolvedLayoutWidth = getScratchLayoutWidth(
+    props.scratchpad,
+    viewportWidth > 0 ? viewportWidth : DEFAULT_SCRATCH_LAYOUT_WIDTH_PX
+  );
+  const scale = viewportWidth > 0 ? Math.min(1, viewportWidth / Math.max(1, resolvedLayoutWidth)) : 1;
+  const frameHeight = Math.max(stageHeight > 0 ? stageHeight * scale : 0, 480);
+
+  return (
+    <div ref={props.viewportRef} className="bb-editor-overlay-shell bb-scratch-stage-viewport" data-testid="scratch-surface">
+      <div className="bb-scratch-stage-frame" style={{ height: `${frameHeight}px` }}>
+        <div
+          ref={props.stageRef}
+          className="bb-scratch-stage"
+          style={{
+            width: `${resolvedLayoutWidth}px`,
+            transform: `scale(${scale})`
+          }}
+        >
+          {props.children}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ScratchOverlayCanvas(props: {
   active: boolean;
   contentVersion: string;
   scratchpad: ScratchDocument | null;
   tool: ScratchTool;
-  surfaceRef: { readonly current: HTMLElement | null };
+  viewportRef: { readonly current: HTMLDivElement | null };
+  stageRef: { readonly current: HTMLDivElement | null };
   onChange(scratchpad: ScratchDocument | null): void;
   onErrorChange(message: string | null): void;
 }) {
@@ -2845,7 +2961,7 @@ function ScratchOverlayCanvas(props: {
 
     let frameId = 0;
     const redraw = () => {
-      if (!drawScratchOverlay(canvasRef.current, props.surfaceRef.current, props.scratchpad)) {
+      if (!drawScratchOverlay(canvasRef.current, props.stageRef.current, props.scratchpad)) {
         if (props.active) {
           props.onErrorChange("Scratch overlay is not available in this browser.");
         }
@@ -2866,34 +2982,23 @@ function ScratchOverlayCanvas(props: {
     };
 
     queueRedraw();
-    const surface = props.surfaceRef.current;
-    const viewport = window.visualViewport;
-    if (!surface) {
-      return () => {
-        if (frameId !== 0) {
-          window.cancelAnimationFrame(frameId);
-        }
-      };
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(queueRedraw);
+    if (props.viewportRef.current) {
+      observer?.observe(props.viewportRef.current);
     }
-
-    surface.addEventListener("scroll", queueRedraw);
+    if (props.stageRef.current) {
+      observer?.observe(props.stageRef.current);
+    }
     window.addEventListener("resize", queueRedraw);
-    viewport?.addEventListener("resize", queueRedraw);
-    viewport?.addEventListener("scroll", queueRedraw);
-    const resizeObserver = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(queueRedraw);
-    resizeObserver?.observe(surface);
 
     return () => {
       if (frameId !== 0) {
         window.cancelAnimationFrame(frameId);
       }
-      surface.removeEventListener("scroll", queueRedraw);
+      observer?.disconnect();
       window.removeEventListener("resize", queueRedraw);
-      viewport?.removeEventListener("resize", queueRedraw);
-      viewport?.removeEventListener("scroll", queueRedraw);
-      resizeObserver?.disconnect();
     };
-  }, [props.active, props.contentVersion, props.onErrorChange, props.scratchpad, props.surfaceRef, visible]);
+  }, [props.active, props.contentVersion, props.onErrorChange, props.scratchpad, props.stageRef, props.viewportRef, visible]);
 
   function handlePointerDown(event: ReactPointerEvent<HTMLCanvasElement>) {
     if (!props.active) {
@@ -2902,7 +3007,7 @@ function ScratchOverlayCanvas(props: {
 
     const canvas = canvasRef.current;
     const context = canvas?.getContext("2d");
-    const metrics = measureScratchSurface(props.surfaceRef.current, canvas);
+    const metrics = measureScratchStage(props.stageRef.current, canvas);
     if (!canvas || !context || !metrics) {
       props.onErrorChange("Scratch overlay is not available in this browser.");
       return;
@@ -2910,9 +3015,10 @@ function ScratchOverlayCanvas(props: {
 
     event.preventDefault();
     const baseDocument = cloneScratchDocument(props.scratchpad) ?? createEmptyScratchDocument();
-    const point = resolveScratchViewportPoint(event.clientX - metrics.canvasRectLeft, event.clientY - metrics.canvasRectTop, baseDocument, metrics);
+    baseDocument.layoutWidth = getScratchLayoutWidth(baseDocument, metrics.stageWidth);
+    const point = resolveScratchStagePoint(event.clientX, event.clientY, baseDocument, metrics);
     const brushWidth = props.tool === "erase" ? DEFAULT_SCRATCH_ERASER_WIDTH_PX : DEFAULT_SCRATCH_STROKE_WIDTH_PX;
-    const storedWidth = normalizeScratchStrokeWidth(brushWidth, metrics.contentWidth, baseDocument.width);
+    const storedWidth = normalizeScratchStrokeWidth(brushWidth, metrics.stageWidth, baseDocument.width);
     const strokeMode = props.tool === "erase" ? "erase" : "draw";
 
     pointerIdRef.current = event.pointerId;
@@ -2936,14 +3042,15 @@ function ScratchOverlayCanvas(props: {
     const context = canvas?.getContext("2d");
     const stroke = currentStrokeRef.current;
     const lastPoint = stroke?.points.at(-1);
-    const metrics = measureScratchSurface(props.surfaceRef.current, canvas);
+    const metrics = measureScratchStage(props.stageRef.current, canvas);
     const baseDocument = cloneScratchDocument(props.scratchpad) ?? createEmptyScratchDocument();
     if (!canvas || !context || !stroke || !lastPoint || !metrics) {
       return;
     }
 
+    baseDocument.layoutWidth = getScratchLayoutWidth(baseDocument, metrics.stageWidth);
     event.preventDefault();
-    const nextPoint = resolveScratchViewportPoint(event.clientX - metrics.canvasRectLeft, event.clientY - metrics.canvasRectTop, baseDocument, metrics);
+    const nextPoint = resolveScratchStagePoint(event.clientX, event.clientY, baseDocument, metrics);
     stroke.points.push(nextPoint);
     drawScratchOverlaySegment(
       context,
@@ -2975,6 +3082,8 @@ function ScratchOverlayCanvas(props: {
     }
 
     const nextScratchpad = cloneScratchDocument(props.scratchpad) ?? createEmptyScratchDocument();
+    const metrics = measureScratchStage(props.stageRef.current, canvasRef.current);
+    nextScratchpad.layoutWidth = getScratchLayoutWidth(nextScratchpad, metrics?.stageWidth ?? DEFAULT_SCRATCH_LAYOUT_WIDTH_PX);
     nextScratchpad.strokes.push({
       ...completedStroke,
       points: completedStroke.points.map((point) => ({ ...point }))
@@ -3008,22 +3117,22 @@ function ScratchOverlayCanvas(props: {
   );
 }
 
-interface ScratchSurfaceMetrics extends ScratchViewportMetrics {
+interface ScratchStageMetrics {
+  canvasRectHeight: number;
   canvasRectLeft: number;
   canvasRectTop: number;
+  canvasRectWidth: number;
+  stageHeight: number;
+  stageWidth: number;
 }
 
-function drawScratchOverlay(
-  canvas: HTMLCanvasElement | null,
-  surface: HTMLElement | null,
-  scratchpad: ScratchDocument | null
-) {
-  const prepared = prepareScratchOverlayCanvas(canvas);
+function drawScratchOverlay(canvas: HTMLCanvasElement | null, stage: HTMLDivElement | null, scratchpad: ScratchDocument | null) {
+  const prepared = prepareScratchOverlayCanvas(canvas, stage);
   if (!prepared) {
     return false;
   }
 
-  const metrics = measureScratchSurface(surface, canvas);
+  const metrics = measureScratchStage(stage, canvas);
   if (!metrics) {
     return false;
   }
@@ -3038,12 +3147,12 @@ function drawScratchOverlay(
     }
 
     if (stroke.points.length === 1) {
-      const point = mapScratchPointToViewport(stroke.points[0], scratchpad, metrics);
+      const point = mapScratchPointToStage(stroke.points[0], scratchpad, metrics);
       drawScratchDot(
         prepared.context,
         point,
         stroke.color,
-        Math.max(1, denormalizeScratchStrokeWidth(stroke.width, metrics.contentWidth, scratchpad.width)),
+        Math.max(1, denormalizeScratchStrokeWidth(stroke.width, metrics.stageWidth, scratchpad.width)),
         getScratchStrokeMode(stroke)
       );
       continue;
@@ -3066,19 +3175,16 @@ function drawScratchOverlay(
   return true;
 }
 
-function prepareScratchOverlayCanvas(canvas: HTMLCanvasElement | null) {
-  if (!canvas) {
+function prepareScratchOverlayCanvas(canvas: HTMLCanvasElement | null, stage: HTMLDivElement | null) {
+  if (!canvas || !stage) {
     return null;
   }
 
-  const rect = canvas.getBoundingClientRect();
-  if (rect.width <= 0 || rect.height <= 0) {
-    return null;
-  }
-
+  const stageWidth = Math.max(stage.clientWidth, 1);
+  const stageHeight = Math.max(stage.scrollHeight, stage.offsetHeight, 1);
   const scale = Math.max(1, window.devicePixelRatio || 1);
-  const nextWidth = Math.max(1, Math.round(rect.width * scale));
-  const nextHeight = Math.max(1, Math.round(rect.height * scale));
+  const nextWidth = Math.max(1, Math.round(stageWidth * scale));
+  const nextHeight = Math.max(1, Math.round(stageHeight * scale));
   if (canvas.width !== nextWidth || canvas.height !== nextHeight) {
     canvas.width = nextWidth;
     canvas.height = nextHeight;
@@ -3090,51 +3196,53 @@ function prepareScratchOverlayCanvas(canvas: HTMLCanvasElement | null) {
   }
 
   context.setTransform(scale, 0, 0, scale, 0, 0);
-  context.clearRect(0, 0, rect.width, rect.height);
+  context.clearRect(0, 0, stageWidth, stageHeight);
   return {
-    context,
-    rect
+    context
   };
 }
 
-function measureScratchSurface(surface: HTMLElement | null, canvas: HTMLCanvasElement | null): ScratchSurfaceMetrics | null {
-  if (!surface || !canvas) {
+function measureScratchStage(stage: HTMLDivElement | null, canvas: HTMLCanvasElement | null): ScratchStageMetrics | null {
+  if (!stage || !canvas) {
     return null;
   }
 
   const canvasRect = canvas.getBoundingClientRect();
-  const surfaceRect = surface.getBoundingClientRect();
-  if (canvasRect.width <= 0 || canvasRect.height <= 0 || surfaceRect.width <= 0 || surfaceRect.height <= 0) {
+  const stageWidth = stage.clientWidth;
+  const stageHeight = Math.max(stage.scrollHeight, stage.offsetHeight);
+  if (canvasRect.width <= 0 || canvasRect.height <= 0 || stageWidth <= 0 || stageHeight <= 0) {
     return null;
   }
 
-  const computedStyle = window.getComputedStyle(surface);
-  const borderLeft = parseFloat(computedStyle.borderLeftWidth || "0") || 0;
-  const borderTop = parseFloat(computedStyle.borderTopWidth || "0") || 0;
-  const paddingLeft = parseFloat(computedStyle.paddingLeft || "0") || 0;
-  const paddingRight = parseFloat(computedStyle.paddingRight || "0") || 0;
-  const paddingTop = parseFloat(computedStyle.paddingTop || "0") || 0;
-  const paddingBottom = parseFloat(computedStyle.paddingBottom || "0") || 0;
-
-  const contentWidth = Math.max(1, surface.clientWidth - paddingLeft - paddingRight);
-  const viewportHeight = Math.max(1, surface.clientHeight - paddingTop - paddingBottom);
-  const contentHeight = Math.max(viewportHeight, surface.scrollHeight - paddingTop - paddingBottom);
-
   return {
+    canvasRectHeight: canvasRect.height,
     canvasRectLeft: canvasRect.left,
     canvasRectTop: canvasRect.top,
-    contentHeight,
-    contentLeft: surfaceRect.left - canvasRect.left + borderLeft + paddingLeft,
-    contentTop: surfaceRect.top - canvasRect.top + borderTop + paddingTop,
-    contentWidth,
-    scrollTop: surface.scrollTop,
-    viewportHeight
+    canvasRectWidth: canvasRect.width,
+    stageHeight,
+    stageWidth
+  };
+}
+
+function resolveScratchStagePoint(clientX: number, clientY: number, document: ScratchDocument, metrics: ScratchStageMetrics): ScratchPoint {
+  const stageX = clampScratchStageCoordinate(
+    ((clientX - metrics.canvasRectLeft) / Math.max(1, metrics.canvasRectWidth)) * metrics.stageWidth,
+    metrics.stageWidth
+  );
+  const stageY = clampScratchStageCoordinate(
+    ((clientY - metrics.canvasRectTop) / Math.max(1, metrics.canvasRectHeight)) * metrics.stageHeight,
+    metrics.stageHeight
+  );
+
+  return {
+    x: clampScratchStageCoordinate((stageX / Math.max(1, metrics.stageWidth)) * document.width, document.width),
+    y: clampScratchStageCoordinate((stageY / Math.max(1, metrics.stageHeight)) * document.height, document.height)
   };
 }
 
 function drawScratchOverlaySegment(
   context: CanvasRenderingContext2D,
-  metrics: ScratchSurfaceMetrics,
+  metrics: ScratchStageMetrics,
   document: ScratchDocument,
   from: ScratchPoint,
   to: ScratchPoint,
@@ -3142,11 +3250,18 @@ function drawScratchOverlaySegment(
   width: number,
   mode: ScratchTool
 ) {
-  const start = mapScratchPointToViewport(from, document, metrics);
-  const end = mapScratchPointToViewport(to, document, metrics);
-  const lineWidth = Math.max(1, denormalizeScratchStrokeWidth(width, metrics.contentWidth, document.width));
+  const start = mapScratchPointToStage(from, document, metrics);
+  const end = mapScratchPointToStage(to, document, metrics);
+  const lineWidth = Math.max(1, denormalizeScratchStrokeWidth(width, metrics.stageWidth, document.width));
 
   drawScratchStroke(context, start, end, color, lineWidth, mode);
+}
+
+function mapScratchPointToStage(point: ScratchPoint, document: ScratchDocument, metrics: ScratchStageMetrics): ScratchPoint {
+  return {
+    x: (point.x / Math.max(1, document.width)) * metrics.stageWidth,
+    y: (point.y / Math.max(1, document.height)) * metrics.stageHeight
+  };
 }
 
 function drawScratchDot(context: CanvasRenderingContext2D, point: ScratchPoint, color: string, lineWidth: number, mode: ScratchTool) {
@@ -3176,6 +3291,14 @@ function withScratchCompositeMode(context: CanvasRenderingContext2D, mode: Scrat
   context.globalCompositeOperation = mode === "erase" ? "destination-out" : "source-over";
   draw();
   context.restore();
+}
+
+function clampScratchStageCoordinate(value: number, max: number) {
+  if (!Number.isFinite(value)) {
+    return 0;
+  }
+
+  return Math.min(Math.max(value, 0), Math.max(0, max));
 }
 
 function getRecorderTitle(phase: RecorderPhase) {
