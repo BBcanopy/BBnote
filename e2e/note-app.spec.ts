@@ -1616,11 +1616,21 @@ test("shows the note title in the topbar above the editor lane, keeps folder and
     .toBeLessThan(48);
 });
 
-test("draws scratch as an editor overlay without changing raw markdown and keeps it editable after reload", async ({ page }) => {
+test("keeps scratch aligned through editor resizing, supports erasing, and keeps markdown clean after reload", async ({ page }) => {
   await page.setViewportSize({ width: 1900, height: 1000 });
   const suffix = createTestSuffix();
   const notebookName = `Scratch ${suffix}`;
   const noteTitle = `Inline scratch ${suffix}`;
+  const noteUpdatePayloads: Array<{ scratchpad?: { strokes?: unknown[] | undefined } | null }> = [];
+
+  page.on("request", (request) => {
+    if (request.method() !== "PUT" || !/\/api\/v1\/notes\/[^/]+$/.test(request.url())) {
+      return;
+    }
+
+    const payload = request.postDataJSON() as { scratchpad?: { strokes?: unknown[] | undefined } | null };
+    noteUpdatePayloads.push(payload);
+  });
 
   await login(page);
   await createNotebookWithDialog(page, notebookName);
@@ -1633,44 +1643,160 @@ test("draws scratch as an editor overlay without changing raw markdown and keeps
   const previousStatus = await waitForUpdatedStatus(page);
   const previewToggle = page.getByRole("button", { name: /^preview$/i });
 
-  async function drawStroke(startXRatio: number, startYRatio: number, offsets: Array<[number, number]>) {
-    const scratchCanvas = activeEditorPanel(page).getByTestId("scratch-canvas");
-    const canvasBox = await scratchCanvas.boundingBox();
-    expect(canvasBox).not.toBeNull();
-    if (!canvasBox) {
-      throw new Error("Expected the scratch overlay canvas to be visible.");
-    }
+  async function resolveScratchContentPoint(xRatio: number, yRatio: number) {
+    return activeEditorPanel(page).evaluate((panel, ratios: { xRatio: number; yRatio: number }) => {
+      const surface =
+        panel.querySelector<HTMLElement>('textarea[placeholder="Write in Markdown"]') ??
+        panel.querySelector<HTMLElement>(".bb-editor-preview");
+      const canvas = panel.querySelector<HTMLCanvasElement>('[data-testid="scratch-canvas"]');
+      if (!surface || !canvas) {
+        throw new Error("Expected the scratch editor surface and canvas to be visible.");
+      }
 
-    const startX = canvasBox.x + canvasBox.width * startXRatio;
-    const startY = canvasBox.y + canvasBox.height * startYRatio;
+      const surfaceRect = surface.getBoundingClientRect();
+      const style = window.getComputedStyle(surface);
+      const borderLeft = parseFloat(style.borderLeftWidth || "0") || 0;
+      const borderTop = parseFloat(style.borderTopWidth || "0") || 0;
+      const paddingLeft = parseFloat(style.paddingLeft || "0") || 0;
+      const paddingRight = parseFloat(style.paddingRight || "0") || 0;
+      const paddingTop = parseFloat(style.paddingTop || "0") || 0;
+      const paddingBottom = parseFloat(style.paddingBottom || "0") || 0;
+      const contentWidth = Math.max(1, surface.clientWidth - paddingLeft - paddingRight);
+      const contentHeight = Math.max(
+        surface.clientHeight - paddingTop - paddingBottom,
+        surface.scrollHeight - paddingTop - paddingBottom
+      );
+
+      return {
+        x: surfaceRect.left + borderLeft + paddingLeft + contentWidth * ratios.xRatio,
+        y: surfaceRect.top + borderTop + paddingTop + contentHeight * ratios.yRatio - surface.scrollTop
+      };
+    }, { xRatio, yRatio });
+  }
+
+  async function drawStroke(points: Array<[number, number]>) {
+    const [startPoint, ...remainingPoints] = points;
+    const start = await resolveScratchContentPoint(startPoint[0], startPoint[1]);
+    const startX = start.x;
+    const startY = start.y;
     await page.mouse.move(startX, startY);
     await page.mouse.down();
 
-    for (const [deltaX, deltaY] of offsets) {
-      await page.mouse.move(startX + deltaX, startY + deltaY, { steps: 10 });
+    for (const [xRatio, yRatio] of remainingPoints) {
+      const nextPoint = await resolveScratchContentPoint(xRatio, yRatio);
+      await page.mouse.move(nextPoint.x, nextPoint.y, { steps: 10 });
     }
 
     await page.mouse.up();
   }
 
+  async function readScratchPixel(xRatio: number, yRatio: number) {
+    return activeEditorPanel(page).evaluate((panel, ratios: { xRatio: number; yRatio: number }) => {
+      const surface =
+        panel.querySelector<HTMLElement>('textarea[placeholder="Write in Markdown"]') ??
+        panel.querySelector<HTMLElement>(".bb-editor-preview");
+      const canvas = panel.querySelector<HTMLCanvasElement>('[data-testid="scratch-canvas"]');
+      if (!surface || !canvas) {
+        throw new Error("Expected the scratch editor surface and canvas to be visible.");
+      }
+
+      const context = canvas.getContext("2d");
+      if (!context) {
+        throw new Error("Expected a 2D canvas context.");
+      }
+
+      const canvasRect = canvas.getBoundingClientRect();
+      const surfaceRect = surface.getBoundingClientRect();
+      const style = window.getComputedStyle(surface);
+      const borderLeft = parseFloat(style.borderLeftWidth || "0") || 0;
+      const borderTop = parseFloat(style.borderTopWidth || "0") || 0;
+      const paddingLeft = parseFloat(style.paddingLeft || "0") || 0;
+      const paddingRight = parseFloat(style.paddingRight || "0") || 0;
+      const paddingTop = parseFloat(style.paddingTop || "0") || 0;
+      const paddingBottom = parseFloat(style.paddingBottom || "0") || 0;
+      const contentLeft = surfaceRect.left - canvasRect.left + borderLeft + paddingLeft;
+      const contentTop = surfaceRect.top - canvasRect.top + borderTop + paddingTop;
+      const contentWidth = Math.max(1, surface.clientWidth - paddingLeft - paddingRight);
+      const contentHeight = Math.max(
+        surface.clientHeight - paddingTop - paddingBottom,
+        surface.scrollHeight - paddingTop - paddingBottom
+      );
+      const pixelX = Math.max(
+        0,
+        Math.min(canvas.width - 1, Math.round(((contentLeft + contentWidth * ratios.xRatio) / canvasRect.width) * canvas.width))
+      );
+      const pixelY = Math.max(
+        0,
+        Math.min(
+          canvas.height - 1,
+          Math.round((((contentTop + contentHeight * ratios.yRatio - surface.scrollTop) / canvasRect.height) * canvas.height))
+        )
+      );
+
+      return Array.from(context.getImageData(pixelX, pixelY, 1, 1).data);
+    }, { xRatio, yRatio });
+  }
+
   await scratchButton.click();
   await expect(editorPanel.getByTestId("scratch-overlay-toolbar")).toBeVisible();
   await expect(scratchButton).toHaveClass(/bb-icon-button--is-active/);
-  await drawStroke(0.22, 0.35, [
-    [120, 28],
-    [40, 88],
-    [150, 110]
+  await drawStroke([
+    [0.18, 0.22],
+    [0.32, 0.27],
+    [0.48, 0.38],
+    [0.6, 0.49]
   ]);
   await waitForUpdatedStatus(page, previousStatus);
   await expect(activeEditorPanel(page).getByTestId("scratch-overlay")).toHaveAttribute("data-scratch-strokes", "1");
   await expect(textarea).toHaveValue("Sketch goes here.");
+  expect((await readScratchPixel(0.48, 0.38))[3]).toBeGreaterThan(0);
+
+  await page.setViewportSize({ width: 1500, height: 1000 });
+  await expect(activeEditorPanel(page).getByTestId("scratch-overlay")).toHaveAttribute("data-scratch-strokes", "1");
+  await expect
+    .poll(async () => (await readScratchPixel(0.48, 0.38))[3], {
+      timeout: 5000
+    })
+    .toBeGreaterThan(0);
+
+  const eraseStatus = await waitForUpdatedStatus(page);
+  await editorPanel.getByRole("button", { name: /^eraser$/i }).click();
+  await expect(activeEditorPanel(page).getByTestId("scratch-overlay")).toHaveAttribute("data-scratch-tool", "erase");
+  await drawStroke([
+    [0.44, 0.34],
+    [0.52, 0.42]
+  ]);
+  await waitForUpdatedStatus(page, eraseStatus);
+  await expect(activeEditorPanel(page).getByTestId("scratch-overlay")).toHaveAttribute("data-scratch-strokes", "2");
+  await expect
+    .poll(async () => (await readScratchPixel(0.48, 0.38))[3], {
+      timeout: 5000
+    })
+    .toBe(0);
+  const noteId = extractNoteIdFromUrl(page.url());
+  await expect
+    .poll(async () => {
+      const persistedScratchpad = await page.evaluate(async (currentNoteId) => {
+        const response = await fetch(`/api/v1/notes/${currentNoteId}`);
+        return (await response.json()).scratchpad;
+      }, noteId);
+      return {
+        persistedStrokes: persistedScratchpad.strokes.length,
+        latestRequestStrokes: noteUpdatePayloads.at(-1)?.scratchpad?.strokes?.length ?? 0
+      };
+    })
+    .toEqual({
+      persistedStrokes: 2,
+      latestRequestStrokes: 2
+    });
+
   await editorPanel.getByRole("button", { name: /^done$/i }).click();
   await expect(editorPanel.getByTestId("scratch-overlay-toolbar")).toHaveCount(0);
   await expect(scratchButton).not.toHaveClass(/bb-icon-button--is-active/);
   await expect(editorPanel.locator(".bb-attachment-card")).toHaveCount(0);
 
   await previewToggle.click();
-  await expect(activeEditorPanel(page).getByTestId("scratch-overlay")).toHaveAttribute("data-scratch-strokes", "1");
+  await expect(activeEditorPanel(page).getByTestId("scratch-overlay")).toHaveAttribute("data-scratch-strokes", "2");
 
   await page.reload();
   const reloadedEditorPanel = page.getByTestId("editor-panel-desktop");
@@ -1678,17 +1804,19 @@ test("draws scratch as an editor overlay without changing raw markdown and keeps
   const reloadedTextarea = reloadedEditorPanel.getByPlaceholder("Write in Markdown");
   await expect(reloadedTextarea).toHaveValue("Sketch goes here.");
   await reloadedPreviewToggle.click();
-  await expect(activeEditorPanel(page).getByTestId("scratch-overlay")).toHaveAttribute("data-scratch-strokes", "1");
+  await expect(activeEditorPanel(page).getByTestId("scratch-overlay")).toHaveAttribute("data-scratch-strokes", "2");
 
   const reloadedStatus = await waitForUpdatedStatus(page);
   await reloadedEditorPanel.getByRole("button", { name: /^scratch$/i }).click();
   await expect(reloadedEditorPanel.getByTestId("scratch-overlay-toolbar")).toBeVisible();
-  await drawStroke(0.58, 0.32, [
-    [36, 84],
-    [128, 126]
+  await reloadedEditorPanel.getByRole("button", { name: /^draw$/i }).click();
+  await drawStroke([
+    [0.62, 0.32],
+    [0.66, 0.4],
+    [0.76, 0.48]
   ]);
   await waitForUpdatedStatus(page, reloadedStatus);
-  await expect(activeEditorPanel(page).getByTestId("scratch-overlay")).toHaveAttribute("data-scratch-strokes", "2");
+  await expect(activeEditorPanel(page).getByTestId("scratch-overlay")).toHaveAttribute("data-scratch-strokes", "3");
 });
 
 test("auto-saves voice notes on stop, inserts them into the editor, keeps delete available, and shows live recorder progress", async ({

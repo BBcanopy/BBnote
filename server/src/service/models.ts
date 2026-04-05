@@ -109,8 +109,11 @@ export interface ScratchPoint {
   y: number;
 }
 
+export type ScratchStrokeMode = "draw" | "erase";
+
 export interface ScratchStroke {
   color: string;
+  mode?: ScratchStrokeMode;
   points: ScratchPoint[];
   width: number;
 }

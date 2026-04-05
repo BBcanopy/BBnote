@@ -257,10 +257,20 @@ describe("noteController integration", () => {
       strokes: [
         {
           color: "#16393d",
+          mode: "draw" as const,
           width: 5,
           points: [
             { x: 120, y: 240 },
             { x: 180, y: 320 }
+          ]
+        },
+        {
+          color: "#16393d",
+          mode: "erase" as const,
+          width: 18,
+          points: [
+            { x: 150, y: 280 },
+            { x: 176, y: 304 }
           ]
         }
       ]

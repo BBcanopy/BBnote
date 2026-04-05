@@ -313,10 +313,24 @@ function parseScratchpadJson(value: string | null): ScratchDocument | null {
 
   try {
     const parsed = JSON.parse(value) as unknown;
-    return isScratchDocument(parsed) ? parsed : null;
+    return normalizeScratchDocument(parsed);
   } catch {
     return null;
   }
+}
+
+function normalizeScratchDocument(value: unknown): ScratchDocument | null {
+  if (!isScratchDocument(value)) {
+    return null;
+  }
+
+  return {
+    ...value,
+    strokes: value.strokes.map((stroke) => ({
+      ...stroke,
+      mode: stroke.mode === "erase" ? "erase" : "draw"
+    }))
+  };
 }
 
 function isScratchDocument(value: unknown): value is ScratchDocument {
@@ -345,6 +359,7 @@ function isScratchStroke(value: unknown): value is ScratchStroke {
   const candidate = value as Partial<ScratchStroke>;
   return (
     typeof candidate.color === "string" &&
+    (candidate.mode === undefined || candidate.mode === "draw" || candidate.mode === "erase") &&
     typeof candidate.width === "number" &&
     candidate.width > 0 &&
     Array.isArray(candidate.points) &&

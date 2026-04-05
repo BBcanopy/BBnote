@@ -5,6 +5,7 @@ import {
   CaretRight,
   CircleNotch,
   Code,
+  Eraser,
   Eye,
   FileArrowUp,
   FolderSimple,
@@ -65,15 +66,21 @@ import {
 import {
   cloneScratchDocument,
   createEmptyScratchDocument,
+  DEFAULT_SCRATCH_ERASER_WIDTH_PX,
   DEFAULT_SCRATCH_STROKE_COLOR,
   DEFAULT_SCRATCH_STROKE_WIDTH_PX,
   denormalizeScratchStrokeWidth,
+  getScratchStrokeMode,
   hasScratchInk,
+  mapScratchPointToViewport,
   normalizeScratchStrokeWidth,
+  resolveScratchViewportPoint,
   serializeScratchpad,
   type ScratchDocument,
   type ScratchPoint,
-  type ScratchStroke
+  type ScratchStroke,
+  type ScratchTool,
+  type ScratchViewportMetrics
 } from "../utils/scratch";
 import { buildNotesPath } from "../utils/noteRoute";
 import { buildNoteOrderIds, moveNotes, type NoteMoveInstruction } from "../utils/noteOrder";
@@ -169,8 +176,10 @@ export function NotesPage() {
   const [pendingNoteDelete, setPendingNoteDelete] = useState<PendingNoteDelete | null>(null);
   const [pendingFolderDelete, setPendingFolderDelete] = useState<FolderNode | null>(null);
   const [lastSyncedContentKey, setLastSyncedContentKey] = useState<string | null>(null);
+  const [autosaveRevision, setAutosaveRevision] = useState(0);
   const deferredSearch = useDeferredValue(search);
   const saveInFlightRef = useRef(false);
+  const queuedAutosaveRef = useRef(false);
   const autosaveTimerRef = useRef<number | null>(null);
   const editorSessionRef = useRef(0);
   const notesRefreshRef = useRef(0);
@@ -439,9 +448,11 @@ export function NotesPage() {
     }
 
     if (saveInFlightRef.current) {
+      queuedAutosaveRef.current = true;
       return;
     }
 
+    queuedAutosaveRef.current = false;
     const sessionId = editorSessionRef.current;
     const payload = {
       noteId: editorNote.noteId,
@@ -460,7 +471,7 @@ export function NotesPage() {
     }, AUTOSAVE_DELAY_MS);
 
     return () => clearAutosaveTimer();
-  }, [auth.user, canPersistEditor, currentContentKey, editorNote, lastSyncedContentKey]);
+  }, [auth.user, autosaveRevision, canPersistEditor, currentContentKey, editorNote, lastSyncedContentKey]);
 
   useEffect(() => {
     if (!paneResize) {
@@ -590,6 +601,7 @@ export function NotesPage() {
     setError(null);
 
     try {
+      const savedScratchpadKey = serializeScratchpad(payload.scratchpad);
       const persisted = payload.noteId
         ? await updateNote(payload.noteId, {
             folderId: payload.folderId,
@@ -618,12 +630,13 @@ export function NotesPage() {
               return current;
             }
 
+            const scratchpadChangedSinceSaveStarted = serializeScratchpad(current.scratchpad) !== savedScratchpadKey;
             return {
               ...current,
               noteId: persisted.id,
               folderId: persisted.folderId,
               title: current.title.trim() ? current.title : persisted.title,
-              scratchpad: persisted.scratchpad,
+              scratchpad: scratchpadChangedSinceSaveStarted ? current.scratchpad : persisted.scratchpad,
               attachments: persisted.attachments,
               createdAt: persisted.createdAt,
               updatedAt: persisted.updatedAt,
@@ -648,6 +661,10 @@ export function NotesPage() {
     } finally {
       saveInFlightRef.current = false;
       setSaving(false);
+      if (queuedAutosaveRef.current) {
+        queuedAutosaveRef.current = false;
+        setAutosaveRevision((current) => current + 1);
+      }
     }
   }
 
@@ -1545,6 +1562,7 @@ function EditorPanel(props: {
   const [recordingElapsedMs, setRecordingElapsedMs] = useState(0);
   const [savingRecording, setSavingRecording] = useState(false);
   const [scratchEditMode, setScratchEditMode] = useState(false);
+  const [scratchTool, setScratchTool] = useState<ScratchTool>("draw");
   const [scratchError, setScratchError] = useState<string | null>(null);
   const [tablePickerOpen, setTablePickerOpen] = useState(false);
   const [tableDimensions, setTableDimensions] = useState<MarkdownTableDimensions>({
@@ -1574,6 +1592,7 @@ function EditorPanel(props: {
 
   useEffect(() => {
     setScratchEditMode(false);
+    setScratchTool("draw");
     setScratchError(null);
   }, [props.editorNote?.noteId]);
 
@@ -1693,7 +1712,12 @@ function EditorPanel(props: {
       return;
     }
 
-    setScratchEditMode((current) => !current);
+    if (scratchEditMode) {
+      setScratchEditMode(false);
+    } else {
+      setScratchTool("draw");
+      setScratchEditMode(true);
+    }
     setScratchError(null);
   }
 
@@ -2267,6 +2291,28 @@ function EditorPanel(props: {
           </p>
         </div>
         <div className="bb-scratch-overlay__actions">
+          <div className="bb-scratch-overlay__tool-group" role="group" aria-label="Scratch tools">
+            <button
+              type="button"
+              onClick={() => setScratchTool("draw")}
+              disabled={props.refreshing}
+              aria-pressed={scratchTool === "draw"}
+              className={`${buttonSecondary} bb-scratch-overlay__tool${scratchTool === "draw" ? " is-active" : ""}`}
+            >
+              <PencilSimple size={16} />
+              Draw
+            </button>
+            <button
+              type="button"
+              onClick={() => setScratchTool("erase")}
+              disabled={props.refreshing}
+              aria-pressed={scratchTool === "erase"}
+              className={`${buttonSecondary} bb-scratch-overlay__tool${scratchTool === "erase" ? " is-active" : ""}`}
+            >
+              <Eraser size={16} />
+              Eraser
+            </button>
+          </div>
           <button type="button" onClick={handleClearSketch} disabled={!scratchHasInk || props.refreshing} className={buttonSecondary}>
             Clear
           </button>
@@ -2510,6 +2556,7 @@ function EditorPanel(props: {
                     active={scratchEditMode}
                     contentVersion={props.editorNote.bodyMarkdown}
                     scratchpad={props.editorNote.scratchpad}
+                    tool={scratchTool}
                     surfaceRef={bodyTextareaRef}
                     onChange={handleScratchpadChange}
                     onErrorChange={setScratchError}
@@ -2527,6 +2574,7 @@ function EditorPanel(props: {
                     active={scratchEditMode}
                     contentVersion={props.editorNote.bodyMarkdown}
                     scratchpad={props.editorNote.scratchpad}
+                    tool={scratchTool}
                     surfaceRef={previewSurfaceRef}
                     onChange={handleScratchpadChange}
                     onErrorChange={setScratchError}
@@ -2780,6 +2828,7 @@ function ScratchOverlayCanvas(props: {
   active: boolean;
   contentVersion: string;
   scratchpad: ScratchDocument | null;
+  tool: ScratchTool;
   surfaceRef: { readonly current: HTMLElement | null };
   onChange(scratchpad: ScratchDocument | null): void;
   onErrorChange(message: string | null): void;
@@ -2818,6 +2867,7 @@ function ScratchOverlayCanvas(props: {
 
     queueRedraw();
     const surface = props.surfaceRef.current;
+    const viewport = window.visualViewport;
     if (!surface) {
       return () => {
         if (frameId !== 0) {
@@ -2828,6 +2878,8 @@ function ScratchOverlayCanvas(props: {
 
     surface.addEventListener("scroll", queueRedraw);
     window.addEventListener("resize", queueRedraw);
+    viewport?.addEventListener("resize", queueRedraw);
+    viewport?.addEventListener("scroll", queueRedraw);
     const resizeObserver = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(queueRedraw);
     resizeObserver?.observe(surface);
 
@@ -2837,6 +2889,8 @@ function ScratchOverlayCanvas(props: {
       }
       surface.removeEventListener("scroll", queueRedraw);
       window.removeEventListener("resize", queueRedraw);
+      viewport?.removeEventListener("resize", queueRedraw);
+      viewport?.removeEventListener("scroll", queueRedraw);
       resizeObserver?.disconnect();
     };
   }, [props.active, props.contentVersion, props.onErrorChange, props.scratchpad, props.surfaceRef, visible]);
@@ -2856,17 +2910,20 @@ function ScratchOverlayCanvas(props: {
 
     event.preventDefault();
     const baseDocument = cloneScratchDocument(props.scratchpad) ?? createEmptyScratchDocument();
-    const point = resolveScratchOverlayPoint(event.clientX, event.clientY, baseDocument, metrics);
-    const storedWidth = normalizeScratchStrokeWidth(DEFAULT_SCRATCH_STROKE_WIDTH_PX, metrics.viewportWidth, baseDocument.width);
+    const point = resolveScratchViewportPoint(event.clientX - metrics.canvasRectLeft, event.clientY - metrics.canvasRectTop, baseDocument, metrics);
+    const brushWidth = props.tool === "erase" ? DEFAULT_SCRATCH_ERASER_WIDTH_PX : DEFAULT_SCRATCH_STROKE_WIDTH_PX;
+    const storedWidth = normalizeScratchStrokeWidth(brushWidth, metrics.contentWidth, baseDocument.width);
+    const strokeMode = props.tool === "erase" ? "erase" : "draw";
 
     pointerIdRef.current = event.pointerId;
     currentStrokeRef.current = {
       color: DEFAULT_SCRATCH_STROKE_COLOR,
+      mode: strokeMode,
       points: [point],
       width: storedWidth
     };
     canvas.setPointerCapture(event.pointerId);
-    drawScratchOverlaySegment(context, metrics, baseDocument, point, point, DEFAULT_SCRATCH_STROKE_COLOR, storedWidth);
+    drawScratchOverlaySegment(context, metrics, baseDocument, point, point, DEFAULT_SCRATCH_STROKE_COLOR, storedWidth, strokeMode);
     props.onErrorChange(null);
   }
 
@@ -2886,9 +2943,18 @@ function ScratchOverlayCanvas(props: {
     }
 
     event.preventDefault();
-    const nextPoint = resolveScratchOverlayPoint(event.clientX, event.clientY, baseDocument, metrics);
+    const nextPoint = resolveScratchViewportPoint(event.clientX - metrics.canvasRectLeft, event.clientY - metrics.canvasRectTop, baseDocument, metrics);
     stroke.points.push(nextPoint);
-    drawScratchOverlaySegment(context, metrics, baseDocument, lastPoint, nextPoint, stroke.color, stroke.width);
+    drawScratchOverlaySegment(
+      context,
+      metrics,
+      baseDocument,
+      lastPoint,
+      nextPoint,
+      stroke.color,
+      stroke.width,
+      getScratchStrokeMode(stroke)
+    );
   }
 
   function handlePointerEnd(event: ReactPointerEvent<HTMLCanvasElement>) {
@@ -2913,14 +2979,20 @@ function ScratchOverlayCanvas(props: {
       ...completedStroke,
       points: completedStroke.points.map((point) => ({ ...point }))
     });
+    if (nextScratchpad.strokes.every((stroke) => getScratchStrokeMode(stroke) === "erase")) {
+      props.onChange(null);
+      return;
+    }
+
     props.onChange(nextScratchpad);
   }
 
   return (
     <div
-      className={`bb-scratch-overlay${visible ? " is-visible" : ""}${props.active ? " is-active" : ""}`}
+      className={`bb-scratch-overlay${visible ? " is-visible" : ""}${props.active ? " is-active" : ""}${props.tool === "erase" ? " is-erasing" : ""}`}
       data-testid="scratch-overlay"
       data-scratch-strokes={props.scratchpad?.strokes.length ?? 0}
+      data-scratch-tool={props.tool}
     >
       <canvas
         ref={canvasRef}
@@ -2936,13 +3008,9 @@ function ScratchOverlayCanvas(props: {
   );
 }
 
-interface ScratchSurfaceMetrics {
-  contentHeight: number;
-  rectLeft: number;
-  rectTop: number;
-  scrollTop: number;
-  viewportHeight: number;
-  viewportWidth: number;
+interface ScratchSurfaceMetrics extends ScratchViewportMetrics {
+  canvasRectLeft: number;
+  canvasRectTop: number;
 }
 
 function drawScratchOverlay(
@@ -2970,12 +3038,13 @@ function drawScratchOverlay(
     }
 
     if (stroke.points.length === 1) {
-      const point = mapScratchPointToOverlay(stroke.points[0], scratchpad, metrics);
+      const point = mapScratchPointToViewport(stroke.points[0], scratchpad, metrics);
       drawScratchDot(
         prepared.context,
         point,
         stroke.color,
-        Math.max(1, denormalizeScratchStrokeWidth(stroke.width, metrics.viewportWidth, scratchpad.width))
+        Math.max(1, denormalizeScratchStrokeWidth(stroke.width, metrics.contentWidth, scratchpad.width)),
+        getScratchStrokeMode(stroke)
       );
       continue;
     }
@@ -2988,7 +3057,8 @@ function drawScratchOverlay(
         stroke.points[index - 1],
         stroke.points[index],
         stroke.color,
-        stroke.width
+        stroke.width,
+        getScratchStrokeMode(stroke)
       );
     }
   }
@@ -3032,27 +3102,33 @@ function measureScratchSurface(surface: HTMLElement | null, canvas: HTMLCanvasEl
     return null;
   }
 
-  const rect = canvas.getBoundingClientRect();
-  if (rect.width <= 0 || rect.height <= 0) {
+  const canvasRect = canvas.getBoundingClientRect();
+  const surfaceRect = surface.getBoundingClientRect();
+  if (canvasRect.width <= 0 || canvasRect.height <= 0 || surfaceRect.width <= 0 || surfaceRect.height <= 0) {
     return null;
   }
 
-  return {
-    contentHeight: Math.max(surface.scrollHeight, rect.height),
-    rectLeft: rect.left,
-    rectTop: rect.top,
-    scrollTop: surface.scrollTop,
-    viewportHeight: rect.height,
-    viewportWidth: rect.width
-  };
-}
+  const computedStyle = window.getComputedStyle(surface);
+  const borderLeft = parseFloat(computedStyle.borderLeftWidth || "0") || 0;
+  const borderTop = parseFloat(computedStyle.borderTopWidth || "0") || 0;
+  const paddingLeft = parseFloat(computedStyle.paddingLeft || "0") || 0;
+  const paddingRight = parseFloat(computedStyle.paddingRight || "0") || 0;
+  const paddingTop = parseFloat(computedStyle.paddingTop || "0") || 0;
+  const paddingBottom = parseFloat(computedStyle.paddingBottom || "0") || 0;
 
-function resolveScratchOverlayPoint(clientX: number, clientY: number, document: ScratchDocument, metrics: ScratchSurfaceMetrics): ScratchPoint {
-  const viewportX = clampScratchCoordinate(clientX - metrics.rectLeft, metrics.viewportWidth);
-  const viewportY = clampScratchCoordinate(clientY - metrics.rectTop, metrics.viewportHeight);
+  const contentWidth = Math.max(1, surface.clientWidth - paddingLeft - paddingRight);
+  const viewportHeight = Math.max(1, surface.clientHeight - paddingTop - paddingBottom);
+  const contentHeight = Math.max(viewportHeight, surface.scrollHeight - paddingTop - paddingBottom);
+
   return {
-    x: clampScratchCoordinate((viewportX / metrics.viewportWidth) * document.width, document.width),
-    y: clampScratchCoordinate(((metrics.scrollTop + viewportY) / metrics.contentHeight) * document.height, document.height)
+    canvasRectLeft: canvasRect.left,
+    canvasRectTop: canvasRect.top,
+    contentHeight,
+    contentLeft: surfaceRect.left - canvasRect.left + borderLeft + paddingLeft,
+    contentTop: surfaceRect.top - canvasRect.top + borderTop + paddingTop,
+    contentWidth,
+    scrollTop: surface.scrollTop,
+    viewportHeight
   };
 }
 
@@ -3063,42 +3139,43 @@ function drawScratchOverlaySegment(
   from: ScratchPoint,
   to: ScratchPoint,
   color: string,
-  width: number
+  width: number,
+  mode: ScratchTool
 ) {
-  const start = mapScratchPointToOverlay(from, document, metrics);
-  const end = mapScratchPointToOverlay(to, document, metrics);
-  const lineWidth = Math.max(1, denormalizeScratchStrokeWidth(width, metrics.viewportWidth, document.width));
+  const start = mapScratchPointToViewport(from, document, metrics);
+  const end = mapScratchPointToViewport(to, document, metrics);
+  const lineWidth = Math.max(1, denormalizeScratchStrokeWidth(width, metrics.contentWidth, document.width));
 
-  drawScratchStroke(context, start, end, color, lineWidth);
+  drawScratchStroke(context, start, end, color, lineWidth, mode);
 }
 
-function mapScratchPointToOverlay(point: ScratchPoint, document: ScratchDocument, metrics: ScratchSurfaceMetrics): ScratchPoint {
-  return {
-    x: (point.x / document.width) * metrics.viewportWidth,
-    y: (point.y / document.height) * metrics.contentHeight - metrics.scrollTop
-  };
+function drawScratchDot(context: CanvasRenderingContext2D, point: ScratchPoint, color: string, lineWidth: number, mode: ScratchTool) {
+  withScratchCompositeMode(context, mode, () => {
+    context.fillStyle = color;
+    context.beginPath();
+    context.arc(point.x, point.y, Math.max(0.75, lineWidth / 2), 0, Math.PI * 2);
+    context.fill();
+  });
 }
 
-function drawScratchDot(context: CanvasRenderingContext2D, point: ScratchPoint, color: string, lineWidth: number) {
-  context.fillStyle = color;
-  context.beginPath();
-  context.arc(point.x, point.y, Math.max(0.75, lineWidth / 2), 0, Math.PI * 2);
-  context.fill();
+function drawScratchStroke(context: CanvasRenderingContext2D, from: ScratchPoint, to: ScratchPoint, color: string, lineWidth: number, mode: ScratchTool) {
+  withScratchCompositeMode(context, mode, () => {
+    context.strokeStyle = color;
+    context.lineWidth = lineWidth;
+    context.lineCap = "round";
+    context.lineJoin = "round";
+    context.beginPath();
+    context.moveTo(from.x, from.y);
+    context.lineTo(to.x, to.y);
+    context.stroke();
+  });
 }
 
-function drawScratchStroke(context: CanvasRenderingContext2D, from: ScratchPoint, to: ScratchPoint, color: string, lineWidth: number) {
-  context.strokeStyle = color;
-  context.lineWidth = lineWidth;
-  context.lineCap = "round";
-  context.lineJoin = "round";
-  context.beginPath();
-  context.moveTo(from.x, from.y);
-  context.lineTo(to.x, to.y);
-  context.stroke();
-}
-
-function clampScratchCoordinate(value: number, max: number) {
-  return Math.max(0, Math.min(value, max));
+function withScratchCompositeMode(context: CanvasRenderingContext2D, mode: ScratchTool, draw: () => void) {
+  context.save();
+  context.globalCompositeOperation = mode === "erase" ? "destination-out" : "source-over";
+  draw();
+  context.restore();
 }
 
 function getRecorderTitle(phase: RecorderPhase) {
