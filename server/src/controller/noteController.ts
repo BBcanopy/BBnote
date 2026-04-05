@@ -22,6 +22,7 @@ const noteBodySchema = z.object({
       strokes: z.array(
         z.object({
           color: z.string().min(1),
+          mode: z.enum(["draw", "erase"]).optional(),
           width: z.number().positive(),
           points: z.array(
             z.object({
