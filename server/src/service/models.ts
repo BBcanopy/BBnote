@@ -121,6 +121,7 @@ export interface ScratchStroke {
 export interface ScratchDocument {
   height: number;
   id: string;
+  layoutWidth?: number;
   strokes: ScratchStroke[];
   version: 1;
   width: number;

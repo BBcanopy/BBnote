@@ -3,6 +3,7 @@ import {
   cloneScratchDocument,
   createEmptyScratchDocument,
   getScratchStrokeMode,
+  getScratchLayoutWidth,
   mapScratchPointToViewport,
   denormalizeScratchStrokeWidth,
   hasScratchInk,
@@ -61,6 +62,14 @@ describe("scratch utils", () => {
   it("serializes nullable scratchpad content for autosave keys", () => {
     expect(serializeScratchpad(null)).toBe("null");
     expect(serializeScratchpad(createEmptyScratchDocument("scratch-1"))).toContain("\"id\":\"scratch-1\"");
+  });
+
+  it("returns a persisted layout width when present", () => {
+    const scratch = createEmptyScratchDocument("scratch-5");
+    scratch.layoutWidth = 720;
+
+    expect(getScratchLayoutWidth(scratch, 480)).toBe(720);
+    expect(getScratchLayoutWidth(null, 480)).toBe(480);
   });
 
   it("normalizes stroke width across different surface widths", () => {

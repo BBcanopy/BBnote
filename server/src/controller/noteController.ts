@@ -17,6 +17,7 @@ const noteBodySchema = z.object({
     .object({
       version: z.literal(1),
       id: z.string().min(1),
+      layoutWidth: z.number().positive().optional(),
       width: z.number().positive(),
       height: z.number().positive(),
       strokes: z.array(
