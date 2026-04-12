@@ -454,6 +454,19 @@ describe("noteController integration", () => {
     });
     expect(uploadResponse.statusCode).toBe(201);
     const uploadedAttachment = uploadResponse.json();
+
+    const secondUploadResponse = await app.inject({
+      method: "POST",
+      url: `/api/v1/notes/${created.id}/attachments`,
+      headers: {
+        ...authHeaders(token),
+        "content-type": fixtureMultipartContentType
+      },
+      payload: createMultipartPayload("follow-up.txt", "text/plain", Buffer.from("second-attachment-body", "utf8"))
+    });
+    expect(secondUploadResponse.statusCode).toBe(201);
+    const secondUploadedAttachment = secondUploadResponse.json();
+
     const ownerRow = app.bbnote.database.connection
       .prepare<[], { id: string }>("select id from users limit 1")
       .get();
@@ -462,6 +475,7 @@ describe("noteController integration", () => {
       .prepare<[string], { filePath: string }>("select file_path as filePath from notes where id = ?")
       .get(created.id);
     const initialAttachment = app.bbnote.attachmentDb.getById(ownerRow!.id, uploadedAttachment.id);
+    const secondInitialAttachment = app.bbnote.attachmentDb.getById(ownerRow!.id, secondUploadedAttachment.id);
 
     const firstDeleteResponse = await app.inject({
       method: "DELETE",
@@ -491,8 +505,12 @@ describe("noteController integration", () => {
     expect(movedNoteResponse.json()).toMatchObject({
       id: created.id,
       folderId: deletedNotesFolder.id,
-      attachments: [expect.objectContaining({ id: uploadedAttachment.id, name: "evidence.txt" })]
+      attachments: expect.arrayContaining([
+        expect.objectContaining({ id: uploadedAttachment.id, name: "evidence.txt" }),
+        expect.objectContaining({ id: secondUploadedAttachment.id, name: "follow-up.txt" })
+      ])
     });
+    expect(movedNoteResponse.json().attachments).toHaveLength(2);
 
     const globalListResponse = await app.inject({
       method: "GET",
@@ -527,7 +545,9 @@ describe("noteController integration", () => {
     await expect(fs.readFile(movedRow!.filePath, "utf8")).resolves.toContain("findmeafterdelete");
     await expect(fs.access(initialRow!.filePath)).rejects.toThrow();
     expect(app.bbnote.attachmentDb.getById(ownerRow!.id, uploadedAttachment.id)).toBeDefined();
+    expect(app.bbnote.attachmentDb.getById(ownerRow!.id, secondUploadedAttachment.id)).toBeDefined();
     await expect(fs.readFile(initialAttachment!.storedPath, "utf8")).resolves.toBe("attachment-body");
+    await expect(fs.readFile(secondInitialAttachment!.storedPath, "utf8")).resolves.toBe("second-attachment-body");
 
     const secondDeleteResponse = await app.inject({
       method: "DELETE",
@@ -538,9 +558,11 @@ describe("noteController integration", () => {
 
     expect(app.bbnote.noteDb.getById(ownerRow!.id, created.id)).toBeUndefined();
     expect(app.bbnote.attachmentDb.getById(ownerRow!.id, uploadedAttachment.id)).toBeUndefined();
+    expect(app.bbnote.attachmentDb.getById(ownerRow!.id, secondUploadedAttachment.id)).toBeUndefined();
     expect(app.bbnote.noteDb.getFtsRows(ownerRow!.id)).toEqual([]);
     await expect(fs.access(movedRow!.filePath)).rejects.toThrow();
     await expect(fs.access(path.dirname(initialAttachment!.storedPath))).rejects.toThrow();
+    await expect(fs.access(path.dirname(secondInitialAttachment!.storedPath))).rejects.toThrow();
 
     const deletedFolderListResponse = await app.inject({
       method: "GET",
@@ -549,6 +571,75 @@ describe("noteController integration", () => {
     });
     expect(deletedFolderListResponse.statusCode).toBe(200);
     expect(deletedFolderListResponse.json().items).toEqual([]);
+  });
+
+  it("moves a note with a missing source file into Deleted Notes instead of failing the delete request", async () => {
+    const notebookResponse = await app.inject({
+      method: "POST",
+      url: "/api/v1/folders",
+      headers: authHeaders(token),
+      payload: {
+        name: "Projects",
+        parentId: null
+      }
+    });
+    expect(notebookResponse.statusCode).toBe(201);
+    const notebook = notebookResponse.json();
+
+    const createResponse = await app.inject({
+      method: "POST",
+      url: "/api/v1/notes",
+      headers: authHeaders(token),
+      payload: {
+        folderId: notebook.id,
+        title: "Delete missing source",
+        bodyMarkdown: "body that will disappear"
+      }
+    });
+    expect(createResponse.statusCode).toBe(201);
+    const created = createResponse.json();
+
+    const createdRow = app.bbnote.database.connection
+      .prepare<[string], { filePath: string }>("select file_path as filePath from notes where id = ?")
+      .get(created.id);
+    await fs.rm(createdRow!.filePath, { force: true });
+
+    const deleteResponse = await app.inject({
+      method: "DELETE",
+      url: `/api/v1/notes/${created.id}`,
+      headers: authHeaders(token)
+    });
+    expect(deleteResponse.statusCode).toBe(204);
+
+    const foldersResponse = await app.inject({
+      method: "GET",
+      url: "/api/v1/folders",
+      headers: authHeaders(token)
+    });
+    expect(foldersResponse.statusCode).toBe(200);
+    const deletedNotesFolder = foldersResponse
+      .json()
+      .find((folder: { id: string; name: string }) => folder.name === DELETED_NOTES_FOLDER_NAME);
+    expect(deletedNotesFolder).toBeDefined();
+
+    const movedNoteResponse = await app.inject({
+      method: "GET",
+      url: `/api/v1/notes/${created.id}`,
+      headers: authHeaders(token)
+    });
+    expect(movedNoteResponse.statusCode).toBe(200);
+    expect(movedNoteResponse.json()).toMatchObject({
+      id: created.id,
+      folderId: deletedNotesFolder.id,
+      bodyMarkdown: ""
+    });
+
+    const movedRow = app.bbnote.database.connection
+      .prepare<[string], { filePath: string; folderId: string }>("select file_path as filePath, folder_id as folderId from notes where id = ?")
+      .get(created.id);
+    expect(movedRow?.folderId).toBe(deletedNotesFolder.id);
+    expect(movedRow?.filePath).toContain(`${path.sep}deleted${path.sep}`);
+    await expect(fs.readFile(movedRow!.filePath, "utf8")).resolves.toBe("");
   });
 });
 

@@ -170,7 +170,7 @@ export class NoteService {
     folderId: string;
     title: string;
     bodyMarkdown: string;
-  }) {
+  }, options?: { previousBodyMarkdown?: string }) {
     const record = this.noteDb.getById(input.ownerId, input.noteId);
     if (!record) {
       throw new Error("Note not found.");
@@ -181,7 +181,10 @@ export class NoteService {
     }
     const trimmedTitle = input.title.trim();
 
-    const previousBody = await this.storageService.readMarkdown(record.filePath);
+    const previousBody =
+      options?.previousBodyMarkdown !== undefined
+        ? options.previousBodyMarkdown
+        : await this.storageService.readMarkdown(record.filePath);
     const folderChanged = record.folderId !== folder.id;
     const nextFilePath = this.storageService.noteFilePath({
       ownerId: input.ownerId,
@@ -242,7 +245,7 @@ export class NoteService {
       folderId: input.folderId,
       title: record.title,
       bodyMarkdown
-    });
+    }, { previousBodyMarkdown: bodyMarkdown });
   }
 
   async deleteNote(ownerId: string, noteId: string) {
@@ -257,7 +260,12 @@ export class NoteService {
     }
 
     if (!isDeletedNotesFolderRecord(folder)) {
-      const bodyMarkdown = await this.storageService.readMarkdown(record.filePath);
+      let bodyMarkdown = "";
+      try {
+        bodyMarkdown = await this.storageService.readMarkdown(record.filePath);
+      } catch {
+        // Allow the note to be trashed even if its source file has already gone missing.
+      }
       const deletedNotesFolder = await this.ensureDeletedNotesFolder(ownerId);
       await this.updateNote({
         ownerId,
@@ -265,16 +273,19 @@ export class NoteService {
         folderId: deletedNotesFolder.id,
         title: record.title,
         bodyMarkdown
-      });
+      }, { previousBodyMarkdown: bodyMarkdown });
       return;
     }
 
     const attachments = this.attachmentsResolver(noteId);
+    const attachmentDirectories = Array.from(
+      new Set(attachments.map((attachment) => path.dirname(attachment.storedPath)))
+    );
     this.noteDb.deleteFts(noteId);
     this.noteDb.delete(ownerId, noteId);
     await Promise.all([
       this.storageService.deleteFile(record.filePath),
-      ...attachments.map((attachment) => this.storageService.deleteDirectory(path.dirname(attachment.storedPath)))
+      ...attachmentDirectories.map((directory) => this.storageService.deleteDirectory(directory))
     ]);
   }
 
