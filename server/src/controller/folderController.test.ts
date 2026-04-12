@@ -4,6 +4,7 @@ import path from "node:path";
 import type { FastifyInstance } from "fastify";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { buildApp } from "../app.js";
+import { DELETED_NOTES_FOLDER_NAME } from "../service/deletedNotesFolder.js";
 import { authHeaders, createTestAuthProvider, createTestConfig } from "../test-helpers.js";
 
 describe("folderController integration", () => {
@@ -156,6 +157,59 @@ describe("folderController integration", () => {
         icon: "briefcase"
       })
     ]);
+  });
+
+  it("keeps Deleted Notes reserved, protected, and pinned last", async () => {
+    const projects = await createNotebook(app, token, "Projects", null);
+    const archive = await createNotebook(app, token, "Archive", null);
+    const ownerRow = app.bbnote.database.connection
+      .prepare<[], { id: string }>("select id from users limit 1")
+      .get();
+
+    const deletedNotes = await app.bbnote.folderService.ensureDeletedNotesFolder(ownerRow!.id);
+
+    const listResponse = await app.inject({
+      method: "GET",
+      url: "/api/v1/folders",
+      headers: authHeaders(token)
+    });
+    expect(listResponse.statusCode).toBe(200);
+    expect(listResponse.json().map((folder: { name: string }) => folder.name)).toEqual([
+      "Projects",
+      "Archive",
+      DELETED_NOTES_FOLDER_NAME
+    ]);
+
+    await expect(
+      app.bbnote.folderService.createFolder(ownerRow!.id, {
+        name: DELETED_NOTES_FOLDER_NAME,
+        parentId: null
+      })
+    ).rejects.toThrow(/reserved/i);
+
+    await expect(
+      app.bbnote.folderService.updateFolder(ownerRow!.id, projects.id, {
+        name: DELETED_NOTES_FOLDER_NAME,
+        parentId: null
+      })
+    ).rejects.toThrow(/reserved/i);
+
+    await expect(
+      app.bbnote.folderService.updateFolder(ownerRow!.id, archive.id, {
+        name: "Archive",
+        parentId: deletedNotes.id
+      })
+    ).rejects.toThrow(/cannot contain notebooks/i);
+
+    await expect(
+      app.bbnote.folderService.updateFolder(ownerRow!.id, deletedNotes.id, {
+        name: DELETED_NOTES_FOLDER_NAME,
+        icon: "star",
+        parentId: null
+      })
+    ).rejects.toThrow(/protected/i);
+
+    await expect(app.bbnote.folderService.deleteFolder(ownerRow!.id, deletedNotes.id)).rejects.toThrow(/protected/i);
   });
 });
 

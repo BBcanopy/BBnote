@@ -95,7 +95,8 @@ describe("NoteListPane", () => {
 
     expect(handleRequestDeleteNote).toHaveBeenCalledWith({
       id: "note-1",
-      title: "Quarterly review"
+      title: "Quarterly review",
+      folderId: "folder-1"
     });
   });
 

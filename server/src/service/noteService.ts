@@ -1,7 +1,9 @@
+import path from "node:path";
 import { randomUUID } from "node:crypto";
 import type { FolderDb } from "../db/folderDb.js";
 import type { NoteDb } from "../db/noteDb.js";
-import type { AttachmentRecord, NoteDetail, NoteSummary, PaginatedNotes } from "./models.js";
+import { DELETED_NOTES_STORAGE_DIR_NAME, isDeletedNotesFolderRecord } from "./deletedNotesFolder.js";
+import type { AttachmentRecord, FolderRecord, NoteDetail, NoteSummary, PaginatedNotes } from "./models.js";
 import { decodeCursor, encodeCursor } from "./paginationService.js";
 import type { StorageService } from "./storageService.js";
 
@@ -20,17 +22,22 @@ export class NoteService {
     private readonly noteDb: NoteDb,
     private readonly folderDb: FolderDb,
     private readonly storageService: StorageService,
-    private readonly attachmentsResolver: (noteId: string) => AttachmentRecord[]
+    private readonly attachmentsResolver: (noteId: string) => AttachmentRecord[],
+    private readonly ensureDeletedNotesFolder: (ownerId: string) => Promise<FolderRecord>
   ) {}
 
   async listNotes(options: ListOptions): Promise<PaginatedNotes> {
     const limit = Math.min(Math.max(options.limit ?? 20, 1), 100);
     const offset = decodeCursor(options.cursor);
     const searchQuery = options.q?.trim();
+    const excludedFolderId = options.folderId
+      ? undefined
+      : this.folderDb.getByStorageDirName(options.ownerId, DELETED_NOTES_STORAGE_DIR_NAME)?.id;
     const records = searchQuery
       ? this.noteDb.search({
           ownerId: options.ownerId,
           folderId: options.folderId,
+          excludedFolderId,
           query: searchQuery,
           limit: limit + 1,
           offset
@@ -38,6 +45,7 @@ export class NoteService {
       : this.noteDb.list({
           ownerId: options.ownerId,
           folderId: options.folderId,
+          excludedFolderId,
           limit: limit + 1,
           offset,
           sort: options.sort ?? "updatedAt",
@@ -242,9 +250,32 @@ export class NoteService {
     if (!record) {
       throw new Error("Note not found.");
     }
+
+    const folder = this.folderDb.getById(ownerId, record.folderId);
+    if (!folder) {
+      throw new Error("Folder not found.");
+    }
+
+    if (!isDeletedNotesFolderRecord(folder)) {
+      const bodyMarkdown = await this.storageService.readMarkdown(record.filePath);
+      const deletedNotesFolder = await this.ensureDeletedNotesFolder(ownerId);
+      await this.updateNote({
+        ownerId,
+        noteId,
+        folderId: deletedNotesFolder.id,
+        title: record.title,
+        bodyMarkdown
+      });
+      return;
+    }
+
+    const attachments = this.attachmentsResolver(noteId);
     this.noteDb.deleteFts(noteId);
     this.noteDb.delete(ownerId, noteId);
-    await this.storageService.deleteFile(record.filePath);
+    await Promise.all([
+      this.storageService.deleteFile(record.filePath),
+      ...attachments.map((attachment) => this.storageService.deleteDirectory(path.dirname(attachment.storedPath)))
+    ]);
   }
 
   async reorderNotes(input: { ownerId: string; folderId: string; orderedNoteIds: string[] }) {

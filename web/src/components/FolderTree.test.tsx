@@ -3,6 +3,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import type { FolderNode } from "../api/types";
 import { FolderTree } from "./FolderTree";
 import { buildNotebookTestId } from "./folderTreeTestIds";
+import { DELETED_NOTES_FOLDER_NAME } from "../utils/deletedNotes";
 
 type FolderTreeProps = ComponentProps<typeof FolderTree>;
 
@@ -68,7 +69,8 @@ describe("FolderTree", () => {
     renderFolderTree({
       draggedNote: {
         id: "note-1",
-        title: "Quarterly review"
+        title: "Quarterly review",
+        folderId: "projects"
       },
       onMoveNote: handleMoveNote
     });
@@ -94,7 +96,8 @@ describe("FolderTree", () => {
     renderFolderTree({
       draggedNote: {
         id: "note-1",
-        title: "Quarterly review"
+        title: "Quarterly review",
+        folderId: "projects"
       },
       onRequestDeleteNote: handleRequestDeleteNote
     });
@@ -107,14 +110,16 @@ describe("FolderTree", () => {
 
     expect(handleRequestDeleteNote).toHaveBeenCalledWith({
       id: "note-1",
-      title: "Quarterly review"
+      title: "Quarterly review",
+      folderId: "projects"
     });
   });
   it("hides notebook action buttons while the full-width delete target is shown", () => {
     renderFolderTree({
       draggedNote: {
         id: "note-1",
-        title: "Quarterly review"
+        title: "Quarterly review",
+        folderId: "projects"
       }
     });
 
@@ -122,12 +127,27 @@ describe("FolderTree", () => {
     expect(screen.getByTestId("notebooks-delete-target")).toHaveClass("bb-pane-card__header-center-action");
     expect(screen.getByTestId("notebooks-delete-target")).toHaveClass("bb-pane-card__header-center-action--lane");
   });
+
+  it("renders Deleted Notes last without folder management affordances", () => {
+    renderFolderTree();
+
+    const notebookLabels = screen
+      .getAllByTestId(/^notebook-drag-/)
+      .map((element) => element.textContent?.replace(/\s+/g, " ").trim() ?? "");
+
+    expect(notebookLabels[notebookLabels.length - 1]).toContain(DELETED_NOTES_FOLDER_NAME);
+    expect(screen.queryByRole("button", { name: new RegExp(`choose icon for ${DELETED_NOTES_FOLDER_NAME}`, "i") })).not.toBeInTheDocument();
+    expect(screen.queryByTestId(buildNotebookTestId("before", DELETED_NOTES_FOLDER_NAME))).not.toBeInTheDocument();
+    expect(screen.queryByTestId(buildNotebookTestId("after", DELETED_NOTES_FOLDER_NAME))).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /deleted notes 2/i })).not.toHaveAttribute("draggable", "true");
+  });
 });
 
 function renderFolderTree(overrides?: {
   draggedNote?: {
     id: string;
     title: string;
+    folderId: string;
   } | null;
   onMoveNote?: ReturnType<typeof vi.fn<FolderTreeProps["onMoveNote"]>>;
   onMoveNotebook?: ReturnType<typeof vi.fn<FolderTreeProps["onMoveNotebook"]>>;
@@ -181,6 +201,15 @@ function buildFolders(): FolderNode[] {
       icon: "folder",
       childCount: 0,
       noteCount: 0
+    },
+    {
+      id: "deleted-notes",
+      name: DELETED_NOTES_FOLDER_NAME,
+      parentId: null,
+      path: DELETED_NOTES_FOLDER_NAME,
+      icon: "archive",
+      childCount: 0,
+      noteCount: 2
     }
   ];
 }

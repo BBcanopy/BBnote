@@ -1115,10 +1115,10 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
   await deleteNotebookTargetForNote.dispatchEvent("dragover", { dataTransfer: cancelDeleteFromNotebookLaneDrag });
   await expect(deleteNotebookTargetForNote).toHaveClass(/is-active/);
   await dropOnTarget(followUpNoteDrag, deleteNotebookTargetForNote, cancelDeleteFromNotebookLaneDrag);
-  const deleteNoteDialog = page.getByRole("dialog", { name: /^delete note\?$/i });
-  await expect(deleteNoteDialog).toBeVisible();
-  await deleteNoteDialog.getByRole("button", { name: /^cancel$/i }).click();
-  await expect(deleteNoteDialog).toHaveCount(0);
+  const moveToDeletedDialog = page.getByRole("dialog", { name: /^move note to deleted notes\?$/i });
+  await expect(moveToDeletedDialog).toBeVisible();
+  await moveToDeletedDialog.getByRole("button", { name: /^cancel$/i }).click();
+  await expect(moveToDeletedDialog).toHaveCount(0);
   await notebookRow(page, archiveNotebookName).click();
   await expect(notebookRowContainer(page, archiveNotebookName)).toHaveClass(/is-active/);
   await expect(followUpNoteDrag).toBeVisible();
@@ -1136,10 +1136,10 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
   expect(activeNoteDeleteStyles.backgroundColor).not.toBe(noteDeleteStyles.backgroundColor);
   expect(activeNoteDeleteStyles.backgroundImage).toBe(expectedActiveTrashBackgroundImage);
   await dropOnTarget(followUpNoteDrag, deleteNoteTarget, cancelDeleteDrag);
-  const deleteNoteDialogFromNotesLane = page.getByRole("dialog", { name: /^delete note\?$/i });
-  await expect(deleteNoteDialogFromNotesLane).toBeVisible();
-  await deleteNoteDialogFromNotesLane.getByRole("button", { name: /^cancel$/i }).click();
-  await expect(deleteNoteDialogFromNotesLane).toHaveCount(0);
+  const moveToDeletedDialogFromNotesLane = page.getByRole("dialog", { name: /^move note to deleted notes\?$/i });
+  await expect(moveToDeletedDialogFromNotesLane).toBeVisible();
+  await moveToDeletedDialogFromNotesLane.getByRole("button", { name: /^cancel$/i }).click();
+  await expect(moveToDeletedDialogFromNotesLane).toHaveCount(0);
   await notebookRow(page, archiveNotebookName).click();
   await expect(notebookRowContainer(page, archiveNotebookName)).toHaveClass(/is-active/);
   await expect(followUpNoteDrag).toBeVisible();
@@ -1147,8 +1147,35 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
   const confirmDeleteDrag = await startDrag(page, followUpNoteDrag);
   await expect(deleteNoteTarget).toBeVisible();
   await dropOnTarget(followUpNoteDrag, deleteNoteTarget, confirmDeleteDrag);
-  await page.getByRole("dialog", { name: /^delete note\?$/i }).getByRole("button", { name: /^delete note$/i }).click();
+  await page.getByRole("dialog", { name: /^move note to deleted notes\?$/i }).getByRole("button", { name: /^move to deleted notes$/i }).click();
   await expect(page.getByText(followUpNoteTitle).first()).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /choose icon for deleted notes/i })).toHaveCount(0);
+  await expect(page.getByTestId(buildNotebookTestId("drag", "Deleted Notes"))).toBeVisible();
+  await expect
+    .poll(async () => {
+      const items = await page
+        .locator('[data-testid^="notebook-drag-"] .bb-tree-row__label')
+        .evaluateAll((elements) => elements.map((element) => element.textContent?.trim() ?? ""));
+      return items[items.length - 1];
+    })
+    .toBe("Deleted Notes");
+
+  await allNotesButton.click();
+  await expect(page.getByText(followUpNoteTitle).first()).toHaveCount(0);
+  await expect(page.getByText(noteTitle).first()).toBeVisible();
+
+  await notebookRow(page, "Deleted Notes").click();
+  await expect(notebookRowContainer(page, "Deleted Notes")).toHaveClass(/is-active/);
+  await expect(page.getByText(followUpNoteTitle).first()).toBeVisible();
+  await page.getByRole("button", { name: new RegExp(followUpNoteTitle, "i") }).click();
+  await activeEditorPanel(page).getByRole("button", { name: /delete note/i }).click();
+  const permanentDeleteDialog = page.getByRole("dialog", { name: /^delete note permanently\?$/i });
+  await expect(permanentDeleteDialog).toBeVisible();
+  await permanentDeleteDialog.getByRole("button", { name: /^delete permanently$/i }).click();
+  await expect(page.getByText(followUpNoteTitle).first()).toHaveCount(0);
+
+  await notebookRow(page, renamedSubNotebookName).click();
+  await expect(notebookRowContainer(page, renamedSubNotebookName)).toHaveClass(/is-active/);
 
   const blockedNotebookDragSource = notebookRow(page, renamedSubNotebookName);
   const blockedNotebookDrag = await startDrag(page, blockedNotebookDragSource);

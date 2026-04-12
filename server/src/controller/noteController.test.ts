@@ -4,6 +4,7 @@ import path from "node:path";
 import type { FastifyInstance } from "fastify";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { buildApp } from "../app.js";
+import { DELETED_NOTES_FOLDER_NAME } from "../service/deletedNotesFolder.js";
 import { authHeaders, createTestAuthProvider, createTestConfig } from "../test-helpers.js";
 
 describe("noteController integration", () => {
@@ -415,5 +416,155 @@ describe("noteController integration", () => {
       ["Move me", 1]
     ]);
   });
+
+  it("moves notes into Deleted Notes on first delete and permanently deletes them from there", async () => {
+    const notebookResponse = await app.inject({
+      method: "POST",
+      url: "/api/v1/folders",
+      headers: authHeaders(token),
+      payload: {
+        name: "Projects",
+        parentId: null
+      }
+    });
+    expect(notebookResponse.statusCode).toBe(201);
+    const notebook = notebookResponse.json();
+
+    const createResponse = await app.inject({
+      method: "POST",
+      url: "/api/v1/notes",
+      headers: authHeaders(token),
+      payload: {
+        folderId: notebook.id,
+        title: "Delete me softly",
+        bodyMarkdown: "findmeafterdelete"
+      }
+    });
+    expect(createResponse.statusCode).toBe(201);
+    const created = createResponse.json();
+
+    const uploadResponse = await app.inject({
+      method: "POST",
+      url: `/api/v1/notes/${created.id}/attachments`,
+      headers: {
+        ...authHeaders(token),
+        "content-type": fixtureMultipartContentType
+      },
+      payload: createMultipartPayload("evidence.txt", "text/plain", Buffer.from("attachment-body", "utf8"))
+    });
+    expect(uploadResponse.statusCode).toBe(201);
+    const uploadedAttachment = uploadResponse.json();
+    const ownerRow = app.bbnote.database.connection
+      .prepare<[], { id: string }>("select id from users limit 1")
+      .get();
+
+    const initialRow = app.bbnote.database.connection
+      .prepare<[string], { filePath: string }>("select file_path as filePath from notes where id = ?")
+      .get(created.id);
+    const initialAttachment = app.bbnote.attachmentDb.getById(ownerRow!.id, uploadedAttachment.id);
+
+    const firstDeleteResponse = await app.inject({
+      method: "DELETE",
+      url: `/api/v1/notes/${created.id}`,
+      headers: authHeaders(token)
+    });
+    expect(firstDeleteResponse.statusCode).toBe(204);
+
+    const foldersResponse = await app.inject({
+      method: "GET",
+      url: "/api/v1/folders",
+      headers: authHeaders(token)
+    });
+    expect(foldersResponse.statusCode).toBe(200);
+    expect(foldersResponse.json().map((folder: { name: string }) => folder.name)).toEqual(["Projects", DELETED_NOTES_FOLDER_NAME]);
+    const deletedNotesFolder = foldersResponse
+      .json()
+      .find((folder: { id: string; name: string }) => folder.name === DELETED_NOTES_FOLDER_NAME);
+    expect(deletedNotesFolder).toBeDefined();
+
+    const movedNoteResponse = await app.inject({
+      method: "GET",
+      url: `/api/v1/notes/${created.id}`,
+      headers: authHeaders(token)
+    });
+    expect(movedNoteResponse.statusCode).toBe(200);
+    expect(movedNoteResponse.json()).toMatchObject({
+      id: created.id,
+      folderId: deletedNotesFolder.id,
+      attachments: [expect.objectContaining({ id: uploadedAttachment.id, name: "evidence.txt" })]
+    });
+
+    const globalListResponse = await app.inject({
+      method: "GET",
+      url: "/api/v1/notes",
+      headers: authHeaders(token)
+    });
+    expect(globalListResponse.statusCode).toBe(200);
+    expect(globalListResponse.json().items).toEqual([]);
+
+    const globalSearchResponse = await app.inject({
+      method: "GET",
+      url: `/api/v1/notes?q=${encodeURIComponent("findmeafterdelete")}`,
+      headers: authHeaders(token)
+    });
+    expect(globalSearchResponse.statusCode).toBe(200);
+    expect(globalSearchResponse.json().items).toEqual([]);
+
+    const deletedFolderSearchResponse = await app.inject({
+      method: "GET",
+      url: `/api/v1/notes?folderId=${deletedNotesFolder.id}&q=${encodeURIComponent("findmeafterdelete")}`,
+      headers: authHeaders(token)
+    });
+    expect(deletedFolderSearchResponse.statusCode).toBe(200);
+    expect(deletedFolderSearchResponse.json().items.map((note: { id: string }) => note.id)).toEqual([created.id]);
+
+    const movedRow = app.bbnote.database.connection
+      .prepare<[string], { filePath: string; folderId: string }>("select file_path as filePath, folder_id as folderId from notes where id = ?")
+      .get(created.id);
+    expect(movedRow?.folderId).toBe(deletedNotesFolder.id);
+    expect(movedRow?.filePath).not.toBe(initialRow?.filePath);
+    expect(movedRow?.filePath).toContain(`${path.sep}deleted${path.sep}`);
+    await expect(fs.readFile(movedRow!.filePath, "utf8")).resolves.toContain("findmeafterdelete");
+    await expect(fs.access(initialRow!.filePath)).rejects.toThrow();
+    expect(app.bbnote.attachmentDb.getById(ownerRow!.id, uploadedAttachment.id)).toBeDefined();
+    await expect(fs.readFile(initialAttachment!.storedPath, "utf8")).resolves.toBe("attachment-body");
+
+    const secondDeleteResponse = await app.inject({
+      method: "DELETE",
+      url: `/api/v1/notes/${created.id}`,
+      headers: authHeaders(token)
+    });
+    expect(secondDeleteResponse.statusCode).toBe(204);
+
+    expect(app.bbnote.noteDb.getById(ownerRow!.id, created.id)).toBeUndefined();
+    expect(app.bbnote.attachmentDb.getById(ownerRow!.id, uploadedAttachment.id)).toBeUndefined();
+    expect(app.bbnote.noteDb.getFtsRows(ownerRow!.id)).toEqual([]);
+    await expect(fs.access(movedRow!.filePath)).rejects.toThrow();
+    await expect(fs.access(path.dirname(initialAttachment!.storedPath))).rejects.toThrow();
+
+    const deletedFolderListResponse = await app.inject({
+      method: "GET",
+      url: `/api/v1/notes?folderId=${deletedNotesFolder.id}`,
+      headers: authHeaders(token)
+    });
+    expect(deletedFolderListResponse.statusCode).toBe(200);
+    expect(deletedFolderListResponse.json().items).toEqual([]);
+  });
 });
+
+const fixtureBoundary = "bbnote-note-delete-boundary";
+const fixtureMultipartContentType = `multipart/form-data; boundary=${fixtureBoundary}`;
+
+function createMultipartPayload(filename: string, mimeType: string, content: Buffer) {
+  return Buffer.concat([
+    Buffer.from(`--${fixtureBoundary}\r\n`, "utf8"),
+    Buffer.from(
+      `Content-Disposition: form-data; name="file"; filename="${filename}"\r\n` +
+        `Content-Type: ${mimeType}\r\n\r\n`,
+      "utf8"
+    ),
+    content,
+    Buffer.from(`\r\n--${fixtureBoundary}--\r\n`, "utf8")
+  ]);
+}
 
