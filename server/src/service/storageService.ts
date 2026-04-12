@@ -67,6 +67,10 @@ export class StorageService {
     await fs.rm(filePath, { force: true });
   }
 
+  async deleteDirectory(directoryPath: string) {
+    await fs.rm(directoryPath, { recursive: true, force: true });
+  }
+
   async saveAttachment(input: {
     ownerId: string;
     attachmentId: string;

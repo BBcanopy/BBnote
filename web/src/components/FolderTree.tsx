@@ -4,6 +4,7 @@ import type { FolderIconId, FolderNode, NoteSummary } from "../api/types";
 import { FolderIconGlyph, folderIconOptions } from "./folderIcons";
 import { buildNotebookTestId } from "./folderTreeTestIds";
 import { getDragPayload, setDragPayload } from "../utils/dragPayload";
+import { isDeletedNotesFolder } from "../utils/deletedNotes";
 import type { FolderMoveInstruction, FolderMovePosition } from "../utils/folderTree";
 
 interface FolderDropTarget {
@@ -14,12 +15,12 @@ interface FolderDropTarget {
 export function FolderTree(props: {
   folders: FolderNode[];
   selectedFolderId: string | null;
-  draggedNote: Pick<NoteSummary, "id" | "title"> | null;
+  draggedNote: Pick<NoteSummary, "id" | "title" | "folderId"> | null;
   onCreateNotebook(): void;
   onMoveNotebook(move: FolderMoveInstruction): void;
   onMoveNote(noteId: string, folderId: string): void;
   onRenameNotebook(folder: FolderNode): void;
-  onRequestDeleteNote(note: Pick<NoteSummary, "id" | "title">): void;
+  onRequestDeleteNote(note: Pick<NoteSummary, "id" | "title" | "folderId">): void;
   onRequestDeleteNotebook(folder: FolderNode): void;
   onSelectFolder(folderId: string | null): void;
   onUpdateNotebookIcon(folderId: string, icon: FolderIconId): Promise<void>;
@@ -50,9 +51,20 @@ export function FolderTree(props: {
     () => new Set(props.folders.filter((folder) => (childFoldersByParent.get(folder.id)?.length ?? 0) > 0).map((folder) => folder.id)),
     [childFoldersByParent, props.folders]
   );
+  const rootFolders = childFoldersByParent.get(null) ?? [];
+  const orderedRootFolders = useMemo(
+    () => [
+      ...rootFolders.filter((folder) => !isDeletedNotesFolder(folder)),
+      ...rootFolders.filter((folder) => isDeletedNotesFolder(folder))
+    ],
+    [rootFolders]
+  );
   const allParentsExpanded = parentFolderIds.size > 0 && [...parentFolderIds].every((folderId) => expandedFolderIds.has(folderId));
   const anyParentExpanded = [...parentFolderIds].some((folderId) => expandedFolderIds.has(folderId));
-  const allNotesCount = props.folders.reduce((total, folder) => total + folder.noteCount, 0);
+  const allNotesCount = props.folders.reduce(
+    (total, folder) => total + (isDeletedNotesFolder(folder) ? 0 : folder.noteCount),
+    0
+  );
   const draggedFolder = draggedFolderId ? folderById.get(draggedFolderId) ?? null : null;
   const showDeleteTarget = draggedFolder !== null || props.draggedNote !== null;
   const canDeleteDraggedFolder = Boolean(
@@ -145,11 +157,13 @@ export function FolderTree(props: {
   }
 
   function handleFolderDragOver(event: DragEvent<HTMLElement>, targetId: string, position: FolderMovePosition) {
+    const targetFolder = folderById.get(targetId) ?? null;
+    const targetIsDeletedNotes = Boolean(targetFolder && isDeletedNotesFolder(targetFolder));
     const payload = getDragPayload(event.dataTransfer);
     const draggedNoteId = payload?.kind === "note" ? payload.id : props.draggedNote?.id ?? null;
     const draggedNoteFolderId = payload?.kind === "note" ? payload.folderId : props.selectedFolderId;
     if (!payload) {
-      if (props.enableFolderDragAndDrop === false || !draggedFolderId || draggedFolderId === targetId) {
+      if (props.enableFolderDragAndDrop === false || !draggedFolderId || draggedFolderId === targetId || targetIsDeletedNotes) {
         if (!props.acceptDraggedNotes || !draggedNoteId || draggedNoteFolderId === targetId) {
           return;
         }
@@ -178,7 +192,7 @@ export function FolderTree(props: {
     }
 
     const draggedId = payload.id || draggedFolderId;
-    if (props.enableFolderDragAndDrop === false || !draggedId || draggedId === targetId) {
+    if (props.enableFolderDragAndDrop === false || !draggedId || draggedId === targetId || targetIsDeletedNotes) {
       return;
     }
 
@@ -188,6 +202,8 @@ export function FolderTree(props: {
   }
 
   function handleFolderDrop(event: DragEvent<HTMLElement>, targetId: string, position: FolderMovePosition) {
+    const targetFolder = folderById.get(targetId) ?? null;
+    const targetIsDeletedNotes = Boolean(targetFolder && isDeletedNotesFolder(targetFolder));
     const payload = getDragPayload(event.dataTransfer);
     const draggedId = payload?.kind === "folder" ? payload.id : draggedFolderId;
     const draggedNoteId = payload?.kind === "note" ? payload.id : props.draggedNote?.id ?? null;
@@ -208,7 +224,7 @@ export function FolderTree(props: {
       return;
     }
 
-    if (props.enableFolderDragAndDrop === false || !draggedId || draggedId === targetId) {
+    if (props.enableFolderDragAndDrop === false || !draggedId || draggedId === targetId || targetIsDeletedNotes) {
       return;
     }
 
@@ -257,6 +273,8 @@ export function FolderTree(props: {
   }
 
   function renderNotebook(folder: FolderNode, depth: number) {
+    const deletedNotesFolder = isDeletedNotesFolder(folder);
+    const allowFolderDragAndDrop = props.enableFolderDragAndDrop !== false && !deletedNotesFolder;
     const children = childFoldersByParent.get(folder.id) ?? [];
     const hasChildren = children.length > 0;
     const expanded = hasChildren ? expandedFolderIds.has(folder.id) : false;
@@ -274,7 +292,7 @@ export function FolderTree(props: {
           folderDropPosition === "after" ? "bb-tree-node--drop-after" : ""
         }`}
       >
-        {props.enableFolderDragAndDrop === false ? null : (
+        {allowFolderDragAndDrop ? (
           <NotebookDropZone
             testId={buildNotebookTestId("before", folder.name)}
             folderId={folder.id}
@@ -285,7 +303,7 @@ export function FolderTree(props: {
             onDragOver={handleFolderDragOver}
             onDrop={handleFolderDrop}
           />
-        )}
+        ) : null}
 
         <div className="bb-tree-node__content">
           <div className={`bb-tree-branch ${activeFolderDrop || activeNoteDrop ? "is-drop-active" : ""}`}>
@@ -315,50 +333,58 @@ export function FolderTree(props: {
                 )}
 
                 <div className="bb-tree-icon-shell">
-                  <button
-                    type="button"
-                    aria-label={`Choose icon for ${folder.name}`}
-                    title={`Choose icon for ${folder.name}`}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      setIconPickerFolderId((current) => (current === folder.id ? null : folder.id));
-                    }}
-                    className="bb-tree-icon-button"
-                  >
-                    <FolderIconGlyph icon={folder.icon} size={16} className="bb-tree-icon-glyph" />
-                  </button>
-                  {iconPickerFolderId === folder.id ? (
-                    <div role="menu" className="bb-icon-picker">
-                      {folderIconOptions.map((option) => (
-                        <button
-                          key={option.id}
-                          type="button"
-                          role="menuitem"
-                          aria-label={`Use ${option.label} icon`}
-                          title={option.label}
-                          disabled={iconSavingFolderId === folder.id}
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            void handleIconSelection(folder, option.id);
-                          }}
-                          className={`bb-icon-picker__option ${folder.icon === option.id ? "is-active" : ""}`}
-                        >
-                          <FolderIconGlyph icon={option.id} size={16} />
-                        </button>
-                      ))}
-                    </div>
-                  ) : null}
+                  {deletedNotesFolder ? (
+                    <span className="bb-tree-icon-button" aria-hidden="true">
+                      <FolderIconGlyph icon={folder.icon} size={16} className="bb-tree-icon-glyph" />
+                    </span>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        aria-label={`Choose icon for ${folder.name}`}
+                        title={`Choose icon for ${folder.name}`}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setIconPickerFolderId((current) => (current === folder.id ? null : folder.id));
+                        }}
+                        className="bb-tree-icon-button"
+                      >
+                        <FolderIconGlyph icon={folder.icon} size={16} className="bb-tree-icon-glyph" />
+                      </button>
+                      {iconPickerFolderId === folder.id ? (
+                        <div role="menu" className="bb-icon-picker">
+                          {folderIconOptions.map((option) => (
+                            <button
+                              key={option.id}
+                              type="button"
+                              role="menuitem"
+                              aria-label={`Use ${option.label} icon`}
+                              title={option.label}
+                              disabled={iconSavingFolderId === folder.id}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                void handleIconSelection(folder, option.id);
+                              }}
+                              className={`bb-icon-picker__option ${folder.icon === option.id ? "is-active" : ""}`}
+                            >
+                              <FolderIconGlyph icon={option.id} size={16} />
+                            </button>
+                          ))}
+                        </div>
+                      ) : null}
+                    </>
+                  )}
                 </div>
 
                 <button
                   type="button"
                   aria-label={formatFolderRowLabel(folder.name, folder.noteCount)}
                   onClick={() => props.onSelectFolder(folder.id)}
-                  onDoubleClick={() => props.onRenameNotebook(folder)}
-                  draggable={props.enableFolderDragAndDrop !== false}
-                  onDragStart={(event) => handleFolderDragStart(event, folder.id)}
+                  onDoubleClick={deletedNotesFolder ? undefined : () => props.onRenameNotebook(folder)}
+                  draggable={allowFolderDragAndDrop}
+                  onDragStart={allowFolderDragAndDrop ? (event) => handleFolderDragStart(event, folder.id) : undefined}
                   onDragEnd={clearDragState}
-                  className={`bb-tree-row__content ${props.enableFolderDragAndDrop !== false ? "bb-tree-row__content--draggable" : ""}`}
+                  className={`bb-tree-row__content ${allowFolderDragAndDrop ? "bb-tree-row__content--draggable" : ""}`}
                 >
                   <span className="bb-tree-row__label">{folder.name}</span>
                   <span className="bb-count-pill shrink-0">{folder.noteCount}</span>
@@ -373,7 +399,7 @@ export function FolderTree(props: {
           ) : null}
         </div>
 
-        {props.enableFolderDragAndDrop === false ? null : (
+        {allowFolderDragAndDrop ? (
           <NotebookDropZone
             testId={buildNotebookTestId("after", folder.name)}
             folderId={folder.id}
@@ -384,7 +410,7 @@ export function FolderTree(props: {
             onDragOver={handleFolderDragOver}
             onDrop={handleFolderDrop}
           />
-        )}
+        ) : null}
       </div>
     );
   }
@@ -514,7 +540,7 @@ export function FolderTree(props: {
         {props.folders.length === 0 ? (
           <div className="bb-empty-state text-sm">No notebooks yet.</div>
         ) : (
-          (childFoldersByParent.get(null) ?? []).map((folder) => renderNotebook(folder, 0))
+          orderedRootFolders.map((folder) => renderNotebook(folder, 0))
         )}
       </div>
     </section>

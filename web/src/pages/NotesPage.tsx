@@ -62,6 +62,7 @@ import {
   type MarkdownFormatOptions,
   type MarkdownTableDimensions
 } from "../utils/markdownFormat";
+import { DELETED_NOTES_FOLDER_NAME, isDeletedNotesFolder } from "../utils/deletedNotes";
 import { buildNotesPath } from "../utils/noteRoute";
 import { buildNoteOrderIds, moveNotes, type NoteMoveInstruction } from "../utils/noteOrder";
 
@@ -102,6 +103,7 @@ interface PaneResizeState {
 interface PendingNoteDelete {
   id: string;
   title: string;
+  folderId: string;
 }
 
 interface TextSelectionRange {
@@ -177,6 +179,13 @@ export function NotesPage() {
     () => folders.find((folder) => folder.id === selectedFolderId) ?? null,
     [folders, selectedFolderId]
   );
+  const selectedFolderIsDeleted = Boolean(selectedFolder && isDeletedNotesFolder(selectedFolder));
+  const createNotebookParent = selectedFolder && !selectedFolderIsDeleted ? selectedFolder : null;
+  const pendingDeleteFolder = useMemo(
+    () => (pendingNoteDelete ? folders.find((folder) => folder.id === pendingNoteDelete.folderId) ?? null : null),
+    [folders, pendingNoteDelete]
+  );
+  const pendingNoteDeleteIsPermanent = Boolean(pendingDeleteFolder && isDeletedNotesFolder(pendingDeleteFolder));
   const currentContentKey = useMemo(
     () => (editorNote ? buildContentKey(editorNote.folderId, editorNote.title, editorNote.bodyMarkdown) : null),
     [editorNote]
@@ -725,7 +734,7 @@ export function NotesPage() {
     try {
       const created = await createFolder({
         name: newNotebookName.trim(),
-        parentId: selectedFolderId
+        parentId: createNotebookParent?.id ?? null
       });
       closeCreateNotebookDialog();
       await refreshFolders();
@@ -962,13 +971,14 @@ export function NotesPage() {
   }
 
   function handleRequestDeleteCurrentNote() {
-    if (!editorNote?.noteId) {
+    if (!editorNote?.noteId || !editorNote.folderId) {
       return;
     }
     setDraggedNoteDeleteCandidate(null);
     setPendingNoteDelete({
       id: editorNote.noteId,
-      title: editorNote.title.trim() || "Untitled note"
+      title: editorNote.title.trim() || "Untitled note",
+      folderId: editorNote.folderId
     });
   }
 
@@ -976,7 +986,8 @@ export function NotesPage() {
     setDraggedNoteDeleteCandidate(null);
     setPendingNoteDelete({
       id: note.id,
-      title: note.title.trim() || "Untitled note"
+      title: note.title.trim() || "Untitled note",
+      folderId: note.folderId
     });
   }
 
@@ -1419,8 +1430,8 @@ export function NotesPage() {
 
       <TextPromptDialog
         open={createNotebookOpen}
-        title={selectedFolder ? `Create notebook in ${selectedFolder.name}` : "Create notebook"}
-        description={selectedFolder ? "The new notebook will be created inside the currently selected notebook." : "Create a new top-level notebook."}
+        title={createNotebookParent ? `Create notebook in ${createNotebookParent.name}` : "Create notebook"}
+        description={createNotebookParent ? "The new notebook will be created inside the currently selected notebook." : "Create a new top-level notebook."}
         value={newNotebookName}
         placeholder="Notebook name"
         confirmLabel="Create notebook"
@@ -1441,9 +1452,15 @@ export function NotesPage() {
 
       <ConfirmationDialog
         open={pendingNoteDelete !== null}
-        title="Delete note?"
-        description={pendingNoteDelete ? `${pendingNoteDelete.title} will be removed permanently.` : undefined}
-        confirmLabel="Delete note"
+        title={pendingNoteDeleteIsPermanent ? "Delete note permanently?" : `Move note to ${DELETED_NOTES_FOLDER_NAME}?`}
+        description={
+          pendingNoteDelete
+            ? pendingNoteDeleteIsPermanent
+              ? `${pendingNoteDelete.title} will be removed permanently.`
+              : `${pendingNoteDelete.title} will be moved to ${DELETED_NOTES_FOLDER_NAME}.`
+            : undefined
+        }
+        confirmLabel={pendingNoteDeleteIsPermanent ? "Delete permanently" : `Move to ${DELETED_NOTES_FOLDER_NAME}`}
         tone="danger"
         onClose={() => setPendingNoteDelete(null)}
         onConfirm={() => void handleDeleteNote()}

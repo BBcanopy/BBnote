@@ -1,6 +1,12 @@
 import { randomUUID } from "node:crypto";
 import type { FolderDb } from "../db/folderDb.js";
 import type { FolderIconId, FolderNode, FolderRecord } from "./models.js";
+import {
+  DELETED_NOTES_FOLDER_NAME,
+  DELETED_NOTES_STORAGE_DIR_NAME,
+  isDeletedNotesFolderName,
+  isDeletedNotesFolderRecord
+} from "./deletedNotesFolder.js";
 import { buildFolderDirectoryName } from "./slugService.js";
 
 export class FolderService {
@@ -9,8 +15,9 @@ export class FolderService {
   async list(ownerId: string): Promise<FolderNode[]> {
     const folders = this.folderDb.listByOwner(ownerId);
     const byId = new Map(folders.map((folder) => [folder.id, folder]));
-    const orderedFolders = flattenFoldersByTree(folders);
-    return orderedFolders.map((folder) => ({
+    const deletedNotesFolder = folders.find((folder) => isDeletedNotesFolderRecord(folder)) ?? null;
+    const orderedFolders = flattenFoldersByTree(folders.filter((folder) => !isDeletedNotesFolderRecord(folder)));
+    const nodes = orderedFolders.map((folder) => ({
       id: folder.id,
       name: folder.name,
       parentId: folder.parentId,
@@ -19,13 +26,37 @@ export class FolderService {
       childCount: folder.child_count,
       noteCount: folder.note_count
     }));
+
+    if (!deletedNotesFolder) {
+      return nodes;
+    }
+
+    return [
+      ...nodes,
+      {
+        id: deletedNotesFolder.id,
+        name: deletedNotesFolder.name,
+        parentId: deletedNotesFolder.parentId,
+        path: buildPath(deletedNotesFolder.id, byId),
+        icon: deletedNotesFolder.icon,
+        childCount: deletedNotesFolder.child_count,
+        noteCount: deletedNotesFolder.note_count
+      }
+    ];
   }
 
   async createFolder(ownerId: string, input: { name: string; parentId: string | null; icon?: FolderIconId }) {
+    const trimmedName = input.name.trim() || "Untitled folder";
+    if (isDeletedNotesFolderName(trimmedName)) {
+      throw new Error(`${DELETED_NOTES_FOLDER_NAME} is reserved for the system notebook.`);
+    }
     if (input.parentId) {
       const parent = this.folderDb.getById(ownerId, input.parentId);
       if (!parent) {
         throw new Error("Parent folder was not found.");
+      }
+      if (isDeletedNotesFolderRecord(parent)) {
+        throw new Error(`${DELETED_NOTES_FOLDER_NAME} cannot contain notebooks.`);
       }
     }
 
@@ -35,9 +66,9 @@ export class FolderService {
       id: folderId,
       ownerId,
       parentId: input.parentId,
-      name: input.name.trim() || "Untitled folder",
+      name: trimmedName,
       icon: input.icon ?? "folder",
-      storageDirName: buildFolderDirectoryName(input.name, folderId),
+      storageDirName: buildFolderDirectoryName(trimmedName, folderId),
       sortOrder: this.folderDb.getNextSortOrder(ownerId, input.parentId),
       createdAt: now,
       updatedAt: now
@@ -51,6 +82,13 @@ export class FolderService {
     if (!existing) {
       throw new Error("Folder not found.");
     }
+    if (isDeletedNotesFolderRecord(existing)) {
+      throw new Error(`${DELETED_NOTES_FOLDER_NAME} is a protected system notebook.`);
+    }
+    const trimmedName = input.name.trim() || existing.name;
+    if (isDeletedNotesFolderName(trimmedName)) {
+      throw new Error(`${DELETED_NOTES_FOLDER_NAME} is reserved for the system notebook.`);
+    }
     if (input.parentId === folderId) {
       throw new Error("A folder cannot be its own parent.");
     }
@@ -59,12 +97,15 @@ export class FolderService {
       if (!parent) {
         throw new Error("Parent folder was not found.");
       }
+      if (isDeletedNotesFolderRecord(parent)) {
+        throw new Error(`${DELETED_NOTES_FOLDER_NAME} cannot contain notebooks.`);
+      }
     }
 
     assertNoDescendantParent(ownerId, folderId, input.parentId, this.folderDb);
 
     this.folderDb.update(ownerId, folderId, {
-      name: input.name.trim() || existing.name,
+      name: trimmedName,
       icon: input.icon ?? null,
       parentId: input.parentId,
       sortOrder:
@@ -83,6 +124,9 @@ export class FolderService {
     if (!existing) {
       throw new Error("Folder not found.");
     }
+    if (isDeletedNotesFolderRecord(existing)) {
+      throw new Error(`${DELETED_NOTES_FOLDER_NAME} is a protected system notebook.`);
+    }
     if (this.folderDb.hasChildren(ownerId, folderId) || this.folderDb.hasNotes(ownerId, folderId)) {
       throw new Error("Folder must be empty before deletion.");
     }
@@ -91,6 +135,33 @@ export class FolderService {
 
   getFolder(ownerId: string, folderId: string) {
     return this.folderDb.getById(ownerId, folderId);
+  }
+
+  getDeletedNotesFolder(ownerId: string) {
+    return this.folderDb.getByStorageDirName(ownerId, DELETED_NOTES_STORAGE_DIR_NAME);
+  }
+
+  async ensureDeletedNotesFolder(ownerId: string) {
+    const existing = this.getDeletedNotesFolder(ownerId);
+    if (existing) {
+      return existing;
+    }
+
+    const now = new Date().toISOString();
+    const folderId = randomUUID();
+    const record: FolderRecord = {
+      id: folderId,
+      ownerId,
+      parentId: null,
+      name: DELETED_NOTES_FOLDER_NAME,
+      icon: "archive",
+      storageDirName: DELETED_NOTES_STORAGE_DIR_NAME,
+      sortOrder: this.folderDb.getNextSortOrder(ownerId, null),
+      createdAt: now,
+      updatedAt: now
+    };
+    this.folderDb.insert(record);
+    return record;
   }
 }
 

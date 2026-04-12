@@ -12,8 +12,8 @@ export class FolderDb {
   insert(record: FolderRecord) {
     this.connection
       .prepare(`
-        insert into folders (id, owner_id, parent_id, name, storage_dir_name, sort_order, created_at, updated_at)
-        values (@id, @ownerId, @parentId, @name, @storageDirName, @sortOrder, @createdAt, @updatedAt)
+        insert into folders (id, owner_id, parent_id, name, icon, storage_dir_name, sort_order, created_at, updated_at)
+        values (@id, @ownerId, @parentId, @name, @icon, @storageDirName, @sortOrder, @createdAt, @updatedAt)
       `)
       .run(record);
   }
@@ -69,6 +69,27 @@ export class FolderDb {
         `
       )
       .get(ownerId, id) as FolderRecord | undefined;
+  }
+
+  getByStorageDirName(ownerId: string, storageDirName: string): FolderRecord | undefined {
+    return this.connection
+      .prepare<[string, string], FolderRecord>(
+        `
+          select
+            id,
+            owner_id as ownerId,
+            parent_id as parentId,
+            name,
+            icon,
+            storage_dir_name as storageDirName,
+            sort_order as sortOrder,
+            created_at as createdAt,
+            updated_at as updatedAt
+          from folders
+          where owner_id = ? and storage_dir_name = ?
+        `
+      )
+      .get(ownerId, storageDirName) as FolderRecord | undefined;
   }
 
   update(ownerId: string, id: string, input: { name: string; icon: FolderRecord["icon"] | null; parentId: string | null; sortOrder: number; updatedAt: string }) {

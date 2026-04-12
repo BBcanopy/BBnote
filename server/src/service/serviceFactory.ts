@@ -53,7 +53,13 @@ export async function createServices(
   await storageService.ensureRoots();
   const folderService = new FolderService(folderDb);
   const oidcService = new OidcService(config, app, authTesting);
-  const noteService = new NoteService(noteDb, folderDb, storageService, (noteId) => attachmentDb.listByNoteId(noteId));
+  const noteService = new NoteService(
+    noteDb,
+    folderDb,
+    storageService,
+    (noteId) => attachmentDb.listByNoteId(noteId),
+    (ownerId) => folderService.ensureDeletedNotesFolder(ownerId)
+  );
   const attachmentService = new AttachmentService(attachmentDb, noteDb, storageService);
   const importService = new ImportService(jobDb, folderService, noteService, attachmentService);
   const exportService = new ExportService(config, jobDb, folderDb, noteDb, attachmentDb, storageService);

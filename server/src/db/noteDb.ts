@@ -4,6 +4,7 @@ import type { NoteRecord } from "../service/models.js";
 interface ListQuery {
   ownerId: string;
   folderId?: string;
+  excludedFolderId?: string;
   limit: number;
   offset: number;
   sort: "updatedAt" | "createdAt" | "title" | "priority";
@@ -13,6 +14,7 @@ interface ListQuery {
 interface SearchQuery {
   ownerId: string;
   folderId?: string;
+  excludedFolderId?: string;
   query: string;
   limit: number;
   offset: number;
@@ -139,10 +141,11 @@ export class NoteDb {
         ? "created_at"
         : query.sort === "priority"
           ? "sort_order"
-        : query.sort === "title"
-          ? "title collate nocase"
-          : "updated_at";
+          : query.sort === "title"
+            ? "title collate nocase"
+            : "updated_at";
     const folderClause = query.folderId ? "and folder_id = @folderId" : "";
+    const excludedFolderClause = query.excludedFolderId ? "and folder_id != @excludedFolderId" : "";
     return this.connection
       .prepare<ListQuery, NoteRecord>(
         `
@@ -160,7 +163,7 @@ export class NoteDb {
             source_id as sourceId,
             source_tags_json as sourceTagsJson
           from notes
-          where owner_id = @ownerId ${folderClause}
+          where owner_id = @ownerId ${folderClause} ${excludedFolderClause}
           order by ${sortColumn} ${query.order}, id ${query.order}
           limit @limit offset @offset
         `
@@ -170,6 +173,7 @@ export class NoteDb {
 
   search(query: SearchQuery): NoteRecord[] {
     const folderClause = query.folderId ? "and notes.folder_id = @folderId" : "";
+    const excludedFolderClause = query.excludedFolderId ? "and notes.folder_id != @excludedFolderId" : "";
     const ftsQuery = buildFtsQuery(query.query);
     if (!ftsQuery) {
       return [];
@@ -194,6 +198,7 @@ export class NoteDb {
           inner join notes_fts on notes_fts.note_id = notes.id
           where notes.owner_id = @ownerId
             ${folderClause}
+            ${excludedFolderClause}
             and notes_fts.owner_id = @ownerId
             and notes_fts match @query
           order by bm25(notes_fts), notes.updated_at desc

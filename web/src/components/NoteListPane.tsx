@@ -19,8 +19,8 @@ export function NoteListPane(props: {
   selectedNoteId: string | null;
   onSelectNote(noteId: string): void;
   onCreateNote(): void;
-  onDraggedNoteChange(note: Pick<NoteSummary, "id" | "title"> | null): void;
-  onRequestDeleteNote(note: Pick<NoteSummary, "id" | "title">): void;
+  onDraggedNoteChange(note: Pick<NoteSummary, "id" | "title" | "folderId"> | null): void;
+  onRequestDeleteNote(note: Pick<NoteSummary, "id" | "title" | "folderId">): void;
   onCollapse?(): void;
   loading: boolean;
   refreshing: boolean;
@@ -88,7 +88,8 @@ export function NoteListPane(props: {
     });
     props.onDraggedNoteChange({
       id: note.id,
-      title: getDisplayNoteTitle(note.title)
+      title: getDisplayNoteTitle(note.title),
+      folderId: note.folderId
     });
   }
 
@@ -281,7 +282,8 @@ export function NoteListPane(props: {
               event.preventDefault();
               props.onRequestDeleteNote({
                 id: noteToDelete.id,
-                title: noteToDelete.title
+                title: noteToDelete.title,
+                folderId: noteToDelete.folderId
               });
             }}
             className={`bb-pane-card__header-center-action bb-pane-card__header-center-action--lane bb-note-trash-target ${deleteTargetActive ? "is-active" : ""}`}
