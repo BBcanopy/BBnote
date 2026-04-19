@@ -1206,6 +1206,7 @@ test("opens notes on click, switches the cursor after a hold, and keeps held rel
   const notebookName = `Click then drag ${suffix}`;
   const firstNoteTitle = `Alpha ${suffix}`;
   const secondNoteTitle = `Beta ${suffix}`;
+  const thirdNoteTitle = `Gamma ${suffix}`;
 
   await login(page);
   await createNotebookWithDialog(page, notebookName);
@@ -1215,8 +1216,10 @@ test("opens notes on click, switches the cursor after a hold, and keeps held rel
   const firstNoteId = extractNoteIdFromUrl(page.url());
   await createNoteWithContent(page, secondNoteTitle, "Second note body.");
   const secondNoteId = extractNoteIdFromUrl(page.url());
+  await createNoteWithContent(page, thirdNoteTitle, "Third note body.");
   const firstNoteCard = page.getByTestId(buildNoteTestId("drag", firstNoteTitle));
   const secondNoteCard = page.getByTestId(buildNoteTestId("drag", secondNoteTitle));
+  const thirdNoteCard = page.getByTestId(buildNoteTestId("drag", thirdNoteTitle));
 
   await expect
     .poll(async () => firstNoteCard.evaluate((element) => getComputedStyle(element).cursor))
@@ -1236,6 +1239,13 @@ test("opens notes on click, switches the cursor after a hold, and keeps held rel
   await expect
     .poll(async () => secondNoteCard.evaluate((element) => getComputedStyle(element).cursor))
     .toBe("pointer");
+
+  await armNoteCardForDrag(page, thirdNoteCard, "touch");
+  const touchDragPreview = await page.evaluateHandle(() => new DataTransfer());
+  await thirdNoteCard.dispatchEvent("dragstart", { dataTransfer: touchDragPreview });
+  await expect(page.getByTestId("notes-delete-target")).toBeVisible();
+  await endDrag(thirdNoteCard, touchDragPreview);
+  await thirdNoteCard.dispatchEvent("pointerup", { button: 0, pointerType: "touch" });
 });
 
 test("reorders notes by dropping onto note cards and persists the order", async ({ page }) => {
@@ -2476,11 +2486,15 @@ async function holdNoteCardWithMouseDown(page: import("@playwright/test").Page, 
     .toBe(true);
 }
 
-async function armNoteCardForDrag(page: import("@playwright/test").Page, source: import("@playwright/test").Locator) {
+async function armNoteCardForDrag(
+  page: import("@playwright/test").Page,
+  source: import("@playwright/test").Locator,
+  pointerType: "mouse" | "touch" | "pen" = "mouse"
+) {
   await expect(source).toBeVisible();
   await source.dispatchEvent("pointerdown", {
     button: 0,
-    pointerType: "mouse"
+    pointerType
   });
   await page.waitForTimeout(NOTE_MOUSE_DRAG_DELAY_MS + 80);
   await expect

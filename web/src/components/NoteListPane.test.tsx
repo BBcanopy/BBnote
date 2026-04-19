@@ -118,6 +118,21 @@ describe("NoteListPane", () => {
     expect(noteCard).not.toHaveClass("bb-note-card--draggable");
   });
 
+  it("arms note dragging after a touch hold too", () => {
+    renderNoteListPane();
+
+    const noteCard = screen.getByTestId(buildNoteTestId("drag", "Quarterly review"));
+    armNoteCard(noteCard, "touch");
+
+    expect(noteCard).toHaveAttribute("draggable", "true");
+    expect(noteCard).toHaveClass("bb-note-card--draggable");
+
+    fireEvent.pointerUp(window, { button: 0, pointerType: "touch" });
+
+    expect(noteCard).toHaveAttribute("draggable", "true");
+    expect(noteCard).not.toHaveClass("bb-note-card--draggable");
+  });
+
   it("allows dragging an unopened note after the hold delay arms it", () => {
     const dataTransfer = createDataTransfer();
 
@@ -834,11 +849,11 @@ function createDataTransfer(): DataTransfer {
   } as DataTransfer;
 }
 
-function armNoteCard(noteCard: HTMLElement) {
+function armNoteCard(noteCard: HTMLElement, pointerType = "mouse") {
   vi.useFakeTimers();
   fireEvent.pointerDown(noteCard, {
     button: 0,
-    pointerType: "mouse"
+    pointerType
   });
   act(() => {
     vi.advanceTimersByTime(NOTE_MOUSE_DRAG_DELAY_MS);

@@ -157,7 +157,7 @@ export function NoteListPane(props: {
   }
 
   function handleNotePointerDown(event: ReactPointerEvent<HTMLElement>, note: NoteSummary) {
-    if (!canDragNotes || event.button !== 0 || event.pointerType !== "mouse") {
+    if (!canDragNotes || event.button !== 0) {
       return;
     }
 
