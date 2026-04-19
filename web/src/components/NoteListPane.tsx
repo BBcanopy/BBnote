@@ -125,7 +125,13 @@ export function NoteListPane(props: {
   }
 
   function handleDragStart(event: DragEvent<HTMLElement>, note: NoteSummary) {
-    if (!canDragNotes || dragReadyNoteId !== note.id) {
+    if (!canDragNotes) {
+      return;
+    }
+
+    if (dragReadyNoteId !== note.id) {
+      event.preventDefault();
+      event.stopPropagation();
       return;
     }
 
@@ -526,7 +532,7 @@ function renderNote(
       role="button"
       tabIndex={helpers.interactionsDisabled ? -1 : 0}
       aria-disabled={helpers.interactionsDisabled || undefined}
-      draggable={dragReady}
+      draggable={helpers.canDragNotes}
       data-testid={buildNoteTestId("drag", note.title)}
       onPointerDown={helpers.canDragNotes ? (event) => helpers.onPointerDown(event, note) : undefined}
       onDragStart={(event) => helpers.onDragStart(event, note)}

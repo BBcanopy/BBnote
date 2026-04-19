@@ -93,7 +93,7 @@ describe("NoteListPane", () => {
     fireEvent.click(noteCard);
 
     expect(onSelectNote).toHaveBeenCalledWith("note-1");
-    expect(noteCard).not.toHaveAttribute("draggable", "true");
+    expect(noteCard).toHaveAttribute("draggable", "true");
     expect(noteCard).not.toHaveClass("bb-note-card--draggable");
   });
 
@@ -114,8 +114,32 @@ describe("NoteListPane", () => {
     fireEvent.click(noteCard);
 
     expect(onSelectNote).not.toHaveBeenCalled();
-    expect(noteCard).not.toHaveAttribute("draggable", "true");
+    expect(noteCard).toHaveAttribute("draggable", "true");
     expect(noteCard).not.toHaveClass("bb-note-card--draggable");
+  });
+
+  it("allows dragging an unopened note after the hold delay arms it", () => {
+    const dataTransfer = createDataTransfer();
+
+    renderNoteListPane({
+      notes: [
+        buildNote({
+          id: "note-1",
+          title: "Quarterly review",
+          sortOrder: 0
+        }),
+        buildNote({
+          id: "note-2",
+          title: "Roadmap follow-up",
+          sortOrder: 1
+        })
+      ]
+    });
+
+    startArmedNoteDrag("Roadmap follow-up", dataTransfer);
+
+    expect(screen.getByTestId("notes-delete-target")).toBeInTheDocument();
+    expect(screen.getByTestId(buildNoteTestId("slot", "Quarterly review"))).toHaveClass("is-drag-ready");
   });
 
   it("shows a temporary delete target during note drag and requests confirmation on drop", () => {

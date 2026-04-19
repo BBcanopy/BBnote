@@ -917,7 +917,6 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
   );
 
   await notebookRow(page, renamedSubNotebookName).click();
-  const renamedSubNotebookId = extractFolderIdFromUrl(page.url());
   await expect(page.getByRole("button", { name: /^new note$/i }).first()).toBeEnabled();
   await expect(page.getByRole("button", { name: /^new note$/i }).first()).toHaveAttribute("title", "New note");
   await page.getByRole("button", { name: /^new note$/i }).click();
@@ -963,7 +962,6 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
   await page.getByRole("textbox", { name: "Title" }).first().fill(followUpNoteTitle);
   await activeEditorTextarea(page).fill("Second note to test manual priority.");
   await waitForUpdatedStatus(page, followUpInitialStatusText);
-  const followUpNoteId = extractNoteIdFromUrl(page.url());
 
   await expect.poll(async () => page.locator('[data-testid^="note-drag-"]').count()).toBe(2);
   await expect(page.locator('[data-testid^="note-drag-"] .bb-note-icon')).toHaveCount(0);
@@ -1088,12 +1086,8 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
   const desktopFollowUpNoteDrag = page.getByTestId("notes-pane").getByTestId(buildNoteTestId("drag", followUpNoteTitle));
   const archiveNotebookDropTarget = page.getByTestId("notebook-pane").getByTestId(buildNotebookTestId("drag", archiveNotebookName));
   await expect(desktopFollowUpNoteDrag).toBeVisible();
-  const moveToArchiveDrag = await startNoteDragWithPayload(page, desktopFollowUpNoteDrag, {
-    kind: "note",
-    id: followUpNoteId,
-    folderId: renamedSubNotebookId
-  });
-  await dropOnTarget(desktopFollowUpNoteDrag, archiveNotebookDropTarget, moveToArchiveDrag);
+  const moveToArchiveDrag = await startHeldNoteDrag(page, desktopFollowUpNoteDrag);
+  await dropOnTarget(desktopFollowUpNoteDrag, archiveNotebookDropTarget, moveToArchiveDrag, page);
   await expect(notebookRowContainer(page, archiveNotebookName)).toHaveClass(/is-active/);
   await expect(page.getByText(followUpNoteTitle).first()).toBeVisible();
   await expect(page.locator('[data-testid^="note-drag-"]').filter({ hasText: noteTitle })).toHaveCount(0);
@@ -2452,26 +2446,18 @@ async function startDrag(page: import("@playwright/test").Page, source: import("
   return dataTransfer;
 }
 
-async function startNoteDragWithPayload(
-  page: import("@playwright/test").Page,
-  source: import("@playwright/test").Locator,
-  payload: { kind: "note"; id: string; folderId: string }
-) {
-  const dataTransfer = await page.evaluateHandle((dragPayload) => {
-    const nextTransfer = new DataTransfer();
-    const encoded = JSON.stringify(dragPayload);
-    nextTransfer.setData("application/x-bbnote-drag-payload", encoded);
-    nextTransfer.setData("text/plain", encoded);
-    return nextTransfer;
-  }, payload);
-  await source.dispatchEvent("dragstart", { dataTransfer });
-  return dataTransfer;
-}
-
 async function holdNoteCardWithMouseDown(page: import("@playwright/test").Page, source: import("@playwright/test").Locator) {
   await expect(source).toBeVisible();
-  const box = await source.boundingBox();
-  if (!box) {
+  const box = await source.evaluate((element) => {
+    const rect = (element as HTMLElement).getBoundingClientRect();
+    return {
+      x: rect.x,
+      y: rect.y,
+      width: rect.width,
+      height: rect.height
+    };
+  });
+  if (!box || box.width <= 0 || box.height <= 0) {
     throw new Error("Expected a note card to be visible.");
   }
 
@@ -2509,6 +2495,13 @@ async function armNoteCardForDrag(page: import("@playwright/test").Page, source:
 
 async function startNoteDrag(page: import("@playwright/test").Page, source: import("@playwright/test").Locator) {
   await armNoteCardForDrag(page, source);
+  const dataTransfer = await page.evaluateHandle(() => new DataTransfer());
+  await source.dispatchEvent("dragstart", { dataTransfer });
+  return dataTransfer;
+}
+
+async function startHeldNoteDrag(page: import("@playwright/test").Page, source: import("@playwright/test").Locator) {
+  await holdNoteCardWithMouseDown(page, source);
   const dataTransfer = await page.evaluateHandle(() => new DataTransfer());
   await source.dispatchEvent("dragstart", { dataTransfer });
   return dataTransfer;
