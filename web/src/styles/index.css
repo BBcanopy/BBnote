@@ -1710,6 +1710,10 @@ button:disabled {
   cursor: default;
 }
 
+.bb-note-card--clickable {
+  cursor: pointer;
+}
+
 .bb-note-card--drop-before,
 .bb-note-card--drop-after {
   border-color: color-mix(in srgb, var(--accent) 30%, var(--line));
@@ -1917,6 +1921,7 @@ button:disabled {
   cursor: grab;
 }
 
+.bb-note-card--dragging,
 .bb-note-card--draggable:active {
   cursor: grabbing;
 }
