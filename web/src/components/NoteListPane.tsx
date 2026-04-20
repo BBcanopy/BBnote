@@ -1,11 +1,12 @@
 import { CaretLeft, CircleNotch, MagnifyingGlass, Plus, Trash } from "@phosphor-icons/react";
-import { useEffect, useMemo, useRef, useState, type DragEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type DragEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { flushSync } from "react-dom";
 import type { NoteSummary } from "../api/types";
 import { getDragPayload, setDragPayload } from "../utils/dragPayload";
 import type { NoteMoveInstruction, NoteMovePosition } from "../utils/noteOrder";
 
 const NOTE_PREVIEW_EXCERPT_LIMIT = 42;
+const NOTE_MOUSE_DRAG_DELAY_MS = 250;
 
 interface NoteDropTarget {
   targetId: string;
@@ -32,9 +33,14 @@ export function NoteListPane(props: {
 }) {
   const [draggedNoteId, setDraggedNoteId] = useState<string | null>(null);
   const [draggedNoteFolderId, setDraggedNoteFolderId] = useState<string | null>(null);
+  const [dragReadyNoteId, setDragReadyNoteId] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<NoteDropTarget | null>(null);
   const [deleteTargetActive, setDeleteTargetActive] = useState(false);
   const draggedNoteIdRef = useRef<string | null>(null);
+  const pendingMouseDragNoteIdRef = useRef<string | null>(null);
+  const pendingMouseDragTimerRef = useRef<number | null>(null);
+  const suppressClickNoteIdRef = useRef<string | null>(null);
+  const pendingMouseDragCleanupRef = useRef<(() => void) | null>(null);
   const canReorder = props.canReorder && !props.refreshing;
   const canDragNotes = !props.refreshing && (props.enableCrossNotebookMove || props.canReorder);
   const dragging = canDragNotes && draggedNoteId !== null;
@@ -50,10 +56,29 @@ export function NoteListPane(props: {
   }, [canReorder]);
 
   useEffect(() => {
+    if (!canDragNotes) {
+      if (draggedNoteId !== null) {
+        clearDragState();
+        return;
+      }
+
+      if (dragReadyNoteId !== null || pendingMouseDragNoteIdRef.current !== null) {
+        clearPendingMouseDragActivation();
+      }
+    }
+  }, [canDragNotes, dragReadyNoteId, draggedNoteId]);
+
+  useEffect(() => {
     if (draggedNoteId && (!draggedNote || (draggedNoteFolderId !== null && draggedNote.folderId !== draggedNoteFolderId))) {
       clearDragState();
     }
   }, [draggedNote, draggedNoteFolderId, draggedNoteId]);
+
+  useEffect(() => {
+    if (dragReadyNoteId !== null && !props.notes.some((note) => note.id === dragReadyNoteId)) {
+      clearPendingMouseDragActivation();
+    }
+  }, [dragReadyNoteId, props.notes]);
 
   useEffect(() => {
     if (props.refreshing && draggedNoteId !== null) {
@@ -61,7 +86,36 @@ export function NoteListPane(props: {
     }
   }, [draggedNoteId, props.refreshing]);
 
+  useEffect(() => () => clearPendingMouseDragActivation(), []);
+
+  function detachPendingMouseDragListeners() {
+    pendingMouseDragCleanupRef.current?.();
+    pendingMouseDragCleanupRef.current = null;
+  }
+
+  function clearPendingMouseDragActivation(options?: {
+    preserveSuppressedClick?: boolean;
+    keepDragReadyNote?: boolean;
+  }) {
+    detachPendingMouseDragListeners();
+    pendingMouseDragNoteIdRef.current = null;
+
+    if (pendingMouseDragTimerRef.current !== null) {
+      window.clearTimeout(pendingMouseDragTimerRef.current);
+      pendingMouseDragTimerRef.current = null;
+    }
+
+    if (!options?.keepDragReadyNote) {
+      setDragReadyNoteId(null);
+    }
+
+    if (!options?.preserveSuppressedClick) {
+      suppressClickNoteIdRef.current = null;
+    }
+  }
+
   function clearDragState() {
+    clearPendingMouseDragActivation();
     draggedNoteIdRef.current = null;
     setDraggedNoteId(null);
     setDraggedNoteFolderId(null);
@@ -75,6 +129,15 @@ export function NoteListPane(props: {
       return;
     }
 
+    if (dragReadyNoteId !== note.id) {
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
+
+    detachPendingMouseDragListeners();
+    pendingMouseDragNoteIdRef.current = null;
+    suppressClickNoteIdRef.current = note.id;
     event.dataTransfer.effectAllowed = "move";
     setDragPayload(event.dataTransfer, {
       kind: "note",
@@ -91,6 +154,51 @@ export function NoteListPane(props: {
       title: getDisplayNoteTitle(note.title),
       folderId: note.folderId
     });
+  }
+
+  function handleNotePointerDown(event: ReactPointerEvent<HTMLElement>, note: NoteSummary) {
+    if (!canDragNotes || event.button !== 0) {
+      return;
+    }
+
+    clearPendingMouseDragActivation();
+    pendingMouseDragNoteIdRef.current = note.id;
+
+    const handlePendingPointerRelease = () => {
+      const pendingNoteId = pendingMouseDragNoteIdRef.current;
+      clearPendingMouseDragActivation({
+        preserveSuppressedClick: pendingNoteId !== null && suppressClickNoteIdRef.current === pendingNoteId
+      });
+    };
+    const handlePendingPointerCancel = () => {
+      clearPendingMouseDragActivation();
+    };
+
+    window.addEventListener("pointerup", handlePendingPointerRelease, { once: true });
+    window.addEventListener("pointercancel", handlePendingPointerCancel, { once: true });
+    pendingMouseDragCleanupRef.current = () => {
+      window.removeEventListener("pointerup", handlePendingPointerRelease);
+      window.removeEventListener("pointercancel", handlePendingPointerCancel);
+    };
+
+    pendingMouseDragTimerRef.current = window.setTimeout(() => {
+      pendingMouseDragTimerRef.current = null;
+      if (pendingMouseDragNoteIdRef.current !== note.id) {
+        return;
+      }
+
+      suppressClickNoteIdRef.current = note.id;
+      setDragReadyNoteId(note.id);
+    }, NOTE_MOUSE_DRAG_DELAY_MS);
+  }
+
+  function handleNoteClick(noteId: string) {
+    if (suppressClickNoteIdRef.current === noteId) {
+      suppressClickNoteIdRef.current = null;
+      return;
+    }
+
+    props.onSelectNote(noteId);
   }
 
   function resolveDraggedNoteId(event: Pick<DragEvent<HTMLElement>, "dataTransfer">) {
@@ -352,16 +460,19 @@ export function NoteListPane(props: {
                 canDragNotes,
                 canReorder,
                 draggedNoteId,
+                dragReadyNoteId,
                 dragging,
                 dropTarget,
                 interactionsDisabled: props.refreshing,
                 showAfterDropZone: index === props.notes.length - 1,
                 onDragEnd: clearDragState,
+                onClickNote: handleNoteClick,
                 onCardDragOver: handleNoteCardDragOver,
                 onCardDrop: handleNoteCardDrop,
                 onDropZoneDragOver: handleNoteDropZoneDragOver,
                 onDropZoneDrop: handleNoteDropZoneDrop,
                 onDragStart: handleDragStart,
+                onPointerDown: handleNotePointerDown,
                 onSelectNote: props.onSelectNote,
                 selectedNoteId: props.selectedNoteId
               })
@@ -391,16 +502,19 @@ function renderNote(
     canDragNotes: boolean;
     canReorder: boolean;
     draggedNoteId: string | null;
+    dragReadyNoteId: string | null;
     dragging: boolean;
     dropTarget: NoteDropTarget | null;
     interactionsDisabled: boolean;
     showAfterDropZone: boolean;
     onDragEnd(): void;
+    onClickNote(noteId: string): void;
     onCardDragOver(event: DragEvent<HTMLElement>, targetId: string): void;
     onCardDrop(event: DragEvent<HTMLElement>, targetId: string): void;
     onDropZoneDragOver(event: DragEvent<HTMLElement>, targetId: string, position: NoteMovePosition): void;
     onDropZoneDrop(event: DragEvent<HTMLElement>, targetId: string, position: NoteMovePosition): void;
     onDragStart(event: DragEvent<HTMLElement>, note: NoteSummary): void;
+    onPointerDown(event: ReactPointerEvent<HTMLElement>, note: NoteSummary): void;
     onSelectNote(noteId: string): void;
     selectedNoteId: string | null;
   }
@@ -408,6 +522,7 @@ function renderNote(
   const selected = helpers.selectedNoteId === note.id;
   const dropPosition = helpers.canReorder && helpers.dropTarget?.targetId === note.id ? helpers.dropTarget.position : null;
   const draggingSource = helpers.draggedNoteId === note.id;
+  const dragReady = helpers.canDragNotes && (helpers.dragReadyNoteId === note.id || draggingSource);
   const dragTargetVisible = helpers.dragging && !draggingSource;
   const dropShiftClass = dropPosition === "before" ? "bb-note-card--shift-down" : dropPosition === "after" ? "bb-note-card--shift-up" : "";
   const previewExcerpt = formatPreviewExcerpt(note.excerpt);
@@ -419,12 +534,13 @@ function renderNote(
       aria-disabled={helpers.interactionsDisabled || undefined}
       draggable={helpers.canDragNotes}
       data-testid={buildNoteTestId("drag", note.title)}
+      onPointerDown={helpers.canDragNotes ? (event) => helpers.onPointerDown(event, note) : undefined}
       onDragStart={(event) => helpers.onDragStart(event, note)}
       onDragEnd={helpers.onDragEnd}
       onDragEnter={helpers.canReorder ? (event) => helpers.onCardDragOver(event, note.id) : undefined}
       onDragOver={helpers.canReorder ? (event) => helpers.onCardDragOver(event, note.id) : undefined}
       onDrop={helpers.canReorder ? (event) => helpers.onCardDrop(event, note.id) : undefined}
-      onClick={helpers.interactionsDisabled ? undefined : () => helpers.onSelectNote(note.id)}
+      onClick={helpers.interactionsDisabled ? undefined : () => helpers.onClickNote(note.id)}
       onKeyDown={
         helpers.interactionsDisabled
           ? undefined
@@ -435,9 +551,11 @@ function renderNote(
               }
             }
       }
-      className={`bb-note-card ${helpers.canDragNotes ? "bb-note-card--draggable" : ""} w-full text-left ${selected ? "is-active" : ""} ${
-        dropPosition ? "bb-tree-drop-target" : ""
-      } ${dropPosition ? `bb-note-card--drop-${dropPosition}` : ""} ${dropShiftClass} ${draggingSource ? "bb-note-card--dragging" : ""} ${
+      className={`bb-note-card ${helpers.interactionsDisabled ? "" : "bb-note-card--clickable"} ${dragReady ? "bb-note-card--draggable" : ""} w-full text-left ${
+        selected ? "is-active" : ""
+      } ${dropPosition ? "bb-tree-drop-target" : ""} ${dropPosition ? `bb-note-card--drop-${dropPosition}` : ""} ${dropShiftClass} ${
+        draggingSource ? "bb-note-card--dragging" : ""
+      } ${
         helpers.interactionsDisabled ? "bb-note-card--disabled" : ""
       }`}
     >

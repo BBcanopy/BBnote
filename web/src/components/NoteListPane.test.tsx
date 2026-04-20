@@ -1,11 +1,21 @@
 import type { ComponentProps } from "react";
-import { createEvent, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, createEvent, fireEvent, render, screen } from "@testing-library/react";
 import type { NoteSummary } from "../api/types";
 import { NoteListPane } from "./NoteListPane";
 
 type NoteListPaneProps = ComponentProps<typeof NoteListPane>;
+const NOTE_MOUSE_DRAG_DELAY_MS = 250;
 
 describe("NoteListPane", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.runOnlyPendingTimers();
+    vi.useRealTimers();
+  });
+
   it("renders borderless header icon buttons", () => {
     renderNoteListPane();
 
@@ -75,6 +85,83 @@ describe("NoteListPane", () => {
     expect(onSelectNote).not.toHaveBeenCalled();
   });
 
+  it("opens a note on a quick mouse click before drag arms", () => {
+    const onSelectNote = vi.fn<NoteListPaneProps["onSelectNote"]>();
+
+    renderNoteListPane({
+      onSelectNote
+    });
+
+    const noteCard = screen.getByTestId(buildNoteTestId("drag", "Quarterly review"));
+    fireEvent.pointerDown(noteCard, { button: 0, pointerType: "mouse" });
+    fireEvent.pointerUp(window, { button: 0, pointerType: "mouse" });
+    fireEvent.click(noteCard);
+
+    expect(onSelectNote).toHaveBeenCalledWith("note-1");
+    expect(noteCard).toHaveAttribute("draggable", "true");
+    expect(noteCard).not.toHaveClass("bb-note-card--draggable");
+  });
+
+  it("arms note dragging after a mouse hold and suppresses the release click", () => {
+    const onSelectNote = vi.fn<NoteListPaneProps["onSelectNote"]>();
+
+    renderNoteListPane({
+      onSelectNote
+    });
+
+    const noteCard = screen.getByTestId(buildNoteTestId("drag", "Quarterly review"));
+    armNoteCard(noteCard);
+
+    expect(noteCard).toHaveAttribute("draggable", "true");
+    expect(noteCard).toHaveClass("bb-note-card--draggable");
+
+    fireEvent.pointerUp(window, { button: 0, pointerType: "mouse" });
+    fireEvent.click(noteCard);
+
+    expect(onSelectNote).not.toHaveBeenCalled();
+    expect(noteCard).toHaveAttribute("draggable", "true");
+    expect(noteCard).not.toHaveClass("bb-note-card--draggable");
+  });
+
+  it("arms note dragging after a touch hold too", () => {
+    renderNoteListPane();
+
+    const noteCard = screen.getByTestId(buildNoteTestId("drag", "Quarterly review"));
+    armNoteCard(noteCard, "touch");
+
+    expect(noteCard).toHaveAttribute("draggable", "true");
+    expect(noteCard).toHaveClass("bb-note-card--draggable");
+
+    fireEvent.pointerUp(window, { button: 0, pointerType: "touch" });
+
+    expect(noteCard).toHaveAttribute("draggable", "true");
+    expect(noteCard).not.toHaveClass("bb-note-card--draggable");
+  });
+
+  it("allows dragging an unopened note after the hold delay arms it", () => {
+    const dataTransfer = createDataTransfer();
+
+    renderNoteListPane({
+      notes: [
+        buildNote({
+          id: "note-1",
+          title: "Quarterly review",
+          sortOrder: 0
+        }),
+        buildNote({
+          id: "note-2",
+          title: "Roadmap follow-up",
+          sortOrder: 1
+        })
+      ]
+    });
+
+    startArmedNoteDrag("Roadmap follow-up", dataTransfer);
+
+    expect(screen.getByTestId("notes-delete-target")).toBeInTheDocument();
+    expect(screen.getByTestId(buildNoteTestId("slot", "Quarterly review"))).toHaveClass("is-drag-ready");
+  });
+
   it("shows a temporary delete target during note drag and requests confirmation on drop", () => {
     const handleRequestDeleteNote = vi.fn<NoteListPaneProps["onRequestDeleteNote"]>();
     const dataTransfer = createDataTransfer();
@@ -85,7 +172,7 @@ describe("NoteListPane", () => {
 
     expect(screen.queryByTestId("notes-delete-target")).not.toBeInTheDocument();
 
-    fireEvent.dragStart(screen.getByTestId(buildNoteTestId("drag", "Quarterly review")), { dataTransfer });
+    startArmedNoteDrag("Quarterly review", dataTransfer);
 
     const deleteTarget = screen.getByTestId("notes-delete-target");
     expect(deleteTarget).toBeInTheDocument();
@@ -105,7 +192,7 @@ describe("NoteListPane", () => {
 
     renderNoteListPane();
 
-    fireEvent.dragStart(screen.getByTestId(buildNoteTestId("drag", "Quarterly review")), { dataTransfer });
+    startArmedNoteDrag("Quarterly review", dataTransfer);
 
     expect(screen.queryByTestId("notes-actions")).not.toBeInTheDocument();
     expect(screen.getByTestId("notes-delete-target")).toHaveClass("bb-pane-card__header-center-action");
@@ -130,7 +217,7 @@ describe("NoteListPane", () => {
       ]
     });
 
-    fireEvent.dragStart(screen.getByTestId(buildNoteTestId("drag", "Quarterly review")), { dataTransfer });
+    startArmedNoteDrag("Quarterly review", dataTransfer);
 
     expect(screen.getByTestId(buildNoteTestId("slot", "Quarterly review"))).not.toHaveClass("is-drag-ready");
     expect(screen.getByTestId(buildNoteTestId("slot", "Roadmap follow-up"))).toHaveClass("is-drag-ready");
@@ -164,7 +251,7 @@ describe("NoteListPane", () => {
       height: 100
     });
 
-    fireEvent.dragStart(screen.getByTestId(buildNoteTestId("drag", "Quarterly review")), { dataTransfer });
+    startArmedNoteDrag("Quarterly review", dataTransfer);
     const dragOverEvent = createEvent.dragOver(screen.getByTestId(buildNoteTestId("after", "Roadmap follow-up")), { dataTransfer });
     Object.defineProperty(dragOverEvent, "clientY", {
       configurable: true,
@@ -205,7 +292,7 @@ describe("NoteListPane", () => {
       onMoveNote: handleMoveNote
     });
 
-    fireEvent.dragStart(screen.getByTestId(buildNoteTestId("drag", "Quarterly review")), { dataTransfer });
+    startArmedNoteDrag("Quarterly review", dataTransfer);
     fireEvent.dragOver(screen.getByTestId(buildNoteTestId("before", "Budget wrap-up")), { dataTransfer });
     fireEvent.drop(screen.getByTestId(buildNoteTestId("before", "Budget wrap-up")), { dataTransfer });
 
@@ -241,7 +328,7 @@ describe("NoteListPane", () => {
       onMoveNote: handleMoveNote
     });
 
-    fireEvent.dragStart(screen.getByTestId(buildNoteTestId("drag", "Budget wrap-up")), { dataTransfer });
+    startArmedNoteDrag("Budget wrap-up", dataTransfer);
     fireEvent.dragOver(screen.getByTestId(buildNoteTestId("before", "Roadmap follow-up")), { dataTransfer });
     fireEvent.drop(screen.getByTestId(buildNoteTestId("before", "Roadmap follow-up")), { dataTransfer });
 
@@ -283,7 +370,7 @@ describe("NoteListPane", () => {
       height: 100
     });
 
-    fireEvent.dragStart(screen.getByTestId(buildNoteTestId("drag", "Budget wrap-up")), { dataTransfer });
+    startArmedNoteDrag("Budget wrap-up", dataTransfer);
     const dragOverEvent = createEvent.dragOver(targetCard, { dataTransfer });
     Object.defineProperty(dragOverEvent, "clientY", {
       configurable: true,
@@ -330,7 +417,7 @@ describe("NoteListPane", () => {
       height: 100
     });
 
-    fireEvent.dragStart(screen.getByTestId(buildNoteTestId("drag", "Quarterly review")), { dataTransfer });
+    startArmedNoteDrag("Quarterly review", dataTransfer);
     const dragOverEvent = createEvent.dragOver(targetCard, { dataTransfer });
     Object.defineProperty(dragOverEvent, "clientY", {
       configurable: true,
@@ -373,7 +460,7 @@ describe("NoteListPane", () => {
       height: 100
     });
 
-    fireEvent.dragStart(screen.getByTestId(buildNoteTestId("drag", "Roadmap follow-up")), { dataTransfer });
+    startArmedNoteDrag("Roadmap follow-up", dataTransfer);
     const dragOverEvent = createEvent.dragOver(targetSlot, { dataTransfer });
     Object.defineProperty(dragOverEvent, "clientY", {
       configurable: true,
@@ -417,7 +504,7 @@ describe("NoteListPane", () => {
       height: 100
     });
 
-    fireEvent.dragStart(screen.getByTestId(buildNoteTestId("drag", "Quarterly review")), { dataTransfer });
+    startArmedNoteDrag("Quarterly review", dataTransfer);
     const dragOverEvent = createEvent.dragOver(targetCard, { dataTransfer });
     Object.defineProperty(dragOverEvent, "clientY", {
       configurable: true,
@@ -480,7 +567,7 @@ describe("NoteListPane", () => {
       height: 60
     });
 
-    fireEvent.dragStart(screen.getByTestId(buildNoteTestId("drag", "Quarterly review")), { dataTransfer });
+    startArmedNoteDrag("Quarterly review", dataTransfer);
     const dragOverEvent = createEvent.dragOver(noteList, { dataTransfer });
     Object.defineProperty(dragOverEvent, "clientY", {
       configurable: true,
@@ -528,7 +615,7 @@ describe("NoteListPane", () => {
       height: 100
     });
 
-    fireEvent.dragStart(screen.getByTestId(buildNoteTestId("drag", "Roadmap follow-up")), { dataTransfer });
+    startArmedNoteDrag("Roadmap follow-up", dataTransfer);
     const dragOverEvent = createEvent.dragOver(targetSlot, { dataTransfer });
     Object.defineProperty(dragOverEvent, "clientY", {
       configurable: true,
@@ -584,7 +671,7 @@ describe("NoteListPane", () => {
       />
     );
 
-    fireEvent.dragStart(screen.getByTestId(buildNoteTestId("drag", "Quarterly review")), { dataTransfer });
+    startArmedNoteDrag("Quarterly review", dataTransfer);
     expect(screen.getByTestId("notes-delete-target")).toBeInTheDocument();
 
     rerender(
@@ -608,9 +695,10 @@ describe("NoteListPane", () => {
       />
     );
 
-    await waitFor(() => {
-      expect(screen.queryByTestId("notes-delete-target")).not.toBeInTheDocument();
+    await act(async () => {
+      await Promise.resolve();
     });
+    expect(screen.queryByTestId("notes-delete-target")).not.toBeInTheDocument();
     expect(onDraggedNoteChange).toHaveBeenLastCalledWith(null);
   });
 
@@ -638,7 +726,7 @@ describe("NoteListPane", () => {
       />
     );
 
-    fireEvent.dragStart(screen.getByTestId(buildNoteTestId("drag", "Quarterly review")), { dataTransfer });
+    startArmedNoteDrag("Quarterly review", dataTransfer);
     expect(screen.getByTestId("notes-delete-target")).toBeInTheDocument();
 
     rerender(
@@ -667,9 +755,10 @@ describe("NoteListPane", () => {
       />
     );
 
-    await waitFor(() => {
-      expect(screen.queryByTestId("notes-delete-target")).not.toBeInTheDocument();
+    await act(async () => {
+      await Promise.resolve();
     });
+    expect(screen.queryByTestId("notes-delete-target")).not.toBeInTheDocument();
     expect(onDraggedNoteChange).toHaveBeenLastCalledWith(null);
   });
 });
@@ -765,6 +854,23 @@ function createDataTransfer(): DataTransfer {
     },
     setDragImage: vi.fn()
   } as DataTransfer;
+}
+
+function armNoteCard(noteCard: HTMLElement, pointerType = "mouse") {
+  fireEvent.pointerDown(noteCard, {
+    button: 0,
+    pointerType
+  });
+  act(() => {
+    vi.advanceTimersByTime(NOTE_MOUSE_DRAG_DELAY_MS);
+  });
+}
+
+function startArmedNoteDrag(title: string, dataTransfer: DataTransfer) {
+  const noteCard = screen.getByTestId(buildNoteTestId("drag", title));
+  armNoteCard(noteCard);
+  fireEvent.dragStart(noteCard, { dataTransfer });
+  return noteCard;
 }
 
 function buildNoteTestId(kind: "drag" | "slot" | "before" | "after", title: string) {
