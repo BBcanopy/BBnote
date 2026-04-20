@@ -1085,9 +1085,31 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
   await expect(page.getByTestId("notes-refresh-indicator")).toHaveCount(0);
   const desktopFollowUpNoteDrag = page.getByTestId("notes-pane").getByTestId(buildNoteTestId("drag", followUpNoteTitle));
   const archiveNotebookDropTarget = page.getByTestId("notebook-pane").getByTestId(buildNotebookTestId("drag", archiveNotebookName));
+  const moveNoteResponse = page.waitForResponse((response) => {
+    if (response.request().method() !== "PATCH" || !response.ok()) {
+      return false;
+    }
+
+    return /^\/api\/v1\/notes\/[^/]+\/move$/.test(new URL(response.url()).pathname);
+  });
   await expect(desktopFollowUpNoteDrag).toBeVisible();
   const moveToArchiveDrag = await startHeldNoteDrag(page, desktopFollowUpNoteDrag);
-  await dropOnTarget(desktopFollowUpNoteDrag, archiveNotebookDropTarget, moveToArchiveDrag, page);
+  await archiveNotebookDropTarget.dispatchEvent("dragenter", { dataTransfer: moveToArchiveDrag });
+  await archiveNotebookDropTarget.dispatchEvent("dragover", { dataTransfer: moveToArchiveDrag });
+  await expect(notebookRowContainer(page, archiveNotebookName)).toHaveClass(/is-note-target/);
+  const archiveNotebookBox = await archiveNotebookDropTarget.boundingBox();
+  if (!archiveNotebookBox) {
+    throw new Error("Expected the archive notebook drop target to be visible.");
+  }
+  await page.mouse.move(
+    archiveNotebookBox.x + archiveNotebookBox.width / 2,
+    archiveNotebookBox.y + archiveNotebookBox.height / 2,
+    { steps: 8 }
+  );
+  await archiveNotebookDropTarget.dispatchEvent("drop", { dataTransfer: moveToArchiveDrag });
+  await endDrag(desktopFollowUpNoteDrag, moveToArchiveDrag, page);
+  await moveNoteResponse;
+  await expect(page.getByTestId("notes-refresh-indicator")).toHaveCount(0);
   await expect(page.getByTestId("notes-pane").getByTestId(buildNoteTestId("drag", followUpNoteTitle))).toBeVisible();
   await expect(page.getByTestId("notes-pane").getByTestId(buildNoteTestId("drag", noteTitle))).toHaveCount(0);
   await expect(notebookRowContainer(page, archiveNotebookName)).toHaveClass(/is-active/);
@@ -2458,19 +2480,27 @@ async function startDrag(page: import("@playwright/test").Page, source: import("
 
 async function waitForNoteCardBounds(source: import("@playwright/test").Locator) {
   await expect(source).toBeVisible();
+  let stableBox:
+    | {
+        x: number;
+        y: number;
+        width: number;
+        height: number;
+      }
+    | null = null;
   await expect
     .poll(async () => {
       const box = await source.boundingBox();
-      return box && box.width > 0 && box.height > 0 ? box : null;
+      stableBox = box && box.width > 0 && box.height > 0 ? box : null;
+      return stableBox !== null;
     })
-    .not.toBeNull();
+    .toBe(true);
 
-  const box = await source.boundingBox();
-  if (!box || box.width <= 0 || box.height <= 0) {
+  if (!stableBox) {
     throw new Error("Expected a note card to be visible.");
   }
 
-  return box;
+  return stableBox;
 }
 
 async function holdNoteCardWithMouseDown(page: import("@playwright/test").Page, source: import("@playwright/test").Locator) {
