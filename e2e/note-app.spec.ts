@@ -1088,9 +1088,9 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
   await expect(desktopFollowUpNoteDrag).toBeVisible();
   const moveToArchiveDrag = await startHeldNoteDrag(page, desktopFollowUpNoteDrag);
   await dropOnTarget(desktopFollowUpNoteDrag, archiveNotebookDropTarget, moveToArchiveDrag, page);
+  await expect(page.getByTestId("notes-pane").getByTestId(buildNoteTestId("drag", followUpNoteTitle))).toBeVisible();
+  await expect(page.getByTestId("notes-pane").getByTestId(buildNoteTestId("drag", noteTitle))).toHaveCount(0);
   await expect(notebookRowContainer(page, archiveNotebookName)).toHaveClass(/is-active/);
-  await expect(page.getByText(followUpNoteTitle).first()).toBeVisible();
-  await expect(page.locator('[data-testid^="note-drag-"]').filter({ hasText: noteTitle })).toHaveCount(0);
   await notebookRow(page, archiveNotebookName).click();
   await expect(notebookRowContainer(page, archiveNotebookName)).toHaveClass(/is-active/);
   await expect(page.getByTestId("notes-pane").getByTestId(buildNoteTestId("drag", followUpNoteTitle))).toBeVisible();
@@ -2456,20 +2456,25 @@ async function startDrag(page: import("@playwright/test").Page, source: import("
   return dataTransfer;
 }
 
-async function holdNoteCardWithMouseDown(page: import("@playwright/test").Page, source: import("@playwright/test").Locator) {
+async function waitForNoteCardBounds(source: import("@playwright/test").Locator) {
   await expect(source).toBeVisible();
-  const box = await source.evaluate((element) => {
-    const rect = (element as HTMLElement).getBoundingClientRect();
-    return {
-      x: rect.x,
-      y: rect.y,
-      width: rect.width,
-      height: rect.height
-    };
-  });
+  await expect
+    .poll(async () => {
+      const box = await source.boundingBox();
+      return box && box.width > 0 && box.height > 0 ? box : null;
+    })
+    .not.toBeNull();
+
+  const box = await source.boundingBox();
   if (!box || box.width <= 0 || box.height <= 0) {
     throw new Error("Expected a note card to be visible.");
   }
+
+  return box;
+}
+
+async function holdNoteCardWithMouseDown(page: import("@playwright/test").Page, source: import("@playwright/test").Locator) {
+  const box = await waitForNoteCardBounds(source);
 
   const startX = box.x + Math.max(16, Math.min(box.width / 2, 28));
   const startY = box.y + box.height / 2;
@@ -2491,7 +2496,7 @@ async function armNoteCardForDrag(
   source: import("@playwright/test").Locator,
   pointerType: "mouse" | "touch" | "pen" = "mouse"
 ) {
-  await expect(source).toBeVisible();
+  await waitForNoteCardBounds(source);
   await source.dispatchEvent("pointerdown", {
     button: 0,
     pointerType
@@ -2507,10 +2512,22 @@ async function armNoteCardForDrag(
     .toBe(true);
 }
 
+async function waitForNoteDragStart(source: import("@playwright/test").Locator) {
+  await expect
+    .poll(async () =>
+      source.evaluate((element) => {
+        const noteCard = element as HTMLElement;
+        return noteCard.classList.contains("bb-note-card--dragging");
+      })
+    )
+    .toBe(true);
+}
+
 async function startNoteDrag(page: import("@playwright/test").Page, source: import("@playwright/test").Locator) {
   await armNoteCardForDrag(page, source);
   const dataTransfer = await page.evaluateHandle(() => new DataTransfer());
   await source.dispatchEvent("dragstart", { dataTransfer });
+  await waitForNoteDragStart(source);
   return dataTransfer;
 }
 
@@ -2518,6 +2535,7 @@ async function startHeldNoteDrag(page: import("@playwright/test").Page, source: 
   await holdNoteCardWithMouseDown(page, source);
   const dataTransfer = await page.evaluateHandle(() => new DataTransfer());
   await source.dispatchEvent("dragstart", { dataTransfer });
+  await waitForNoteDragStart(source);
   return dataTransfer;
 }
 
