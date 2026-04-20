@@ -1,5 +1,5 @@
 import type { ComponentProps } from "react";
-import { act, createEvent, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, createEvent, fireEvent, render, screen } from "@testing-library/react";
 import type { NoteSummary } from "../api/types";
 import { NoteListPane } from "./NoteListPane";
 
@@ -7,7 +7,12 @@ type NoteListPaneProps = ComponentProps<typeof NoteListPane>;
 const NOTE_MOUSE_DRAG_DELAY_MS = 250;
 
 describe("NoteListPane", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
   afterEach(() => {
+    vi.runOnlyPendingTimers();
     vi.useRealTimers();
   });
 
@@ -690,9 +695,10 @@ describe("NoteListPane", () => {
       />
     );
 
-    await waitFor(() => {
-      expect(screen.queryByTestId("notes-delete-target")).not.toBeInTheDocument();
+    await act(async () => {
+      await Promise.resolve();
     });
+    expect(screen.queryByTestId("notes-delete-target")).not.toBeInTheDocument();
     expect(onDraggedNoteChange).toHaveBeenLastCalledWith(null);
   });
 
@@ -749,9 +755,10 @@ describe("NoteListPane", () => {
       />
     );
 
-    await waitFor(() => {
-      expect(screen.queryByTestId("notes-delete-target")).not.toBeInTheDocument();
+    await act(async () => {
+      await Promise.resolve();
     });
+    expect(screen.queryByTestId("notes-delete-target")).not.toBeInTheDocument();
     expect(onDraggedNoteChange).toHaveBeenLastCalledWith(null);
   });
 });
@@ -850,7 +857,6 @@ function createDataTransfer(): DataTransfer {
 }
 
 function armNoteCard(noteCard: HTMLElement, pointerType = "mouse") {
-  vi.useFakeTimers();
   fireEvent.pointerDown(noteCard, {
     button: 0,
     pointerType
@@ -858,7 +864,6 @@ function armNoteCard(noteCard: HTMLElement, pointerType = "mouse") {
   act(() => {
     vi.advanceTimersByTime(NOTE_MOUSE_DRAG_DELAY_MS);
   });
-  vi.useRealTimers();
 }
 
 function startArmedNoteDrag(title: string, dataTransfer: DataTransfer) {
