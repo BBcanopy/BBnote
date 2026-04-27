@@ -447,10 +447,7 @@ export function NotesPage() {
     clearAutosaveTimer();
     autosaveTimerRef.current = window.setTimeout(async () => {
       autosaveTimerRef.current = null;
-      const persisted = await persistEditorPayload(payload, sessionId);
-      if (persisted) {
-        skipNextNoteLoadRef.current = persisted.id;
-      }
+      await persistEditorPayload(payload, sessionId);
     }, AUTOSAVE_DELAY_MS);
 
     return () => clearAutosaveTimer();
@@ -598,6 +595,9 @@ export function NotesPage() {
 
       if (sessionId === editorSessionRef.current) {
         setLastSyncedContentKey(buildContentKey(payload.folderId, payload.title, payload.bodyMarkdown));
+        if (!payload.noteId) {
+          skipNextNoteLoadRef.current = persisted.id;
+        }
         startTransition(() => {
           setSelectedNoteId(persisted.id);
           setEditorNote((current) => {
