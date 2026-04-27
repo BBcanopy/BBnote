@@ -739,6 +739,7 @@ export function NotesPage() {
       closeCreateNotebookDialog();
       await refreshFolders();
       updateSelectedFolderId(created.id);
+      setSelectedNoteId(null);
       setFolderPaneCollapsed(false);
       setNotePaneCollapsed(false);
       setMobileFoldersOpen(false);

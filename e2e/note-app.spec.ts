@@ -2313,6 +2313,8 @@ async function createNotebookWithDialog(page: import("@playwright/test").Page, n
   await dialog.getByPlaceholder("Notebook name").fill(name);
   await dialog.getByRole("button", { name: /^create notebook$/i }).click();
   await expect(dialog).toHaveCount(0);
+  await expect(notebookRowContainer(page, name)).toHaveClass(/is-active/);
+  await expect(page).toHaveURL(/\/folders\/[^/]+$/);
 }
 
 async function installMockVoiceRecorder(page: import("@playwright/test").Page) {
