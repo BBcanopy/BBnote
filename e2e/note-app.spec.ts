@@ -2012,6 +2012,7 @@ test("keeps the previous editor visible while switching notes", async ({ page })
   const desktopEditorPanel = page.getByTestId("editor-panel-desktop");
   const topbarTitleInput = page.getByTestId("page-nav-title-input").getByRole("textbox", { name: "Title" });
   const bodyTextarea = desktopEditorPanel.getByPlaceholder("Write in Markdown");
+  const contentShell = desktopEditorPanel.locator(".bb-editor-panel__content-shell");
   await expect(topbarTitleInput).toHaveValue(firstNoteTitle);
   await expect(bodyTextarea).toHaveValue(firstNoteBody);
 
@@ -2040,6 +2041,7 @@ test("keeps the previous editor visible while switching notes", async ({ page })
   const refreshIndicator = desktopEditorPanel.getByTestId("editor-refresh-indicator");
   await expect(refreshIndicator).toBeVisible();
   await expect(page.locator(".bb-editor-panel__content--empty").filter({ hasText: "Loading note" })).toHaveCount(0);
+  await expect.poll(async () => Number.parseFloat(await contentShell.evaluate((element) => getComputedStyle(element).opacity))).toBeGreaterThan(0.95);
   await expect(topbarTitleInput).toHaveValue(firstNoteTitle);
   await expect(topbarTitleInput).toBeDisabled();
   await expect(bodyTextarea).toHaveValue(firstNoteBody);
@@ -2052,6 +2054,59 @@ test("keeps the previous editor visible while switching notes", async ({ page })
   await expect(bodyTextarea).toHaveValue(secondNoteBody);
   await expect(bodyTextarea).toBeEnabled();
   await expect(refreshIndicator).toHaveCount(0);
+});
+
+test("keeps the editor steady while autosave is in flight", async ({ page }) => {
+  const suffix = Date.now().toString();
+  const notebookName = `Autosave smooth ${suffix}`;
+  const noteTitle = `Autosave steady ${suffix}`;
+  const noteBody = "Autosave should not blank or dim the editor while the save request is pending.";
+
+  await login(page);
+  await createNotebookWithDialog(page, notebookName);
+  await createNoteWithContent(page, noteTitle, noteBody);
+  const noteId = extractNoteIdFromUrl(page.url());
+
+  const desktopEditorPanel = page.getByTestId("editor-panel-desktop");
+  const topbarTitleInput = page.getByTestId("page-nav-title-input").getByRole("textbox", { name: "Title" });
+  const bodyTextarea = desktopEditorPanel.getByPlaceholder("Write in Markdown");
+  const contentShell = desktopEditorPanel.locator(".bb-editor-panel__content-shell");
+  const previousStatusText = await waitForUpdatedStatus(page);
+
+  let releaseAutosave!: () => void;
+  const autosaveReleased = new Promise<void>((resolve) => {
+    releaseAutosave = resolve;
+  });
+  let delayedAutosaveSeen = false;
+
+  await page.route(`**/api/v1/notes/${noteId}`, async (route) => {
+    if (!delayedAutosaveSeen && route.request().method() === "PUT") {
+      delayedAutosaveSeen = true;
+      const response = await route.fetch();
+      await autosaveReleased;
+      await route.fulfill({ response });
+      return;
+    }
+
+    await route.continue();
+  });
+
+  await bodyTextarea.click();
+  await bodyTextarea.press("End");
+  await bodyTextarea.pressSequentially(" The editor should stay steady.");
+  await expect(bodyTextarea).toHaveValue(/The editor should stay steady\.$/);
+  await expect.poll(() => delayedAutosaveSeen).toBe(true);
+
+  await expect(desktopEditorPanel.getByTestId("editor-refresh-indicator")).toHaveCount(0);
+  await expect(page.locator(".bb-editor-panel__content--empty").filter({ hasText: "Loading note" })).toHaveCount(0);
+  await expect.poll(async () => Number.parseFloat(await contentShell.evaluate((element) => getComputedStyle(element).opacity))).toBeGreaterThan(0.95);
+  await expect(topbarTitleInput).toBeEnabled();
+  await expect(bodyTextarea).toBeEnabled();
+
+  releaseAutosave();
+
+  await waitForUpdatedStatus(page, previousStatusText);
+  await expect(desktopEditorPanel.getByTestId("editor-refresh-indicator")).toHaveCount(0);
 });
 
 test("opens migration from the avatar menu and runs both export and import flows", async ({ page }) => {
@@ -2258,6 +2313,8 @@ async function createNotebookWithDialog(page: import("@playwright/test").Page, n
   await dialog.getByPlaceholder("Notebook name").fill(name);
   await dialog.getByRole("button", { name: /^create notebook$/i }).click();
   await expect(dialog).toHaveCount(0);
+  await expect(notebookRowContainer(page, name)).toHaveClass(/is-active/);
+  await expect(page).toHaveURL(/\/folders\/[^/]+$/);
 }
 
 async function installMockVoiceRecorder(page: import("@playwright/test").Page) {
