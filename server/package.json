@@ -22,7 +22,7 @@
     "@fastify/swagger-ui": "6.0.0",
     "better-sqlite3": "12.11.1",
     "cheerio": "1.2.0",
-    "fastify": "5.8.5",
+    "fastify": "5.9.0",
     "jszip": "3.10.1",
     "mime-types": "3.0.2",
     "turndown": "7.2.4",
