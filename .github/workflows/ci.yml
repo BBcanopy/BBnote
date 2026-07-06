@@ -17,7 +17,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-node@v6
         with:
@@ -33,7 +33,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-node@v6
         with:
@@ -52,7 +52,7 @@ jobs:
       - web-test
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Prepare compose env
         run: cp .env.example .env
@@ -104,7 +104,7 @@ jobs:
             dockerfile: Dockerfile.all-in-one
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - id: vars
         shell: bash
