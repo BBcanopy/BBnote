@@ -18,9 +18,9 @@
     "server:consistency-check": "npm run cli --workspace server -- consistency-check"
   },
   "devDependencies": {
-    "@playwright/test": "1.61.1",
-    "concurrently": "10.0.3",
-    "typescript": "6.0.3",
-    "vite": "8.1.2"
+    "@playwright/test": "1.62.1",
+    "concurrently": "10.0.4",
+    "typescript": "7.0.2",
+    "vite": "8.2.0"
   }
 }
