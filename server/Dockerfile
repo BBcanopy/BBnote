@@ -6,7 +6,12 @@ COPY package.json package-lock.json tsconfig.base.json ./
 COPY web/package.json web/package.json
 COPY server/package.json server/package.json
 COPY android/package.json android/package.json
-RUN npm ci
+# better-sqlite3 13 invokes node-gyp even when its bundled prebuild is used.
+# Keep the native toolchain in this intermediate stage only.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends python3 make g++ \
+    && rm -rf /var/lib/apt/lists/*
+RUN npm ci --workspace server
 
 FROM deps AS build
 COPY . .
