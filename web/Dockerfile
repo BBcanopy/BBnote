@@ -6,7 +6,7 @@ COPY package.json package-lock.json tsconfig.base.json ./
 COPY web/package.json web/package.json
 COPY server/package.json server/package.json
 COPY android/package.json android/package.json
-RUN npm ci
+RUN npm ci --workspace web
 
 FROM deps AS build
 COPY . .
