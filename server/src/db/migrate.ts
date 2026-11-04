@@ -95,6 +95,7 @@ export function runMigrations(connection: Database.Database) {
       updated_at text not null,
       refresh_token text,
       access_token_expires_at text,
+      generation text,
       expires_at text not null,
       foreign key(owner_id) references users(id) on delete cascade
     );
@@ -144,6 +145,10 @@ export function runMigrations(connection: Database.Database) {
 
   if (!sessionColumns.includes("access_token_expires_at")) {
     connection.exec("alter table sessions add column access_token_expires_at text;");
+  }
+
+  if (!sessionColumns.includes("generation")) {
+    connection.exec("alter table sessions add column generation text;");
   }
 
   const noteColumns = connection
