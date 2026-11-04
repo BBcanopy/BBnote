@@ -1411,6 +1411,67 @@ test("reorders notes when the drop lands in the note-lane gap", async ({ page })
   await expectNoteOrderInLane(page, [secondNoteTitle, firstNoteTitle, thirdNoteTitle]);
 });
 
+test("waits for autosave before moving another note to a notebook", async ({ page }) => {
+  const suffix = Date.now().toString();
+  const archiveName = `Move archive ${suffix}`;
+  const sourceName = `Move source ${suffix}`;
+  const movingTitle = `Moving note ${suffix}`;
+  await login(page, { assertTheme: false });
+  await createNotebookWithDialog(page, archiveName);
+  await page.getByRole("button", { name: /all notes/i }).first().click();
+  await createNotebookWithDialog(page, sourceName);
+  await createNoteWithContent(page, movingTitle, "Move this note.");
+  await createNoteWithContent(page, `Editing note ${suffix}`, "Keep this edit.");
+  const editorId = extractNoteIdFromUrl(page.url());
+
+  let releaseSave!: () => void;
+  let saveStarted!: () => void;
+  const saveGate = new Promise<void>((resolve) => { releaseSave = resolve; });
+  const pendingSave = new Promise<void>((resolve) => { saveStarted = resolve; });
+  await page.route(`**/api/v1/notes/${editorId}`, async (route) => {
+    if (route.request().method() !== "PUT") {
+      await route.continue();
+      return;
+    }
+    const response = await route.fetch();
+    saveStarted();
+    await saveGate;
+    await route.fulfill({ response });
+  });
+  await activeEditorTextarea(page).fill("Keep this edit while another note moves.");
+  await pendingSave;
+  await page.evaluate(() => {
+    const state = window as Window & { noteMoveRequests: number };
+    state.noteMoveRequests = 0;
+    const originalFetch = window.fetch.bind(window);
+    window.fetch = (input, init) => {
+      const url = input instanceof Request ? input.url : String(input);
+      if (init?.method === "PATCH" && /\/notes\/[^/]+\/move$/.test(url)) {
+        state.noteMoveRequests += 1;
+      }
+      return originalFetch(input, init);
+    };
+  });
+
+  const source = page.getByTestId("notes-pane").getByTestId(buildNoteTestId("drag", movingTitle));
+  const target = page.getByTestId("notebook-pane").getByTestId(buildNotebookTestId("drag", archiveName));
+  const moved = page.waitForResponse((response) => response.request().method() === "PATCH" && /\/notes\/[^/]+\/move$/.test(response.url()));
+  let prematureMoves = -1;
+  try {
+    const transfer = await startHeldNoteDrag(page, source);
+    await target.dispatchEvent("dragover", { dataTransfer: transfer });
+    await target.dispatchEvent("drop", { dataTransfer: transfer });
+    await endDrag(source, transfer, page);
+    prematureMoves = await page.evaluate(() => (window as Window & { noteMoveRequests: number }).noteMoveRequests);
+  } finally {
+    releaseSave();
+  }
+  expect((await moved).ok()).toBe(true);
+  expect(prematureMoves).toBe(0);
+  await expect(notebookRowContainer(page, archiveName)).toHaveClass(/is-active/);
+  await expect(page.getByTestId("notes-pane").getByTestId(buildNoteTestId("drag", movingTitle))).toBeVisible();
+});
+
 test("shows the note title in the topbar above the editor lane and supports table insertion, fullscreen editing, and markdown formatting tools", async ({
   page
 }) => {

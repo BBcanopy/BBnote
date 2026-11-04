@@ -943,6 +943,7 @@ export function NotesPage() {
     setError(null);
 
     try {
+      await waitForSaveInFlight();
       const movedNote = await moveNote(noteId, { folderId });
       setSearch("");
       updateSelectedFolderId(folderId);
