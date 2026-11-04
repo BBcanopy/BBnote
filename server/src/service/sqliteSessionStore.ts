@@ -1,5 +1,9 @@
 import type * as Fastify from "fastify";
-import type { SessionDb } from "../db/sessionDb.js";
+import type { SessionDb, SessionRow } from "../db/sessionDb.js";
+
+type StoredSession = Fastify.Session & {
+  __fastifySessionMetadata?: { generation: string };
+};
 
 export class SqliteSessionStore {
   constructor(
@@ -12,36 +16,25 @@ export class SqliteSessionStore {
     }
   ) {}
 
-  set(sessionId: string, session: Fastify.Session, callback: (error?: unknown) => void) {
+  set(sessionId: string, session: StoredSession, callback: (error?: unknown) => void) {
     try {
-      const ownerId = session.userId ?? null;
-      if (!ownerId) {
-        throw new Error("Cannot persist a session without a userId.");
+      this.sessions.upsert(this.toRow(sessionId, session));
+      callback();
+    } catch (error) {
+      callback(error);
+    }
+  }
+
+  compareAndSet(
+    sessionId: string,
+    expectedGeneration: string,
+    session: StoredSession,
+    callback: (error?: unknown) => void
+  ) {
+    try {
+      if (!this.sessions.compareAndSet(this.toRow(sessionId, session), expectedGeneration)) {
+        throw Object.assign(new Error("The session does not exist or has changed"), { code: "ENOENT" });
       }
-      const refreshToken = session.refreshToken ?? null;
-      const accessTokenExpiresAt = session.accessTokenExpiresAt ?? null;
-
-      const expiresAt = session.cookie?.expires instanceof Date
-        ? session.cookie.expires
-        : typeof session.cookie?.originalMaxAge === "number"
-          ? new Date(Date.now() + session.cookie.originalMaxAge)
-          : null;
-
-      if (!expiresAt) {
-        throw new Error("Cannot persist a session without an expiry.");
-      }
-
-      const existing = this.sessions.getById(sessionId);
-      const now = new Date().toISOString();
-      this.sessions.upsert({
-        id: sessionId,
-        owner_id: ownerId,
-        created_at: existing?.created_at ?? now,
-        updated_at: now,
-        refresh_token: refreshToken,
-        access_token_expires_at: accessTokenExpiresAt,
-        expires_at: expiresAt.toISOString()
-      });
       callback();
     } catch (error) {
       callback(error);
@@ -66,6 +59,7 @@ export class SqliteSessionStore {
 
       callback(null, {
         userId: row.owner_id,
+        __fastifySessionMetadata: { generation: row.generation ?? row.id },
         ...(row.refresh_token ? { refreshToken: row.refresh_token } : {}),
         ...(row.access_token_expires_at ? { accessTokenExpiresAt: row.access_token_expires_at } : {}),
         cookie: {
@@ -87,5 +81,32 @@ export class SqliteSessionStore {
     } catch (error) {
       callback(error);
     }
+  }
+
+  private toRow(sessionId: string, session: StoredSession): SessionRow {
+    const ownerId = session.userId ?? null;
+    if (!ownerId) {
+      throw new Error("Cannot persist a session without a userId.");
+    }
+    const expiresAt = session.cookie?.expires instanceof Date
+      ? session.cookie.expires
+      : typeof session.cookie?.originalMaxAge === "number"
+        ? new Date(Date.now() + session.cookie.originalMaxAge)
+        : null;
+    if (!expiresAt) {
+      throw new Error("Cannot persist a session without an expiry.");
+    }
+
+    const now = new Date().toISOString();
+    return {
+      id: sessionId,
+      owner_id: ownerId,
+      created_at: this.sessions.getById(sessionId)?.created_at ?? now,
+      updated_at: now,
+      refresh_token: session.refreshToken ?? null,
+      access_token_expires_at: session.accessTokenExpiresAt ?? null,
+      generation: session.__fastifySessionMetadata?.generation ?? sessionId,
+      expires_at: expiresAt.toISOString()
+    };
   }
 }
