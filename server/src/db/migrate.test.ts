@@ -205,7 +205,7 @@ describe("runMigrations", () => {
     expect(row?.icon).toBe("folder");
   });
 
-  it("adds refresh-token session columns for existing databases", () => {
+  it("adds refresh-token and generation columns without changing existing sessions", () => {
     const connection = new Database(":memory:");
     connections.push(connection);
 
@@ -234,6 +234,16 @@ describe("runMigrations", () => {
       );
     `);
 
+    connection.prepare(`
+      insert into users (id, issuer, subject, created_at, updated_at)
+      values ('user-1', 'issuer', 'subject', '2026-01-01', '2026-01-01')
+    `).run();
+    connection.prepare(`
+      insert into sessions (id, owner_id, created_at, updated_at, expires_at)
+      values ('legacy-session', 'user-1', '2026-01-01', '2026-01-01', '2099-01-01')
+    `).run();
+
+    runMigrations(connection);
     runMigrations(connection);
 
     const columns = connection
@@ -243,5 +253,9 @@ describe("runMigrations", () => {
 
     expect(columns).toContain("refresh_token");
     expect(columns).toContain("access_token_expires_at");
+    expect(columns).toContain("generation");
+    expect(connection.prepare("select id, generation from sessions").all()).toEqual([
+      { id: "legacy-session", generation: null }
+    ]);
   });
 });
