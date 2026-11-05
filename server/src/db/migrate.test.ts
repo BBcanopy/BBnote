@@ -146,6 +146,41 @@ describe("runMigrations", () => {
     ]);
   });
 
+  it("adds an empty scratch overlay column to existing notes", () => {
+    const connection = new Database(":memory:");
+    connections.push(connection);
+
+    connection.exec(`
+      pragma foreign_keys = ON;
+
+      create table notes (
+        id text primary key,
+        owner_id text not null,
+        folder_id text not null,
+        title text not null,
+        file_path text not null,
+        sort_order integer not null default 0,
+        created_at text not null,
+        updated_at text not null,
+        last_opened_at text,
+        source_app text,
+        source_id text,
+        source_tags_json text not null default '[]'
+      );
+
+      insert into notes (id, owner_id, folder_id, title, file_path, created_at, updated_at)
+      values ('note-1', 'owner-1', 'folder-1', 'Existing', '/notes/existing.md', '2026-01-01', '2026-01-01');
+    `);
+
+    runMigrations(connection);
+    runMigrations(connection);
+
+    const row = connection
+      .prepare<[], { title: string; scratchpadJson: string | null }>("select title, scratchpad_json as scratchpadJson from notes where id = 'note-1'")
+      .get();
+    expect(row).toEqual({ title: "Existing", scratchpadJson: null });
+  });
+
   it("adds folder icon metadata with a folder default", () => {
     const connection = new Database(":memory:");
     connections.push(connection);

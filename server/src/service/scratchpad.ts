@@ -11,7 +11,8 @@ export const SCRATCH_MAX_STROKES = 5_000;
 export const SCRATCH_MAX_POINTS = 50_000;
 const SCRATCH_MAX_LAYOUT_WIDTH = 16_384;
 const SCRATCH_MAX_STROKE_WIDTH = 256;
-const SCRATCH_MAX_COORDINATE = 1_000_000;
+/** Beyond any note the body limit allows, so this rejects garbage without ever refusing real ink. */
+const SCRATCH_MAX_COORDINATE = 100_000_000;
 
 const scratchPointSchema = z.object({
   x: z.number().min(0).max(SCRATCH_MAX_COORDINATE),
