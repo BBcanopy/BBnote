@@ -1,3 +1,5 @@
+import type { ScratchDocument } from "./scratchpad.js";
+
 export const userThemeValues = ["sea", "ember", "midnight"] as const;
 export type UserTheme = (typeof userThemeValues)[number];
 
@@ -42,7 +44,6 @@ export interface NoteRecord {
   folderId: string;
   title: string;
   filePath: string;
-  scratchpadJson: string | null;
   sortOrder: number;
   createdAt: string;
   updatedAt: string;
@@ -102,29 +103,6 @@ export interface AttachmentView {
   sizeBytes: number;
   url: string;
   embedded: boolean;
-}
-
-export interface ScratchPoint {
-  x: number;
-  y: number;
-}
-
-export type ScratchStrokeMode = "draw" | "erase";
-
-export interface ScratchStroke {
-  color: string;
-  mode?: ScratchStrokeMode;
-  points: ScratchPoint[];
-  width: number;
-}
-
-export interface ScratchDocument {
-  height: number;
-  id: string;
-  layoutWidth?: number;
-  strokes: ScratchStroke[];
-  version: 1;
-  width: number;
 }
 
 export interface NoteSummary {

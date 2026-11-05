@@ -5,6 +5,7 @@ import type { FastifyInstance } from "fastify";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { buildApp } from "../app.js";
 import { DELETED_NOTES_FOLDER_NAME } from "../service/deletedNotesFolder.js";
+import { SCRATCH_MAX_POINTS, SCRATCH_MAX_STROKES } from "../service/scratchpad.js";
 import { authHeaders, createTestAuthProvider, createTestConfig } from "../test-helpers.js";
 
 describe("noteController integration", () => {
@@ -237,97 +238,183 @@ describe("noteController integration", () => {
     await expect(fs.readFile(updatedRow!.filePath, "utf8")).resolves.toContain("still blank title");
   });
 
-  it("stores scratchpad overlays separately from markdown body content", async () => {
-    const notebookResponse = await app.inject({
-      method: "POST",
-      url: "/api/v1/folders",
-      headers: authHeaders(token),
-      payload: {
-        name: "Sketchbook",
-        parentId: null
-      }
-    });
-    expect(notebookResponse.statusCode).toBe(201);
-    const notebook = notebookResponse.json();
-
+  describe("scratch overlays", () => {
     const scratchpad = {
-      version: 1 as const,
-      id: "scratch-1",
+      version: 2 as const,
       layoutWidth: 720,
-      width: 1000,
-      height: 1000,
       strokes: [
         {
-          color: "#16393d",
-          mode: "draw" as const,
-          width: 5,
+          tool: "draw" as const,
+          width: 3,
           points: [
-            { x: 120, y: 240 },
-            { x: 180, y: 320 }
+            { x: 120, y: 2400 },
+            { x: 180.5, y: 2460.5 }
           ]
         },
         {
-          color: "#16393d",
-          mode: "erase" as const,
-          width: 18,
-          points: [
-            { x: 150, y: 280 },
-            { x: 176, y: 304 }
-          ]
+          tool: "erase" as const,
+          width: 20,
+          points: [{ x: 150, y: 2430 }]
         }
       ]
     };
 
-    const createResponse = await app.inject({
-      method: "POST",
-      url: "/api/v1/notes",
-      headers: authHeaders(token),
-      payload: {
-        folderId: notebook.id,
-        title: "Overlay note",
-        bodyMarkdown: "Visible body only",
-        scratchpad
+    async function createNotebook(name: string) {
+      const response = await app.inject({
+        method: "POST",
+        url: "/api/v1/folders",
+        headers: authHeaders(token),
+        payload: { name, parentId: null }
+      });
+      expect(response.statusCode).toBe(201);
+      return response.json() as { id: string };
+    }
+
+    function createNote(folderId: string, payload: Record<string, unknown> = {}) {
+      return app.inject({
+        method: "POST",
+        url: "/api/v1/notes",
+        headers: authHeaders(token),
+        payload: { folderId, title: "Overlay note", bodyMarkdown: "Visible body only", ...payload }
+      });
+    }
+
+    function updateNote(noteId: string, folderId: string, payload: Record<string, unknown> = {}) {
+      return app.inject({
+        method: "PUT",
+        url: `/api/v1/notes/${noteId}`,
+        headers: authHeaders(token),
+        payload: { folderId, title: "Overlay note", bodyMarkdown: "Edited body", ...payload }
+      });
+    }
+
+    async function readScratchpad(noteId: string) {
+      const response = await app.inject({
+        method: "GET",
+        url: `/api/v1/notes/${noteId}`,
+        headers: authHeaders(token)
+      });
+      expect(response.statusCode).toBe(200);
+      return response.json().scratchpad;
+    }
+
+    it("stores the overlay outside the markdown file and round-trips it", async () => {
+      const notebook = await createNotebook("Sketchbook");
+
+      const created = await createNote(notebook.id, { scratchpad });
+      expect(created.statusCode).toBe(201);
+      expect(created.json()).toMatchObject({ bodyMarkdown: "Visible body only", scratchpad });
+
+      const noteFilePath = app.bbnote.database.connection
+        .prepare<[string], { filePath: string }>("select file_path as filePath from notes where id = ?")
+        .get(created.json().id)?.filePath;
+      await expect(fs.readFile(noteFilePath!, "utf8")).resolves.toBe("Visible body only");
+      await expect(readScratchpad(created.json().id)).resolves.toEqual(scratchpad);
+    });
+
+    it("returns null for notes without an overlay and when an overlay has no strokes", async () => {
+      const notebook = await createNotebook("Plain");
+
+      const plain = await createNote(notebook.id);
+      expect(plain.json().scratchpad).toBeNull();
+
+      const empty = await createNote(notebook.id, { scratchpad: { ...scratchpad, strokes: [] } });
+      expect(empty.statusCode).toBe(201);
+      expect(empty.json().scratchpad).toBeNull();
+    });
+
+    it("keeps the overlay when an update omits it and clears it only for an explicit null", async () => {
+      const notebook = await createNotebook("Partial updates");
+      const { id } = (await createNote(notebook.id, { scratchpad })).json();
+
+      const omitted = await updateNote(id, notebook.id);
+      expect(omitted.statusCode).toBe(200);
+      expect(omitted.json()).toMatchObject({ bodyMarkdown: "Edited body", scratchpad });
+
+      const cleared = await updateNote(id, notebook.id, { scratchpad: null });
+      expect(cleared.statusCode).toBe(200);
+      expect(cleared.json().scratchpad).toBeNull();
+      await expect(readScratchpad(id)).resolves.toBeNull();
+    });
+
+    it("keeps the overlay through notebook moves, Deleted Notes, and restore", async () => {
+      const source = await createNotebook("Source");
+      const target = await createNotebook("Target");
+      const { id } = (await createNote(source.id, { scratchpad })).json();
+
+      const moved = await app.inject({
+        method: "PATCH",
+        url: `/api/v1/notes/${id}/move`,
+        headers: authHeaders(token),
+        payload: { folderId: target.id }
+      });
+      expect(moved.statusCode).toBe(200);
+      expect(moved.json().scratchpad).toEqual(scratchpad);
+
+      const trashed = await app.inject({
+        method: "DELETE",
+        url: `/api/v1/notes/${id}`,
+        headers: authHeaders(token)
+      });
+      expect(trashed.statusCode).toBe(204);
+      await expect(readScratchpad(id)).resolves.toEqual(scratchpad);
+
+      const restored = await app.inject({
+        method: "PATCH",
+        url: `/api/v1/notes/${id}/move`,
+        headers: authHeaders(token),
+        payload: { folderId: source.id }
+      });
+      expect(restored.statusCode).toBe(200);
+      expect(restored.json().scratchpad).toEqual(scratchpad);
+    });
+
+    it("rejects overlays that are malformed or over the size limits", async () => {
+      const notebook = await createNotebook("Limits");
+      const point = { x: 1, y: 1 };
+      const invalidOverlays = [
+        { ...scratchpad, version: 1 },
+        { ...scratchpad, layoutWidth: 0 },
+        { ...scratchpad, strokes: [{ tool: "draw", width: 3, points: [] }] },
+        { ...scratchpad, strokes: [{ tool: "laser", width: 3, points: [point] }] },
+        { ...scratchpad, strokes: [{ tool: "draw", width: 3, points: [{ x: -1, y: 1 }] }] },
+        { ...scratchpad, strokes: Array.from({ length: SCRATCH_MAX_STROKES + 1 }, () => ({ tool: "draw", width: 3, points: [point] })) },
+        { ...scratchpad, strokes: [{ tool: "draw", width: 3, points: Array.from({ length: SCRATCH_MAX_POINTS + 1 }, () => point) }] }
+      ];
+
+      for (const overlay of invalidOverlays) {
+        const response = await createNote(notebook.id, { scratchpad: overlay });
+        expect(response.statusCode).toBe(400);
       }
     });
-    expect(createResponse.statusCode).toBe(201);
-    expect(createResponse.json()).toMatchObject({
-      bodyMarkdown: "Visible body only",
-      scratchpad
+
+    it("accepts a full overlay even though its payload is larger than the default body limit", async () => {
+      const notebook = await createNotebook("Full overlay");
+      const points = Array.from({ length: SCRATCH_MAX_POINTS }, (_, index) => ({ x: 1000.5, y: 10000 + index + 0.5 }));
+      const fullOverlay = { ...scratchpad, strokes: [{ tool: "draw" as const, width: 3, points }] };
+      expect(JSON.stringify(fullOverlay).length).toBeGreaterThan(1024 * 1024);
+
+      const created = await createNote(notebook.id, { scratchpad: fullOverlay });
+      expect(created.statusCode).toBe(201);
+      expect(created.json().scratchpad.strokes[0].points).toHaveLength(SCRATCH_MAX_POINTS);
     });
 
-    const created = createResponse.json();
-    const noteFilePath = app.bbnote.database.connection
-      .prepare<[string], { filePath: string }>("select file_path as filePath from notes where id = ?")
-      .get(created.id)?.filePath;
-    await expect(fs.readFile(noteFilePath!, "utf8")).resolves.toBe("Visible body only");
+    it("reads unreleased version 1 overlays as empty and leaves them stored until redrawn", async () => {
+      const notebook = await createNotebook("Legacy");
+      const { id } = (await createNote(notebook.id)).json();
+      const legacyJson = JSON.stringify({ version: 1, id: "old", width: 1000, height: 1000, strokes: [] });
+      const readStoredScratchpad = () =>
+        app.bbnote.database.connection
+          .prepare<[string], { json: string | null }>("select scratchpad_json as json from notes where id = ?")
+          .get(id)?.json;
+      app.bbnote.database.connection.prepare("update notes set scratchpad_json = ? where id = ?").run(legacyJson, id);
 
-    const getResponse = await app.inject({
-      method: "GET",
-      url: `/api/v1/notes/${created.id}`,
-      headers: authHeaders(token)
-    });
-    expect(getResponse.statusCode).toBe(200);
-    expect(getResponse.json()).toMatchObject({
-      id: created.id,
-      bodyMarkdown: "Visible body only",
-      scratchpad
-    });
+      await expect(readScratchpad(id)).resolves.toBeNull();
+      expect((await updateNote(id, notebook.id)).statusCode).toBe(200);
+      expect(readStoredScratchpad()).toBe(legacyJson);
 
-    const updateResponse = await app.inject({
-      method: "PUT",
-      url: `/api/v1/notes/${created.id}`,
-      headers: authHeaders(token),
-      payload: {
-        folderId: notebook.id,
-        title: "Overlay note",
-        bodyMarkdown: "Still plain markdown",
-        scratchpad: null
-      }
-    });
-    expect(updateResponse.statusCode).toBe(200);
-    expect(updateResponse.json()).toMatchObject({
-      bodyMarkdown: "Still plain markdown",
-      scratchpad: null
+      expect((await updateNote(id, notebook.id, { scratchpad })).statusCode).toBe(200);
+      await expect(readScratchpad(id)).resolves.toEqual(scratchpad);
     });
   });
 

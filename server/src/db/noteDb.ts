@@ -23,7 +23,7 @@ interface SearchQuery {
 export class NoteDb {
   constructor(private readonly connection: Database.Database) {}
 
-  insert(record: NoteRecord) {
+  insert(record: NoteRecord, scratchpadJson: string | null = null) {
     this.connection
       .prepare(`
         insert into notes (
@@ -35,7 +35,16 @@ export class NoteDb {
           @lastOpenedAt, @sourceApp, @sourceId, @sourceTagsJson
         )
       `)
-      .run(record);
+      .run({ ...record, scratchpadJson });
+  }
+
+  getScratchpadJson(ownerId: string, id: string) {
+    const row = this.connection
+      .prepare<[string, string], { scratchpadJson: string | null }>(
+        "select scratchpad_json as scratchpadJson from notes where owner_id = ? and id = ?"
+      )
+      .get(ownerId, id);
+    return row?.scratchpadJson ?? null;
   }
 
   getById(ownerId: string, id: string): NoteRecord | undefined {
@@ -48,7 +57,6 @@ export class NoteDb {
             folder_id as folderId,
             title,
             file_path as filePath,
-            scratchpad_json as scratchpadJson,
             sort_order as sortOrder,
             created_at as createdAt,
             updated_at as updatedAt,
@@ -70,10 +78,11 @@ export class NoteDb {
       folderId: string;
       title: string;
       filePath: string;
-      scratchpadJson: string | null;
       sortOrder: number | null;
       updatedAt: string;
       lastOpenedAt: string | null;
+      /** Left unchanged when undefined; null clears it. */
+      scratchpadJson?: string | null;
     }
   ) {
     this.connection
@@ -83,7 +92,7 @@ export class NoteDb {
           folder_id = @folderId,
           title = @title,
           file_path = @filePath,
-          scratchpad_json = @scratchpadJson,
+          ${input.scratchpadJson === undefined ? "" : "scratchpad_json = @scratchpadJson,"}
           sort_order = coalesce(@sortOrder, sort_order),
           updated_at = @updatedAt,
           last_opened_at = @lastOpenedAt
@@ -106,7 +115,6 @@ export class NoteDb {
             folder_id as folderId,
             title,
             file_path as filePath,
-            scratchpad_json as scratchpadJson,
             sort_order as sortOrder,
             created_at as createdAt,
             updated_at as updatedAt,
@@ -132,7 +140,6 @@ export class NoteDb {
             folder_id as folderId,
             title,
             file_path as filePath,
-            scratchpad_json as scratchpadJson,
             sort_order as sortOrder,
             created_at as createdAt,
             updated_at as updatedAt,
@@ -167,7 +174,6 @@ export class NoteDb {
             folder_id as folderId,
             title,
             file_path as filePath,
-            scratchpad_json as scratchpadJson,
             sort_order as sortOrder,
             created_at as createdAt,
             updated_at as updatedAt,
@@ -200,7 +206,6 @@ export class NoteDb {
             notes.folder_id as folderId,
             notes.title,
             notes.file_path as filePath,
-            notes.scratchpad_json as scratchpadJson,
             notes.sort_order as sortOrder,
             notes.created_at as createdAt,
             notes.updated_at as updatedAt,
@@ -269,7 +274,6 @@ export class NoteDb {
             folder_id as folderId,
             title,
             file_path as filePath,
-            scratchpad_json as scratchpadJson,
             sort_order as sortOrder,
             created_at as createdAt,
             updated_at as updatedAt,

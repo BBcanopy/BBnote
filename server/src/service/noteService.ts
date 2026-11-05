@@ -3,8 +3,9 @@ import { randomUUID } from "node:crypto";
 import type { FolderDb } from "../db/folderDb.js";
 import type { NoteDb } from "../db/noteDb.js";
 import { DELETED_NOTES_STORAGE_DIR_NAME, isDeletedNotesFolderRecord } from "./deletedNotesFolder.js";
-import type { AttachmentRecord, FolderRecord, NoteDetail, NoteSummary, PaginatedNotes, ScratchDocument, ScratchPoint, ScratchStroke } from "./models.js";
+import type { AttachmentRecord, FolderRecord, NoteDetail, NoteSummary, PaginatedNotes } from "./models.js";
 import { decodeCursor, encodeCursor } from "./paginationService.js";
+import { parseScratchpad, serializeScratchpad, type ScratchDocument } from "./scratchpad.js";
 import type { StorageService } from "./storageService.js";
 
 interface ListOptions {
@@ -84,7 +85,6 @@ export class NoteService {
       folderId: record.folderId,
       title: record.title,
       filePath: record.filePath,
-      scratchpadJson: record.scratchpadJson,
       sortOrder: null,
       updatedAt: record.updatedAt,
       lastOpenedAt: new Date().toISOString()
@@ -94,7 +94,7 @@ export class NoteService {
       folderId: record.folderId,
       title: record.title,
       bodyMarkdown,
-      scratchpad: parseScratchpadJson(record.scratchpadJson),
+      scratchpad: parseScratchpad(this.noteDb.getScratchpadJson(ownerId, noteId)),
       sortOrder: record.sortOrder,
       createdAt: record.createdAt,
       updatedAt: record.updatedAt,
@@ -145,7 +145,6 @@ export class NoteService {
         folderId: folder.id,
         title: trimmedTitle,
         filePath,
-        scratchpadJson: serializeScratchpad(input.scratchpad ?? null),
         sortOrder,
         createdAt,
         updatedAt,
@@ -153,7 +152,7 @@ export class NoteService {
         sourceApp: input.sourceApp ?? null,
         sourceId: input.sourceId ?? null,
         sourceTagsJson: input.sourceTagsJson ?? "[]"
-      });
+      }, serializeScratchpad(input.scratchpad ?? null));
       this.noteDb.replaceFts({
         noteId,
         ownerId: input.ownerId,
@@ -174,6 +173,7 @@ export class NoteService {
     folderId: string;
     title: string;
     bodyMarkdown: string;
+    /** Left unchanged when undefined, so moves and other partial callers cannot erase it; null clears it. */
     scratchpad?: ScratchDocument | null;
   }, options?: { previousBodyMarkdown?: string }) {
     const record = this.noteDb.getById(input.ownerId, input.noteId);
@@ -212,10 +212,10 @@ export class NoteService {
         folderId: folder.id,
         title: trimmedTitle,
         filePath: nextFilePath,
-        scratchpadJson: serializeScratchpad(input.scratchpad ?? null),
         sortOrder,
         updatedAt,
-        lastOpenedAt: new Date().toISOString()
+        lastOpenedAt: new Date().toISOString(),
+        scratchpadJson: input.scratchpad === undefined ? undefined : serializeScratchpad(input.scratchpad)
       });
       this.noteDb.replaceFts({
         noteId: input.noteId,
@@ -250,8 +250,7 @@ export class NoteService {
       noteId: input.noteId,
       folderId: input.folderId,
       title: record.title,
-      bodyMarkdown,
-      scratchpad: parseScratchpadJson(record.scratchpadJson)
+      bodyMarkdown
     }, { previousBodyMarkdown: bodyMarkdown });
   }
 
@@ -342,80 +341,4 @@ function stripMarkdown(markdown: string) {
 
 function excerptFromMarkdown(markdown: string) {
   return stripMarkdown(markdown).slice(0, 180);
-}
-
-function serializeScratchpad(scratchpad: ScratchDocument | null) {
-  return scratchpad ? JSON.stringify(scratchpad) : null;
-}
-
-function parseScratchpadJson(value: string | null): ScratchDocument | null {
-  if (!value) {
-    return null;
-  }
-
-  try {
-    const parsed = JSON.parse(value) as unknown;
-    return normalizeScratchDocument(parsed);
-  } catch {
-    return null;
-  }
-}
-
-function normalizeScratchDocument(value: unknown): ScratchDocument | null {
-  if (!isScratchDocument(value)) {
-    return null;
-  }
-
-  return {
-    ...value,
-    layoutWidth: typeof value.layoutWidth === "number" && value.layoutWidth > 0 ? value.layoutWidth : undefined,
-    strokes: value.strokes.map((stroke) => ({
-      ...stroke,
-      mode: stroke.mode === "erase" ? "erase" : "draw"
-    }))
-  };
-}
-
-function isScratchDocument(value: unknown): value is ScratchDocument {
-  if (!value || typeof value !== "object") {
-    return false;
-  }
-
-  const candidate = value as Partial<ScratchDocument>;
-  return (
-    candidate.version === 1 &&
-    typeof candidate.id === "string" &&
-    (candidate.layoutWidth === undefined || (typeof candidate.layoutWidth === "number" && candidate.layoutWidth > 0)) &&
-    typeof candidate.width === "number" &&
-    candidate.width > 0 &&
-    typeof candidate.height === "number" &&
-    candidate.height > 0 &&
-    Array.isArray(candidate.strokes) &&
-    candidate.strokes.every((stroke) => isScratchStroke(stroke))
-  );
-}
-
-function isScratchStroke(value: unknown): value is ScratchStroke {
-  if (!value || typeof value !== "object") {
-    return false;
-  }
-
-  const candidate = value as Partial<ScratchStroke>;
-  return (
-    typeof candidate.color === "string" &&
-    (candidate.mode === undefined || candidate.mode === "draw" || candidate.mode === "erase") &&
-    typeof candidate.width === "number" &&
-    candidate.width > 0 &&
-    Array.isArray(candidate.points) &&
-    candidate.points.every((point) => isScratchPoint(point))
-  );
-}
-
-function isScratchPoint(value: unknown): value is ScratchPoint {
-  if (!value || typeof value !== "object") {
-    return false;
-  }
-
-  const candidate = value as Partial<ScratchPoint>;
-  return typeof candidate.x === "number" && typeof candidate.y === "number";
 }
