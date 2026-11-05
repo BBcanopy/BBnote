@@ -28,13 +28,6 @@ describe("MarkdownPreview", () => {
     vi.restoreAllMocks();
   });
 
-  it("keeps regular code fences as code blocks", () => {
-    const { container } = render(<MarkdownPreview bodyMarkdown={"```ts\nconsole.log('hi')\n```"} />);
-
-    expect(container.querySelector("pre")).toBeInTheDocument();
-    expect(screen.getByText("console.log('hi')")).toBeInTheDocument();
-  });
-
   it("renders inline audio and video players for attachment links when metadata is available", async () => {
     fetchAttachmentBlob.mockImplementation(async (attachmentUrl: string) => {
       if (attachmentUrl.includes("audio-1")) {

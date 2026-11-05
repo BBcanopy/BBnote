@@ -2270,59 +2270,6 @@ button:disabled {
   max-width: 22rem;
 }
 
-.bb-scratch-overlay__toolbar {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 0.8rem;
-  flex-wrap: wrap;
-  padding: 0.95rem 1rem 1rem;
-  border: 1px solid color-mix(in srgb, var(--line) 88%, transparent);
-  border-radius: 1.35rem;
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--surface-strong) 96%, white), var(--surface-input));
-  box-shadow:
-    inset 0 1px 0 var(--surface-highlight-strong),
-    0 18px 30px -28px rgba(18, 34, 36, 0.3);
-}
-
-.bb-scratch-overlay__copy {
-  display: grid;
-  gap: 0.2rem;
-  min-width: 0;
-}
-
-.bb-scratch-overlay__copy p {
-  margin: 0;
-}
-
-.bb-scratch-overlay__actions {
-  display: flex;
-  align-items: center;
-  gap: 0.65rem;
-  flex-wrap: wrap;
-}
-
-.bb-scratch-overlay__tool-group {
-  display: inline-flex;
-  gap: 0.45rem;
-  flex-wrap: wrap;
-}
-
-.bb-scratch-overlay__tool {
-  min-height: 2.45rem;
-  padding-inline: 0.85rem;
-}
-
-.bb-scratch-overlay__tool.is-active {
-  border-color: color-mix(in srgb, var(--accent) 34%, var(--line));
-  background: color-mix(in srgb, var(--accent-soft) 72%, var(--surface-strong));
-  color: var(--accent-strong);
-  box-shadow:
-    inset 0 1px 0 var(--surface-highlight-strong),
-    0 12px 22px -22px rgba(18, 34, 36, 0.36);
-}
-
 @keyframes bb-recorder-progress-sweep {
   0% {
     background-position: 200% 0;
@@ -2468,12 +2415,14 @@ button:disabled {
 .bb-editor-surface {
   min-height: 30rem;
   border-radius: 0;
+  scrollbar-gutter: stable;
 }
 
 .bb-editor-preview {
   min-height: 30rem;
   overflow-y: auto;
   overscroll-behavior: contain;
+  scrollbar-gutter: stable;
 }
 
 .bb-editor-preview.is-disabled {
@@ -3200,73 +3149,6 @@ button:disabled {
   color: color-mix(in srgb, var(--ink-soft) 84%, transparent);
 }
 
-.bb-editor-overlay-shell {
-  position: relative;
-  min-height: 0;
-  flex: 1 1 auto;
-}
-
-.bb-scratch-stage-viewport {
-  overflow: auto;
-  overscroll-behavior: contain;
-}
-
-.bb-scratch-stage-frame {
-  position: relative;
-  min-height: 100%;
-}
-
-.bb-scratch-stage {
-  position: absolute;
-  top: 0;
-  left: 0;
-  transform-origin: top left;
-}
-
-.bb-editor-surface--scratch-stage {
-  height: auto;
-  min-height: 30rem;
-  overflow: hidden;
-  resize: none;
-}
-
-.bb-editor-preview--scratch {
-  min-height: 30rem;
-  overflow: visible;
-}
-
-.bb-scratch-overlay {
-  position: absolute;
-  inset: 0;
-  z-index: 2;
-  pointer-events: none;
-}
-
-.bb-scratch-overlay.is-visible {
-  display: block;
-}
-
-.bb-scratch-overlay.is-active {
-  pointer-events: auto;
-}
-
-.bb-scratch-overlay__canvas {
-  width: 100%;
-  height: 100%;
-  display: block;
-  pointer-events: none;
-  touch-action: none;
-}
-
-.bb-scratch-overlay.is-active .bb-scratch-overlay__canvas {
-  pointer-events: auto;
-  cursor: crosshair;
-}
-
-.bb-scratch-overlay.is-active.is-erasing .bb-scratch-overlay__canvas {
-  cursor: cell;
-}
-
 .bb-markdown__audio-card {
   display: grid;
   gap: 0.8rem;
@@ -3855,4 +3737,164 @@ button:disabled {
   .bb-migration-card__header {
     grid-template-columns: minmax(0, 1fr);
   }
+}
+
+.bb-scratch-toolbar {
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+}
+
+.bb-scratch-toolbar__group {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.bb-scratch-toolbar__group--end {
+  margin-left: auto;
+}
+
+.bb-scratch-toolbar__button {
+  min-height: 2.25rem;
+  padding-block: 0;
+  padding-inline: 0.75rem;
+  font-size: 0.875rem;
+}
+
+.bb-scratch-toolbar__button.is-selected {
+  border-color: color-mix(in srgb, var(--accent) 34%, var(--line));
+  background: color-mix(in srgb, var(--accent-soft) 72%, var(--surface-strong));
+  color: var(--accent-strong);
+}
+
+.bb-scratch-toolbar__status {
+  margin: 0;
+  color: var(--ink-soft);
+}
+
+/* Without scratch these wrappers generate no boxes, so the surface lays out as in any plain note. */
+.bb-scratch-viewport,
+.bb-scratch-frame,
+.bb-scratch-stage {
+  display: contents;
+}
+
+/* The viewport scrolls in place of the surface, so it also takes on the surface's box. */
+.bb-scratch-viewport.is-enabled {
+  display: block;
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 30rem;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  border: 1px solid var(--line);
+  background: var(--surface-input);
+  box-shadow:
+    inset 0 1px 0 var(--surface-highlight),
+    0 14px 28px -30px rgba(18, 34, 36, 0.18);
+  transition:
+    border-color 220ms var(--ease),
+    box-shadow 220ms var(--ease);
+}
+
+.bb-scratch-viewport.is-enabled:focus-within {
+  border-color: color-mix(in srgb, var(--accent) 38%, var(--line));
+  box-shadow:
+    inset 0 1px 0 var(--surface-highlight),
+    0 0 0 4px color-mix(in srgb, var(--accent) 12%, transparent),
+    0 18px 30px -28px rgba(18, 34, 36, 0.22);
+}
+
+.bb-scratch-viewport.is-enabled:has(.bb-editor-preview) {
+  border-radius: 1.7rem;
+  background: var(--surface);
+}
+
+.bb-mobile-workspace__editor .bb-scratch-viewport.is-enabled {
+  min-height: 0;
+}
+
+.bb-scratch-viewport.is-enabled .bb-scratch-frame {
+  display: block;
+  position: relative;
+  margin-inline: auto;
+}
+
+.bb-scratch-viewport.is-enabled .bb-scratch-stage {
+  display: flex;
+  flex-direction: column;
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: 0 0;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+/*
+ * The stage must lay text out identically in every window, including across the mobile breakpoint that
+ * browser zoom can cross, or text would re-wrap beneath the ink. So these are fixed pixels that ignore the
+ * responsive editor rules, and they match the desktop editor so that turning scratch on moves nothing.
+ */
+.bb-scratch-viewport.is-enabled .bb-scratch-stage .bb-editor-surface,
+.bb-scratch-viewport.is-enabled .bb-scratch-stage .bb-editor-preview {
+  min-height: 0;
+  padding: 16px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+  scrollbar-gutter: auto;
+  transition: none;
+}
+
+.bb-scratch-viewport.is-enabled .bb-scratch-stage .bb-editor-surface {
+  overflow: hidden;
+  font-size: 16px;
+  line-height: 24px;
+  resize: none;
+}
+
+.bb-scratch-viewport.is-enabled .bb-scratch-stage .bb-editor-preview {
+  flex: 1 1 auto;
+  overflow: visible;
+}
+
+.bb-scratch-viewport.is-enabled .bb-scratch-stage .bb-markdown {
+  font-size: 16px;
+  line-height: 1.62;
+}
+
+/* Room to keep drawing past the end of the note; it collapses again on Done. */
+.bb-scratch-viewport.is-drawing .bb-scratch-stage .bb-editor-surface,
+.bb-scratch-viewport.is-drawing .bb-scratch-stage .bb-editor-preview {
+  padding-bottom: 320px;
+}
+
+.bb-scratch-canvas {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: block;
+  width: 100%;
+  height: 100%;
+  /* The ink color; the canvas reads it so ink follows the active theme. */
+  color: var(--accent-strong);
+  pointer-events: none;
+  touch-action: none;
+  user-select: none;
+}
+
+.bb-scratch-viewport.is-drawing .bb-scratch-canvas {
+  pointer-events: auto;
+  cursor: crosshair;
+}
+
+.bb-scratch-viewport.is-drawing .bb-scratch-canvas.is-erasing {
+  cursor: cell;
 }
