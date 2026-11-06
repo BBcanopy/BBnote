@@ -92,6 +92,7 @@ const MIN_NOTE_PANE_WIDTH = 280;
 const MAX_NOTE_PANE_WIDTH = 480;
 const KEYBOARD_RESIZE_STEP = 24;
 const MEDIA_PLACEHOLDER_TITLE = "Untitled note";
+const NOTE_REFERENCE_ERROR = "Couldn't open the linked note. It may have been deleted.";
 
 type MediaInsertBehavior = "image" | "link" | "none";
 type RecorderPhase = "closed" | "starting" | "recording" | "paused" | "processing" | "saving" | "recorded" | "error";
@@ -167,6 +168,7 @@ export function NotesPage() {
   const editorSessionRef = useRef(0);
   const notesRefreshRef = useRef(0);
   const noteLoadRef = useRef(0);
+  const noteReferenceJumpRef = useRef(0);
   const skipNextNoteLoadRef = useRef<string | null>(null);
   const syncingRouteRef = useRef(false);
   const previousRouteSelectionRef = useRef(JSON.stringify({
@@ -177,6 +179,7 @@ export function NotesPage() {
   const deferredSearchRef = useRef(deferredSearch);
   const notesRef = useRef(notes);
   const editorNoteRef = useRef(editorNote);
+  const lastSyncedContentKeyRef = useRef(lastSyncedContentKey);
   const renderedNotesContextRef = useRef<NotesQueryContext | null>(null);
 
   const selectedFolder = useMemo(
@@ -210,6 +213,7 @@ export function NotesPage() {
   deferredSearchRef.current = deferredSearch;
   notesRef.current = notes;
   editorNoteRef.current = editorNote;
+  lastSyncedContentKeyRef.current = lastSyncedContentKey;
 
   function updateSelectedFolderId(folderId: string | null) {
     selectedFolderIdRef.current = folderId;
@@ -950,6 +954,57 @@ export function NotesPage() {
     setMobileNotesOpen(false);
   }
 
+  async function handleOpenNoteReference(noteId: string) {
+    if (!auth.user || noteId === editorNoteRef.current?.noteId) {
+      return;
+    }
+
+    const jumpId = ++noteReferenceJumpRef.current;
+    setError(null);
+
+    // The autosave timer is cancelled when the next note loads, so pending edits have to be saved before leaving.
+    clearAutosaveTimer();
+    await waitForSaveInFlight();
+    const current = editorNoteRef.current;
+    if (
+      current?.folderId &&
+      buildContentKey(current.folderId, current.title, current.bodyMarkdown, current.scratchpad) !== lastSyncedContentKeyRef.current
+    ) {
+      const persisted = await persistEditorPayload(
+        {
+          noteId: current.noteId,
+          folderId: current.folderId,
+          title: current.title.trim(),
+          bodyMarkdown: current.bodyMarkdown,
+          scratchpad: current.scratchpad
+        },
+        editorSessionRef.current
+      );
+      if (!persisted) {
+        return;
+      }
+    }
+
+    if (jumpId !== noteReferenceJumpRef.current) {
+      return;
+    }
+
+    try {
+      // Fetching first means a broken reference leaves the selection alone, and setting the notebook and note
+      // together pushes one history entry, so Back returns to this note instead of a URL that corrects itself.
+      const target = await getNote(noteId);
+      if (jumpId !== noteReferenceJumpRef.current) {
+        return;
+      }
+      updateSelectedFolderId(target.folderId);
+      setSelectedNoteId(target.id);
+    } catch {
+      if (jumpId === noteReferenceJumpRef.current) {
+        setError(NOTE_REFERENCE_ERROR);
+      }
+    }
+  }
+
   async function handleMoveNoteToNotebook(noteId: string, folderId: string) {
     if (!auth.user) {
       return;
@@ -1259,6 +1314,7 @@ export function NotesPage() {
               mediaActionDisabledReason="Select a notebook to add media."
               onEditorPaneChange={setEditorPane}
               onBodyChange={(bodyMarkdown) => setEditorNote((current) => (current ? { ...current, bodyMarkdown } : current))}
+              onOpenNoteReference={(noteId) => void handleOpenNoteReference(noteId)}
               onDeleteRequest={handleRequestDeleteCurrentNote}
               onUploadSelectedFile={(file, insertBehavior) => handleUploadSelectedFile(file, insertBehavior)}
               onInsertLink={(attachment) => appendToBody(`[${attachment.name}](${attachment.url})`)}
@@ -1396,6 +1452,7 @@ export function NotesPage() {
             mediaActionDisabledReason="Select a notebook to add media."
             onEditorPaneChange={setEditorPane}
             onBodyChange={(bodyMarkdown) => setEditorNote((current) => (current ? { ...current, bodyMarkdown } : current))}
+            onOpenNoteReference={(noteId) => void handleOpenNoteReference(noteId)}
             onToggleFullscreen={() => setEditorFullscreen((current) => !current)}
             onDeleteRequest={handleRequestDeleteCurrentNote}
             onUploadSelectedFile={(file, insertBehavior) => handleUploadSelectedFile(file, insertBehavior)}
@@ -1519,6 +1576,7 @@ function EditorPanel(props: {
   mediaActionDisabledReason: string;
   onEditorPaneChange(value: EditorPane): void;
   onBodyChange(bodyMarkdown: string): void;
+  onOpenNoteReference(noteId: string): void;
   onToggleFullscreen?(): void;
   onDeleteRequest(): void;
   onUploadSelectedFile(file: File | null, insertBehavior: MediaInsertBehavior): Promise<boolean>;
@@ -2486,7 +2544,11 @@ function EditorPanel(props: {
                   </label>
                 ) : (
                   <div className={`bb-pane-card bb-editor-preview bb-editor-preview--grow${props.refreshing ? " is-disabled" : ""}`}>
-                    <MarkdownPreview bodyMarkdown={props.editorNote.bodyMarkdown} attachments={props.editorNote.attachments} />
+                    <MarkdownPreview
+                      bodyMarkdown={props.editorNote.bodyMarkdown}
+                      attachments={props.editorNote.attachments}
+                      onOpenNote={props.onOpenNoteReference}
+                    />
                   </div>
                 )}
               </ScratchStage>

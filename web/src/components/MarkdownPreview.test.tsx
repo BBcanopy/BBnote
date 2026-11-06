@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MarkdownPreview } from "./MarkdownPreview";
 
 const { fetchAttachmentBlob } = vi.hoisted(() => ({
@@ -92,5 +92,61 @@ describe("MarkdownPreview", () => {
     expect(screen.getByRole("button", { name: "Spec sheet" })).toBeInTheDocument();
     expect(screen.queryByRole("audio")).not.toBeInTheDocument();
     expect(screen.queryByRole("video")).not.toBeInTheDocument();
+  });
+
+  it("opens note references in place on a plain click", () => {
+    const onOpenNote = vi.fn();
+    render(<MarkdownPreview bodyMarkdown="[Project plan](/notes/note-9)" onOpenNote={onOpenNote} />);
+
+    const link = screen.getByRole("link", { name: "Project plan" });
+    expect(link).toHaveAttribute("href", "/notes/note-9");
+    expect(link).not.toHaveAttribute("target");
+    expect(link).toHaveClass("bb-link-button");
+
+    // fireEvent returns false once the handler has prevented the browser's own navigation.
+    expect(fireEvent.click(link)).toBe(false);
+    expect(onOpenNote).toHaveBeenCalledExactlyOnceWith("note-9");
+  });
+
+  it("recognises note references written with the notebook route", () => {
+    const onOpenNote = vi.fn();
+    render(<MarkdownPreview bodyMarkdown="[Project plan](/folders/folder-1/notes/note-9)" onOpenNote={onOpenNote} />);
+
+    fireEvent.click(screen.getByRole("link", { name: "Project plan" }));
+
+    expect(onOpenNote).toHaveBeenCalledExactlyOnceWith("note-9");
+  });
+
+  it.each([
+    ["ctrl", { ctrlKey: true }],
+    ["cmd", { metaKey: true }],
+    ["shift", { shiftKey: true }],
+    ["alt", { altKey: true }]
+  ])("leaves %s-clicks on note references to the browser", (_label, modifier) => {
+    const onOpenNote = vi.fn();
+    render(<MarkdownPreview bodyMarkdown="[Project plan](/notes/note-9)" onOpenNote={onOpenNote} />);
+
+    const notPrevented = fireEvent.click(screen.getByRole("link", { name: "Project plan" }), modifier);
+
+    expect(notPrevented).toBe(true);
+    expect(onOpenNote).not.toHaveBeenCalled();
+  });
+
+  it("keeps external links opening in a new tab", () => {
+    const onOpenNote = vi.fn();
+    render(<MarkdownPreview bodyMarkdown="[Docs](https://example.com/notes/note-9)" onOpenNote={onOpenNote} />);
+
+    const link = screen.getByRole("link", { name: "Docs" });
+    expect(link).toHaveAttribute("target", "_blank");
+    expect(fireEvent.click(link)).toBe(true);
+    expect(onOpenNote).not.toHaveBeenCalled();
+  });
+
+  it("keeps attachment links as secure buttons when note references are enabled", () => {
+    const onOpenNote = vi.fn();
+    render(<MarkdownPreview bodyMarkdown="[Spec sheet](/api/v1/attachments/file-1)" onOpenNote={onOpenNote} />);
+
+    expect(screen.getByRole("button", { name: "Spec sheet" })).toBeInTheDocument();
+    expect(onOpenNote).not.toHaveBeenCalled();
   });
 });

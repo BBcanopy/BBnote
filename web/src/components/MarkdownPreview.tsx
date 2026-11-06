@@ -4,8 +4,9 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { fetchAttachmentBlob } from "../api/client";
 import type { AttachmentRef } from "../api/types";
+import { parseNoteIdFromHref } from "../utils/noteRoute";
 
-export function MarkdownPreview(props: { bodyMarkdown: string; attachments?: AttachmentRef[] }) {
+export function MarkdownPreview(props: { bodyMarkdown: string; attachments?: AttachmentRef[]; onOpenNote?(noteId: string): void }) {
   const attachmentsByUrl = new Map<string, AttachmentRef>();
   for (const attachment of props.attachments ?? []) {
     attachmentsByUrl.set(normalizeAttachmentUrl(attachment.url), attachment);
@@ -18,6 +19,15 @@ export function MarkdownPreview(props: { bodyMarkdown: string; attachments?: Att
         components={{
           img: ({ src, alt }) => <SecureAttachmentImage src={src} alt={alt ?? ""} />,
           a: ({ href, children }) => {
+            const noteId = parseNoteIdFromHref(href);
+            if (noteId && props.onOpenNote) {
+              return (
+                <NoteReferenceLink href={href} noteId={noteId} onOpenNote={props.onOpenNote}>
+                  {children}
+                </NoteReferenceLink>
+              );
+            }
+
             const attachment = href ? attachmentsByUrl.get(normalizeAttachmentUrl(href)) : undefined;
             if (attachment?.mimeType.startsWith("audio/")) {
               return (
@@ -37,6 +47,26 @@ export function MarkdownPreview(props: { bodyMarkdown: string; attachments?: Att
         {props.bodyMarkdown}
       </ReactMarkdown>
     </div>
+  );
+}
+
+function NoteReferenceLink(props: { href?: string; noteId: string; onOpenNote(noteId: string): void; children: ReactNode }) {
+  return (
+    <a
+      href={props.href}
+      className="bb-link-button"
+      onClick={(event) => {
+        // Modified clicks keep the browser's behaviour, so a reference can still open in a new tab.
+        if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+          return;
+        }
+
+        event.preventDefault();
+        props.onOpenNote(props.noteId);
+      }}
+    >
+      {props.children}
+    </a>
   );
 }
 
