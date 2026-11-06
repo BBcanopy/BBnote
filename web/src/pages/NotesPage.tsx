@@ -992,7 +992,7 @@ export function NotesPage() {
 
     try {
       // Fetching first means a broken reference leaves the selection alone, and setting the notebook and note
-      // together pushes one history entry, so Back returns to this note instead of a URL that corrects itself.
+      // together keeps the jump to one history entry, so a single Back returns to this note.
       const target = await getNote(noteId);
       if (jumpId !== noteReferenceJumpRef.current) {
         return;
