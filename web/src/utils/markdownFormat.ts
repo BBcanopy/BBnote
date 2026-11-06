@@ -1,3 +1,5 @@
+import { buildNotesPath } from "./noteRoute";
+
 export type MarkdownFormatKind =
   | "bold"
   | "italic"
@@ -6,7 +8,8 @@ export type MarkdownFormatKind =
   | "code"
   | "quote"
   | "bulleted-list"
-  | "table";
+  | "table"
+  | "note-reference";
 
 export const DEFAULT_MARKDOWN_TABLE_COLUMNS = 2;
 export const DEFAULT_MARKDOWN_TABLE_ROWS = 1;
@@ -18,8 +21,14 @@ export interface MarkdownTableDimensions {
   rows: number;
 }
 
+export interface MarkdownNoteReference {
+  id: string;
+  title: string;
+}
+
 export interface MarkdownFormatOptions {
   table?: Partial<MarkdownTableDimensions>;
+  noteReference?: MarkdownNoteReference;
 }
 
 interface MarkdownSelectionResult {
@@ -50,13 +59,17 @@ export function formatMarkdownSelection(
     return applyTableFormat(value, safeStart, safeEnd, options?.table);
   }
 
+  if (kind === "note-reference") {
+    return applyNoteReferenceFormat(value, safeStart, safeEnd, options?.noteReference);
+  }
+
   const wrappers = {
     bold: { prefix: "**", suffix: "**", placeholder: "bold text" },
     italic: { prefix: "*", suffix: "*", placeholder: "italic text" },
     underline: { prefix: "<u>", suffix: "</u>", placeholder: "underlined text" },
     strikethrough: { prefix: "~~", suffix: "~~", placeholder: "crossed text" },
     code: { prefix: "`", suffix: "`", placeholder: "inline code" }
-  } satisfies Record<Exclude<MarkdownFormatKind, "quote" | "bulleted-list" | "table">, { prefix: string; suffix: string; placeholder: string }>;
+  } satisfies Record<Exclude<MarkdownFormatKind, "quote" | "bulleted-list" | "table" | "note-reference">, { prefix: string; suffix: string; placeholder: string }>;
 
   return applyWrapFormat(value, safeStart, safeEnd, wrappers[kind]);
 }
@@ -141,6 +154,36 @@ function applyTableFormat(
     nextSelectionStart: selectionStart + prefix.length + 2,
     nextSelectionEnd: selectionStart + prefix.length + 2 + firstHeaderCell.length
   };
+}
+
+function applyNoteReferenceFormat(
+  value: string,
+  selectionStart: number,
+  selectionEnd: number,
+  reference?: MarkdownNoteReference
+): MarkdownSelectionResult {
+  if (!reference) {
+    return {
+      nextValue: value,
+      nextSelectionStart: selectionStart,
+      nextSelectionEnd: selectionEnd
+    };
+  }
+
+  const selectedText = value.slice(selectionStart, selectionEnd);
+  const label = selectedText.trim() ? selectedText : reference.title.trim() || "Untitled note";
+  const link = `[${escapeLinkLabel(label)}](${buildNotesPath({ folderId: null, noteId: reference.id })})`;
+  const nextSelectionStart = selectionStart + link.length;
+
+  return {
+    nextValue: `${value.slice(0, selectionStart)}${link}${value.slice(selectionEnd)}`,
+    nextSelectionStart,
+    nextSelectionEnd: nextSelectionStart
+  };
+}
+
+function escapeLinkLabel(label: string) {
+  return label.replace(/[\\[\]]/g, "\\$&");
 }
 
 function buildTableRow(values: string[]) {

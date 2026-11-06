@@ -65,4 +65,56 @@ describe("formatMarkdownSelection", () => {
       nextSelectionEnd: 7
     });
   });
+
+  describe("note references", () => {
+    const noteReference = { id: "note-9", title: "Project plan" };
+
+    it("inserts a link labelled with the note title and leaves the cursor after it", () => {
+      const link = "[Project plan](/notes/note-9)";
+      expect(formatMarkdownSelection("See  for details", 4, 4, "note-reference", { noteReference })).toEqual({
+        nextValue: `See ${link} for details`,
+        nextSelectionStart: 4 + link.length,
+        nextSelectionEnd: 4 + link.length
+      });
+    });
+
+    it("uses the selected text as the label and replaces it", () => {
+      const link = "[the plan](/notes/note-9)";
+      expect(formatMarkdownSelection("See the plan first", 4, 12, "note-reference", { noteReference })).toEqual({
+        nextValue: `See ${link} first`,
+        nextSelectionStart: 4 + link.length,
+        nextSelectionEnd: 4 + link.length
+      });
+    });
+
+    it("keeps the title when the selection is only whitespace", () => {
+      expect(formatMarkdownSelection("a b", 1, 2, "note-reference", { noteReference }).nextValue).toBe("a[Project plan](/notes/note-9)b");
+    });
+
+    it("falls back to a placeholder for untitled notes", () => {
+      expect(formatMarkdownSelection("", 0, 0, "note-reference", { noteReference: { id: "note-9", title: "  " } }).nextValue).toBe(
+        "[Untitled note](/notes/note-9)"
+      );
+    });
+
+    it("escapes characters that would end the link label early", () => {
+      expect(formatMarkdownSelection("", 0, 0, "note-reference", { noteReference: { id: "note-9", title: "Plan [v2] \\ final" } }).nextValue).toBe(
+        "[Plan \\[v2\\] \\\\ final](/notes/note-9)"
+      );
+    });
+
+    it("encodes the note id in the link target", () => {
+      expect(formatMarkdownSelection("", 0, 0, "note-reference", { noteReference: { id: "note 9", title: "Plan" } }).nextValue).toBe(
+        "[Plan](/notes/note%209)"
+      );
+    });
+
+    it("changes nothing when no note was given", () => {
+      expect(formatMarkdownSelection("hello", 1, 3, "note-reference")).toEqual({
+        nextValue: "hello",
+        nextSelectionStart: 1,
+        nextSelectionEnd: 3
+      });
+    });
+  });
 });
