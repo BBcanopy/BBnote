@@ -754,6 +754,61 @@ describe("noteController integration", () => {
     expect(deletedFolderListResponse.json().items).toEqual([]);
   });
 
+  it("finds notes from the start of a word while typing and tolerates punctuation in the search", async () => {
+    const notebookResponse = await app.inject({
+      method: "POST",
+      url: "/api/v1/folders",
+      headers: authHeaders(token),
+      payload: { name: "Search", parentId: null }
+    });
+    expect(notebookResponse.statusCode).toBe(201);
+    const folderId = notebookResponse.json().id as string;
+
+    for (const note of [
+      { title: "gewgew", bodyMarkdown: "Nothing else here" },
+      { title: "Quarterly budget", bodyMarkdown: "Vendor comparison budget-20260325" }
+    ]) {
+      const response = await app.inject({
+        method: "POST",
+        url: "/api/v1/notes",
+        headers: authHeaders(token),
+        payload: { folderId, ...note }
+      });
+      expect(response.statusCode).toBe(201);
+    }
+
+    async function search(query: string) {
+      const response = await app.inject({
+        method: "GET",
+        url: `/api/v1/notes?q=${encodeURIComponent(query)}`,
+        headers: authHeaders(token)
+      });
+      expect(response.statusCode, `searching for ${query}`).toBe(200);
+      return response.json().items.map((note: { title: string }) => note.title);
+    }
+
+    // Every step of typing a title finds the note, not just the finished word.
+    for (const query of ["g", "ge", "gew", "gewg", "gewgew", "GEW"]) {
+      expect(await search(query), `searching for ${query}`).toEqual(["gewgew"]);
+    }
+
+    expect(await search("compar")).toEqual(["Quarterly budget"]);
+    expect(await search("quart budg")).toEqual(["Quarterly budget"]);
+    expect(await search("budget-2026")).toEqual(["Quarterly budget"]);
+
+    // Every word still has to match, and only from its start.
+    expect(await search("gew budget")).toEqual([]);
+    expect(await search("wgew")).toEqual([]);
+    expect(await search("gewgwe")).toEqual([]);
+
+    // Half-typed punctuation must never reach the search engine as syntax.
+    expect(await search("gew*")).toEqual(["gewgew"]);
+    expect(await search('"gew')).toEqual(["gewgew"]);
+    for (const query of ["-", "*", '"', '""', "^", ":", "(", ")", "c++", "AND", "OR", "NOT", "NEAR(", "title:gew", "gew -"]) {
+      await search(query);
+    }
+  });
+
   it("moves a note with a missing source file into Deleted Notes instead of failing the delete request", async () => {
     const notebookResponse = await app.inject({
       method: "POST",

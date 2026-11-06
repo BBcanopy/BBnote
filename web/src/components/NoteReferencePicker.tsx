@@ -139,7 +139,7 @@ export function NoteReferencePicker(props: {
               type="search"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search by word"
+              placeholder="Title or text"
               className="bb-input"
             />
           </label>
@@ -175,5 +175,5 @@ function getEmptyMessage(status: LoadStatus, query: string) {
     return "Notes couldn't be loaded.";
   }
 
-  return query ? "No notes match. Search looks for whole words." : "No other notes yet.";
+  return query ? "No notes match." : "No other notes yet.";
 }

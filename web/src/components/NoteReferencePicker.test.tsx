@@ -79,7 +79,7 @@ describe("NoteReferencePicker", () => {
     expect(listNotes).toHaveBeenLastCalledWith({ q: "budget", limit: 20 });
 
     await user.type(search, "s");
-    expect(await screen.findByRole("status")).toHaveTextContent("No notes match. Search looks for whole words.");
+    expect(await screen.findByRole("status")).toHaveTextContent("No notes match.");
   });
 
   it("ignores a slower response for an older search", async () => {

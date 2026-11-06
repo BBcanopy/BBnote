@@ -326,6 +326,7 @@ function buildFtsQuery(query: string) {
     .trim()
     .split(/\s+/)
     .filter(Boolean)
-    .map((token) => `"${token.replace(/"/g, "\"\"")}"`)
+    // The trailing * matches from the start of a word, so results appear while the word is still being typed.
+    .map((token) => `"${token.replace(/"/g, "\"\"")}"*`)
     .join(" AND ");
 }

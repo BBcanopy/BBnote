@@ -2573,10 +2573,18 @@ test.describe("note references", () => {
 
     await panel.getByRole("button", { name: "Link to note" }).click();
     const picker = panel.getByTestId("note-reference-picker");
-    await picker.getByRole("searchbox", { name: "Search notes" }).fill(notes.targetBody.split(" ").at(-1)!);
-    await expect(picker.getByRole("button", { name: new RegExp(notes.targetTitle) })).toBeVisible();
+    const searchBox = picker.getByRole("searchbox", { name: "Search notes" });
+    const targetResult = picker.getByRole("button", { name: new RegExp(notes.targetTitle) });
+    const uniqueWord = notes.targetTitle.split(" ").at(-1)!;
 
-    await picker.getByRole("searchbox", { name: "Search notes" }).fill(`missing${createTestSuffix()}`);
+    // Results have to appear while the word is still being typed, not only once it is complete.
+    await searchBox.pressSequentially(uniqueWord.slice(0, 6));
+    await expect(targetResult).toBeVisible();
+
+    await searchBox.fill(uniqueWord);
+    await expect(targetResult).toBeVisible();
+
+    await searchBox.fill(`missing${createTestSuffix()}`);
     await expect(picker.getByRole("status")).toContainText("No notes match");
 
     await page.keyboard.press("Escape");
