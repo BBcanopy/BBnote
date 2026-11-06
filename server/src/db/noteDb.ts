@@ -23,19 +23,28 @@ interface SearchQuery {
 export class NoteDb {
   constructor(private readonly connection: Database.Database) {}
 
-  insert(record: NoteRecord) {
+  insert(record: NoteRecord, scratchpadJson: string | null = null) {
     this.connection
       .prepare(`
         insert into notes (
-          id, owner_id, folder_id, title, file_path, sort_order, created_at, updated_at,
+          id, owner_id, folder_id, title, file_path, scratchpad_json, sort_order, created_at, updated_at,
           last_opened_at, source_app, source_id, source_tags_json
         )
         values (
-          @id, @ownerId, @folderId, @title, @filePath, @sortOrder, @createdAt, @updatedAt,
+          @id, @ownerId, @folderId, @title, @filePath, @scratchpadJson, @sortOrder, @createdAt, @updatedAt,
           @lastOpenedAt, @sourceApp, @sourceId, @sourceTagsJson
         )
       `)
-      .run(record);
+      .run({ ...record, scratchpadJson });
+  }
+
+  getScratchpadJson(ownerId: string, id: string) {
+    const row = this.connection
+      .prepare<[string, string], { scratchpadJson: string | null }>(
+        "select scratchpad_json as scratchpadJson from notes where owner_id = ? and id = ?"
+      )
+      .get(ownerId, id);
+    return row?.scratchpadJson ?? null;
   }
 
   getById(ownerId: string, id: string): NoteRecord | undefined {
@@ -65,7 +74,16 @@ export class NoteDb {
   update(
     ownerId: string,
     id: string,
-    input: { folderId: string; title: string; filePath: string; sortOrder: number | null; updatedAt: string; lastOpenedAt: string | null }
+    input: {
+      folderId: string;
+      title: string;
+      filePath: string;
+      sortOrder: number | null;
+      updatedAt: string;
+      lastOpenedAt: string | null;
+      /** Left unchanged when undefined; null clears it. */
+      scratchpadJson?: string | null;
+    }
   ) {
     this.connection
       .prepare(`
@@ -74,6 +92,7 @@ export class NoteDb {
           folder_id = @folderId,
           title = @title,
           file_path = @filePath,
+          ${input.scratchpadJson === undefined ? "" : "scratchpad_json = @scratchpadJson,"}
           sort_order = coalesce(@sortOrder, sort_order),
           updated_at = @updatedAt,
           last_opened_at = @lastOpenedAt

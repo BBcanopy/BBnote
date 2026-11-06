@@ -7,12 +7,17 @@ import {
   sessionCookieSecurity
 } from "./openapi.js";
 import { authenticate } from "./authenticate.js";
+import { scratchDocumentSchema } from "../service/scratchpad.js";
 import type { AppServices } from "../service/serviceFactory.js";
+
+/** Leaves room for a full scratch overlay on top of Fastify's default 1 MiB limit for the note text. */
+const NOTE_BODY_LIMIT_BYTES = 4 * 1024 * 1024;
 
 const noteBodySchema = z.object({
   folderId: z.string().uuid(),
   title: z.string().trim(),
-  bodyMarkdown: z.string()
+  bodyMarkdown: z.string(),
+  scratchpad: scratchDocumentSchema.nullable().optional()
 });
 
 const noteListQuerySchema = z.object({
@@ -111,6 +116,7 @@ export function registerNoteController(app: FastifyInstance, services: AppServic
 
   app.post("/api/v1/notes", {
     preHandler: guard,
+    bodyLimit: NOTE_BODY_LIMIT_BYTES,
     schema: {
       tags: ["Notes"],
       summary: "Create a note",
@@ -121,7 +127,8 @@ export function registerNoteController(app: FastifyInstance, services: AppServic
         properties: {
           folderId: { type: "string", format: "uuid" },
           title: { type: "string" },
-          bodyMarkdown: { type: "string" }
+          bodyMarkdown: { type: "string" },
+          scratchpad: { ...passthroughObjectSchema, nullable: true }
         }
       },
       response: {
@@ -139,7 +146,8 @@ export function registerNoteController(app: FastifyInstance, services: AppServic
       ownerId: request.auth!.ownerId,
       folderId: body.folderId,
       title: body.title,
-      bodyMarkdown: body.bodyMarkdown
+      bodyMarkdown: body.bodyMarkdown,
+      scratchpad: body.scratchpad
     });
     return reply.code(201).send(note);
   });
@@ -159,6 +167,7 @@ export function registerNoteController(app: FastifyInstance, services: AppServic
 
   app.put("/api/v1/notes/:id", {
     preHandler: guard,
+    bodyLimit: NOTE_BODY_LIMIT_BYTES,
     schema: {
       tags: ["Notes"],
       summary: "Update a note",
@@ -170,7 +179,8 @@ export function registerNoteController(app: FastifyInstance, services: AppServic
         properties: {
           folderId: { type: "string", format: "uuid" },
           title: { type: "string" },
-          bodyMarkdown: { type: "string" }
+          bodyMarkdown: { type: "string" },
+          scratchpad: { ...passthroughObjectSchema, nullable: true }
         }
       },
       response: {
@@ -190,7 +200,8 @@ export function registerNoteController(app: FastifyInstance, services: AppServic
       noteId: params.id,
       folderId: body.folderId,
       title: body.title,
-      bodyMarkdown: body.bodyMarkdown
+      bodyMarkdown: body.bodyMarkdown,
+      scratchpad: body.scratchpad
     });
   });
 

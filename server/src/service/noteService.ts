@@ -5,6 +5,7 @@ import type { NoteDb } from "../db/noteDb.js";
 import { DELETED_NOTES_STORAGE_DIR_NAME, isDeletedNotesFolderRecord } from "./deletedNotesFolder.js";
 import type { AttachmentRecord, FolderRecord, NoteDetail, NoteSummary, PaginatedNotes } from "./models.js";
 import { decodeCursor, encodeCursor } from "./paginationService.js";
+import { parseScratchpad, serializeScratchpad, type ScratchDocument } from "./scratchpad.js";
 import type { StorageService } from "./storageService.js";
 
 interface ListOptions {
@@ -93,6 +94,7 @@ export class NoteService {
       folderId: record.folderId,
       title: record.title,
       bodyMarkdown,
+      scratchpad: parseScratchpad(this.noteDb.getScratchpadJson(ownerId, noteId)),
       sortOrder: record.sortOrder,
       createdAt: record.createdAt,
       updatedAt: record.updatedAt,
@@ -112,6 +114,7 @@ export class NoteService {
     folderId: string;
     title: string;
     bodyMarkdown: string;
+    scratchpad?: ScratchDocument | null;
     createdAt?: string;
     updatedAt?: string;
     sourceApp?: string | null;
@@ -149,7 +152,7 @@ export class NoteService {
         sourceApp: input.sourceApp ?? null,
         sourceId: input.sourceId ?? null,
         sourceTagsJson: input.sourceTagsJson ?? "[]"
-      });
+      }, serializeScratchpad(input.scratchpad ?? null));
       this.noteDb.replaceFts({
         noteId,
         ownerId: input.ownerId,
@@ -170,6 +173,8 @@ export class NoteService {
     folderId: string;
     title: string;
     bodyMarkdown: string;
+    /** Left unchanged when undefined, so moves and other partial callers cannot erase it; null clears it. */
+    scratchpad?: ScratchDocument | null;
   }, options?: { previousBodyMarkdown?: string }) {
     const record = this.noteDb.getById(input.ownerId, input.noteId);
     if (!record) {
@@ -209,7 +214,8 @@ export class NoteService {
         filePath: nextFilePath,
         sortOrder,
         updatedAt,
-        lastOpenedAt: new Date().toISOString()
+        lastOpenedAt: new Date().toISOString(),
+        scratchpadJson: input.scratchpad === undefined ? undefined : serializeScratchpad(input.scratchpad)
       });
       this.noteDb.replaceFts({
         noteId: input.noteId,

@@ -5,6 +5,7 @@ import type { FastifyInstance } from "fastify";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { buildApp } from "../app.js";
 import { DELETED_NOTES_FOLDER_NAME } from "../service/deletedNotesFolder.js";
+import { SCRATCH_MAX_POINTS, SCRATCH_MAX_STROKES } from "../service/scratchpad.js";
 import { authHeaders, createTestAuthProvider, createTestConfig } from "../test-helpers.js";
 
 describe("noteController integration", () => {
@@ -235,6 +236,186 @@ describe("noteController integration", () => {
       .get(created.id);
     expect(updatedRow?.filePath).toContain("untitled");
     await expect(fs.readFile(updatedRow!.filePath, "utf8")).resolves.toContain("still blank title");
+  });
+
+  describe("scratch overlays", () => {
+    const scratchpad = {
+      version: 2 as const,
+      layoutWidth: 720,
+      strokes: [
+        {
+          tool: "draw" as const,
+          width: 3,
+          points: [
+            { x: 120, y: 2400 },
+            { x: 180.5, y: 2460.5 }
+          ]
+        },
+        {
+          tool: "erase" as const,
+          width: 20,
+          points: [{ x: 150, y: 2430 }]
+        }
+      ]
+    };
+
+    async function createNotebook(name: string) {
+      const response = await app.inject({
+        method: "POST",
+        url: "/api/v1/folders",
+        headers: authHeaders(token),
+        payload: { name, parentId: null }
+      });
+      expect(response.statusCode).toBe(201);
+      return response.json() as { id: string };
+    }
+
+    function createNote(folderId: string, payload: Record<string, unknown> = {}) {
+      return app.inject({
+        method: "POST",
+        url: "/api/v1/notes",
+        headers: authHeaders(token),
+        payload: { folderId, title: "Overlay note", bodyMarkdown: "Visible body only", ...payload }
+      });
+    }
+
+    function updateNote(noteId: string, folderId: string, payload: Record<string, unknown> = {}) {
+      return app.inject({
+        method: "PUT",
+        url: `/api/v1/notes/${noteId}`,
+        headers: authHeaders(token),
+        payload: { folderId, title: "Overlay note", bodyMarkdown: "Edited body", ...payload }
+      });
+    }
+
+    async function readScratchpad(noteId: string) {
+      const response = await app.inject({
+        method: "GET",
+        url: `/api/v1/notes/${noteId}`,
+        headers: authHeaders(token)
+      });
+      expect(response.statusCode).toBe(200);
+      return response.json().scratchpad;
+    }
+
+    it("stores the overlay outside the markdown file and round-trips it", async () => {
+      const notebook = await createNotebook("Sketchbook");
+
+      const created = await createNote(notebook.id, { scratchpad });
+      expect(created.statusCode).toBe(201);
+      expect(created.json()).toMatchObject({ bodyMarkdown: "Visible body only", scratchpad });
+
+      const noteFilePath = app.bbnote.database.connection
+        .prepare<[string], { filePath: string }>("select file_path as filePath from notes where id = ?")
+        .get(created.json().id)?.filePath;
+      await expect(fs.readFile(noteFilePath!, "utf8")).resolves.toBe("Visible body only");
+      await expect(readScratchpad(created.json().id)).resolves.toEqual(scratchpad);
+    });
+
+    it("returns null for notes without an overlay and when an overlay has no strokes", async () => {
+      const notebook = await createNotebook("Plain");
+
+      const plain = await createNote(notebook.id);
+      expect(plain.json().scratchpad).toBeNull();
+
+      const empty = await createNote(notebook.id, { scratchpad: { ...scratchpad, strokes: [] } });
+      expect(empty.statusCode).toBe(201);
+      expect(empty.json().scratchpad).toBeNull();
+    });
+
+    it("keeps the overlay when an update omits it and clears it only for an explicit null", async () => {
+      const notebook = await createNotebook("Partial updates");
+      const { id } = (await createNote(notebook.id, { scratchpad })).json();
+
+      const omitted = await updateNote(id, notebook.id);
+      expect(omitted.statusCode).toBe(200);
+      expect(omitted.json()).toMatchObject({ bodyMarkdown: "Edited body", scratchpad });
+
+      const cleared = await updateNote(id, notebook.id, { scratchpad: null });
+      expect(cleared.statusCode).toBe(200);
+      expect(cleared.json().scratchpad).toBeNull();
+      await expect(readScratchpad(id)).resolves.toBeNull();
+    });
+
+    it("keeps the overlay through notebook moves, Deleted Notes, and restore", async () => {
+      const source = await createNotebook("Source");
+      const target = await createNotebook("Target");
+      const { id } = (await createNote(source.id, { scratchpad })).json();
+
+      const moved = await app.inject({
+        method: "PATCH",
+        url: `/api/v1/notes/${id}/move`,
+        headers: authHeaders(token),
+        payload: { folderId: target.id }
+      });
+      expect(moved.statusCode).toBe(200);
+      expect(moved.json().scratchpad).toEqual(scratchpad);
+
+      const trashed = await app.inject({
+        method: "DELETE",
+        url: `/api/v1/notes/${id}`,
+        headers: authHeaders(token)
+      });
+      expect(trashed.statusCode).toBe(204);
+      await expect(readScratchpad(id)).resolves.toEqual(scratchpad);
+
+      const restored = await app.inject({
+        method: "PATCH",
+        url: `/api/v1/notes/${id}/move`,
+        headers: authHeaders(token),
+        payload: { folderId: source.id }
+      });
+      expect(restored.statusCode).toBe(200);
+      expect(restored.json().scratchpad).toEqual(scratchpad);
+    });
+
+    it("rejects overlays that are malformed or over the size limits", async () => {
+      const notebook = await createNotebook("Limits");
+      const point = { x: 1, y: 1 };
+      const invalidOverlays = [
+        { ...scratchpad, version: 1 },
+        { ...scratchpad, layoutWidth: 0 },
+        { ...scratchpad, strokes: [{ tool: "draw", width: 3, points: [] }] },
+        { ...scratchpad, strokes: [{ tool: "laser", width: 3, points: [point] }] },
+        { ...scratchpad, strokes: [{ tool: "draw", width: 3, points: [{ x: -1, y: 1 }] }] },
+        { ...scratchpad, strokes: Array.from({ length: SCRATCH_MAX_STROKES + 1 }, () => ({ tool: "draw", width: 3, points: [point] })) },
+        { ...scratchpad, strokes: [{ tool: "draw", width: 3, points: Array.from({ length: SCRATCH_MAX_POINTS + 1 }, () => point) }] }
+      ];
+
+      for (const overlay of invalidOverlays) {
+        const response = await createNote(notebook.id, { scratchpad: overlay });
+        expect(response.statusCode).toBe(400);
+      }
+    });
+
+    it("accepts a full overlay even though its payload is larger than the default body limit", async () => {
+      const notebook = await createNotebook("Full overlay");
+      const points = Array.from({ length: SCRATCH_MAX_POINTS }, (_, index) => ({ x: 1000.5, y: 10000 + index + 0.5 }));
+      const fullOverlay = { ...scratchpad, strokes: [{ tool: "draw" as const, width: 3, points }] };
+      expect(JSON.stringify(fullOverlay).length).toBeGreaterThan(1024 * 1024);
+
+      const created = await createNote(notebook.id, { scratchpad: fullOverlay });
+      expect(created.statusCode).toBe(201);
+      expect(created.json().scratchpad.strokes[0].points).toHaveLength(SCRATCH_MAX_POINTS);
+    });
+
+    it("reads unreleased version 1 overlays as empty and leaves them stored until redrawn", async () => {
+      const notebook = await createNotebook("Legacy");
+      const { id } = (await createNote(notebook.id)).json();
+      const legacyJson = JSON.stringify({ version: 1, id: "old", width: 1000, height: 1000, strokes: [] });
+      const readStoredScratchpad = () =>
+        app.bbnote.database.connection
+          .prepare<[string], { json: string | null }>("select scratchpad_json as json from notes where id = ?")
+          .get(id)?.json;
+      app.bbnote.database.connection.prepare("update notes set scratchpad_json = ? where id = ?").run(legacyJson, id);
+
+      await expect(readScratchpad(id)).resolves.toBeNull();
+      expect((await updateNote(id, notebook.id)).statusCode).toBe(200);
+      expect(readStoredScratchpad()).toBe(legacyJson);
+
+      expect((await updateNote(id, notebook.id, { scratchpad })).statusCode).toBe(200);
+      await expect(readScratchpad(id)).resolves.toEqual(scratchpad);
+    });
   });
 
   it("reorders notes within a notebook and rejects incomplete reorder payloads", async () => {

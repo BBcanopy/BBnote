@@ -1,3 +1,5 @@
+import type { ScratchDocument } from "./scratchpad.js";
+
 export const userThemeValues = ["sea", "ember", "midnight"] as const;
 export type UserTheme = (typeof userThemeValues)[number];
 
@@ -118,6 +120,7 @@ export interface NoteDetail {
   folderId: string;
   title: string;
   bodyMarkdown: string;
+  scratchpad: ScratchDocument | null;
   sortOrder: number;
   createdAt: string;
   updatedAt: string;

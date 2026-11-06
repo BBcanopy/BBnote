@@ -88,6 +88,11 @@ export class ExportService {
       });
 
       zip.file(noteZipPath, `---\n${frontMatter}---\n\n${rewrittenBody}`);
+
+      const scratchpadJson = this.noteDb.getScratchpadJson(ownerId, note.id);
+      if (scratchpadJson) {
+        zip.file(`${path.posix.join(noteFolder, path.basename(noteBaseName, ".md"))}.scratch.json`, scratchpadJson);
+      }
     }
 
     const archiveBuffer = await zip.generateAsync({ type: "nodebuffer" });

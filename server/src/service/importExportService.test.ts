@@ -91,5 +91,33 @@ describe("import/export services", () => {
     const importedSummary = JSON.parse(importJob.summaryJson);
     expect(importedSummary.createdCount).toBeGreaterThanOrEqual(1);
   });
+
+  it("exports scratch overlays beside their note without touching the markdown", async () => {
+    const notebook = await app.bbnote.folderService.createFolder(ownerId, { name: "Sketches", parentId: null });
+    const scratchpad = {
+      version: 2 as const,
+      layoutWidth: 800,
+      strokes: [{ tool: "draw" as const, width: 3, points: [{ x: 10, y: 20 }] }]
+    };
+    await app.bbnote.noteService.createNote({
+      ownerId,
+      folderId: notebook.id,
+      title: "Annotated",
+      bodyMarkdown: "Plain text only",
+      scratchpad
+    });
+
+    const exportJob = await app.bbnote.exportService.createExportJob(ownerId);
+    const exportDownload = await app.bbnote.exportService.getExportDownload(ownerId, exportJob.id);
+    const archive = await JSZip.loadAsync(await fs.readFile(exportDownload.filePath));
+
+    const noteEntry = archive.filter((relativePath) => relativePath.toLowerCase().includes("annotated") && relativePath.endsWith(".md"))[0];
+    const noteMarkdown = await noteEntry.async("string");
+    expect(noteMarkdown).toContain("Plain text only");
+    expect(noteMarkdown).not.toContain("strokes");
+    const scratchEntry = archive.file(noteEntry.name.replace(/\.md$/, ".scratch.json"));
+    expect(scratchEntry).toBeTruthy();
+    expect(JSON.parse(await scratchEntry!.async("string"))).toEqual(scratchpad);
+  });
 });
 

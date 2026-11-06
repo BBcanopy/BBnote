@@ -938,7 +938,7 @@ test("starts empty, restores separate notebook and notes lanes, supports drag in
       const widths = await toolbar.locator("button").evaluateAll((buttons) => buttons.map((button) => getComputedStyle(button).borderTopWidth));
       return widths.join("|");
     })
-    .toBe("0px|0px|0px|0px|0px");
+    .toBe("0px|0px|0px|0px|0px|0px");
   await expect
     .poll(async () => {
       const textareaBox = await bodyTextarea.boundingBox();
@@ -1777,6 +1777,503 @@ test("shows the note title in the topbar above the editor lane and supports tabl
   await expect
     .poll(async () => Math.abs(((await editorPanel.boundingBox())?.width ?? 0) - editorWidthBeforeFullscreen))
     .toBeLessThan(48);
+});
+
+test.describe("scratch overlay", () => {
+  test("draws without disturbing the note, saves once per stroke, and survives a reload", async ({ page }) => {
+    await page.setViewportSize({ width: 1900, height: 1000 });
+    const suffix = createTestSuffix();
+    await login(page);
+    await createNotebookWithDialog(page, `Scratch ${suffix}`);
+    await notebookRow(page, `Scratch ${suffix}`).click();
+    await createNoteWithContent(page, `Inline scratch ${suffix}`, "Sketch goes here.");
+    await waitForUpdatedStatus(page);
+
+    const panel = page.getByTestId("editor-panel-desktop");
+    const textarea = panel.getByPlaceholder("Write in Markdown");
+    const scratchButton = panel.getByRole("button", { name: /^scratch$/i });
+
+    // Turning scratch on must not remount the textarea, or it would lose focus, selection, and undo history.
+    await selectTextRange(textarea, 7, 11);
+    await textarea.evaluate((element) => element.setAttribute("data-same-element", "yes"));
+    const plainLayout = await readScratchTextLayout(page);
+    const plainTextOrigin = await readTextOrigin(textarea);
+    await scratchButton.click();
+    await expect(scratchButton).toHaveAttribute("aria-pressed", "true");
+    await expect(scratchButton).toHaveClass(/bb-icon-button--is-active/);
+    await expect(panel.getByTestId("scratch-toolbar")).toBeVisible();
+    await expect(textarea).toHaveAttribute("data-same-element", "yes");
+    await expect
+      .poll(() => textarea.evaluate((element: HTMLTextAreaElement) => [element.selectionStart, element.selectionEnd]))
+      .toEqual([7, 11]);
+
+    // Turning scratch on must not move or re-wrap a single word.
+    expect(await readScratchTextLayout(page)).toEqual(plainLayout);
+    expect(await readTextOrigin(textarea)).toEqual(plainTextOrigin);
+
+    // Nor may the first stroke, which locks the layout to its current width.
+    const widthBeforeStroke = await textarea.evaluate((element) => element.clientWidth);
+    const updates = trackNoteUpdates(page);
+
+    await page.mouse.move(0, 0);
+    const { x: rightClickX, y: rightClickY } = await scratchClientPoint(page, 300, 300);
+    await page.mouse.move(rightClickX, rightClickY);
+    await page.mouse.down({ button: "right" });
+    await page.mouse.up({ button: "right" });
+    await page.mouse.click(0, 0);
+
+    await drawScratchStroke(page, [[200, 100], [320, 150], [480, 220], [600, 300]]);
+    await expect.poll(() => readScratchpad(page).then((document) => document?.strokes.length ?? 0)).toBe(1);
+
+    expect(await textarea.evaluate((element) => element.clientWidth)).toBe(widthBeforeStroke);
+    await expect(textarea).toHaveValue("Sketch goes here.");
+
+    const scratchpad = await readScratchpad(page);
+    expect(scratchpad.version).toBe(2);
+    expect(scratchpad.layoutWidth).toBe(await scratchStageWidth(page));
+    expect(scratchpad.strokes[0]).toMatchObject({ tool: "draw", width: 3 });
+    expect(scratchpad.strokes[0].points[0]).toEqual({ x: 200, y: 100 });
+    expect(await readScratchAlpha(page, 480, 220)).toBeGreaterThan(0);
+    expect(await readScratchAlpha(page, 300, 300)).toBe(0);
+
+    // Exactly one save: the server's copy of the document must not look like a new edit.
+    await page.waitForTimeout(1500);
+    expect(updates()).toBe(1);
+
+    // After Done the ink no longer intercepts the pointer.
+    await panel.getByRole("button", { name: /^done$/i }).click();
+    await expect(panel.getByTestId("scratch-toolbar")).toHaveCount(0);
+    await expect(scratchButton).toHaveAttribute("aria-pressed", "false");
+    await textarea.click({ position: { x: 480, y: 220 } });
+    await page.keyboard.press("Control+End");
+    await page.keyboard.type(" More.");
+    await expect(textarea).toHaveValue("Sketch goes here. More.");
+    await expect.poll(() => readNote(page).then((note) => note.bodyMarkdown)).toBe("Sketch goes here. More.");
+
+    // The overlay also shows in preview, and the markdown never contains it.
+    await page.getByRole("button", { name: /^preview$/i }).click();
+    await expect(panel.locator(".bb-markdown")).toContainText("Sketch goes here. More.");
+    await expect.poll(() => readScratchAlpha(page, 480, 220)).toBeGreaterThan(0);
+
+    await page.reload();
+    await expect(page.getByTestId("editor-panel-desktop").getByPlaceholder("Write in Markdown")).toHaveValue("Sketch goes here. More.");
+    await expect.poll(() => readScratchAlpha(page, 480, 220)).toBeGreaterThan(0);
+    expect(await scratchStageWidth(page)).toBe(scratchpad.layoutWidth);
+
+    // Reopened strokes stay editable: the next stroke adds to them.
+    await page.getByTestId("editor-panel-desktop").getByRole("button", { name: /^scratch$/i }).click();
+    await drawScratchStroke(page, [[700, 120], [760, 180]]);
+    await expect.poll(() => readScratchpad(page).then((document) => document?.strokes.length ?? 0)).toBe(2);
+  });
+
+  test("keeps ink in place when the text changes, and keeps the caret in view while typing", async ({ page }) => {
+    await page.setViewportSize({ width: 1600, height: 900 });
+    const suffix = createTestSuffix();
+    await login(page);
+    await createNotebookWithDialog(page, `Scratch ${suffix}`);
+    await notebookRow(page, `Scratch ${suffix}`).click();
+    await createNoteWithContent(page, `Stable ink ${suffix}`, "First line.");
+    await waitForUpdatedStatus(page);
+
+    const panel = page.getByTestId("editor-panel-desktop");
+    const textarea = panel.getByPlaceholder("Write in Markdown");
+    await panel.getByRole("button", { name: /^scratch$/i }).click();
+    await drawScratchStroke(page, [[150, 60], [300, 60]]);
+    await expect.poll(() => readScratchpad(page).then((document) => document?.strokes.length ?? 0)).toBe(1);
+    await panel.getByRole("button", { name: /^done$/i }).click();
+
+    // Adding text used to stretch ink, because y was stored relative to the note height.
+    const stageHeightBefore = await scratchStageHeight(page);
+    const longBody = Array.from({ length: 120 }, (_, index) => `Line ${index + 1}`).join("\n");
+    await textarea.click();
+    await page.keyboard.press("Control+End");
+    await page.keyboard.insertText(`\n${longBody}`);
+    await expect.poll(() => scratchStageHeight(page)).toBeGreaterThan(stageHeightBefore * 2);
+    expect(await readScratchAlpha(page, 225, 60)).toBeGreaterThan(0);
+    expect(await readScratchAlpha(page, 225, 600)).toBe(0);
+    await expect.poll(() => readNote(page).then((note) => note.bodyMarkdown.length)).toBeGreaterThan(500);
+    expect((await readScratchpad(page)).strokes[0].points[0]).toEqual({ x: 150, y: 60 });
+
+    // Pasting past the end used to strand the caret off screen, since the stage scrolls now, not the textarea.
+    await expect.poll(() => scratchViewportScrollTop(page)).toBeGreaterThan(0);
+    await page.keyboard.type("Typing at the end");
+    await expect
+      .poll(async () => {
+        const viewportBox = await panel.getByTestId("scratch-viewport").boundingBox();
+        const textareaBox = await textarea.boundingBox();
+        return Boolean(viewportBox && textareaBox && textareaBox.y + textareaBox.height >= viewportBox.y + viewportBox.height - 1);
+      })
+      .toBe(true);
+    await expect
+      .poll(() =>
+        panel.getByTestId("scratch-viewport").evaluate((element) => Math.abs(element.scrollHeight - element.clientHeight - element.scrollTop))
+      )
+      .toBeLessThan(60);
+
+    // Ink far down the page keeps the stage tall enough even after the text above it is removed.
+    await panel.getByRole("button", { name: /^scratch$/i }).click();
+    const lowY = Math.round((await scratchStageHeight(page)) - 200);
+    await panel.getByTestId("scratch-viewport").evaluate((element, y) => {
+      element.scrollTop = y - 200;
+    }, lowY);
+    await drawScratchStroke(page, [[200, lowY], [320, lowY]]);
+    await expect.poll(() => readScratchpad(page).then((document) => document?.strokes.length ?? 0)).toBe(2);
+    await panel.getByRole("button", { name: /^done$/i }).click();
+    await textarea.fill("Short again.");
+    await expect.poll(() => readNote(page).then((note) => note.bodyMarkdown)).toBe("Short again.");
+    expect(await scratchStageHeight(page)).toBeGreaterThan(lowY);
+    await expect.poll(() => readScratchAlpha(page, 260, lowY)).toBeGreaterThan(0);
+  });
+
+  test("keeps ink on the same words through browser zoom, including across the mobile breakpoint", async ({ page }) => {
+    await page.setViewportSize({ width: 1900, height: 1000 });
+    const suffix = createTestSuffix();
+    await login(page);
+    await createNotebookWithDialog(page, `Scratch ${suffix}`);
+    await notebookRow(page, `Scratch ${suffix}`).click();
+    const wrappingText = "Words that wrap across several lines so any reflow would change the height of the note. ".repeat(30);
+    await createNoteWithContent(page, `Zoomed ink ${suffix}`, wrappingText);
+    await waitForUpdatedStatus(page);
+
+    const desktopPanel = page.getByTestId("editor-panel-desktop");
+    await desktopPanel.getByRole("button", { name: /^scratch$/i }).click();
+    await drawScratchStroke(page, [[220, 90], [420, 150]]);
+    await expect.poll(() => readScratchpad(page).then((document) => document?.strokes.length ?? 0)).toBe(1);
+
+    const layoutAtFullSize = await readScratchTextLayout(page);
+    expect(layoutAtFullSize.textHeight).toBeGreaterThan(200);
+
+    const cdp = await page.context().newCDPSession(page);
+    async function zoomBrowser(zoom: number) {
+      // Browser zoom shrinks the viewport in CSS pixels and raises the device pixel ratio by the same factor.
+      await cdp.send("Emulation.setDeviceMetricsOverride", {
+        width: Math.round(1900 / zoom),
+        height: Math.round(1000 / zoom),
+        deviceScaleFactor: zoom,
+        mobile: false
+      });
+    }
+
+    let strokes = 1;
+    for (const zoom of [1.25, 1.5, 2, 3, 0.75, 1]) {
+      await zoomBrowser(zoom);
+      await expect.poll(() => page.evaluate(() => [window.devicePixelRatio, window.innerWidth])).toEqual([zoom, Math.round(1900 / zoom)]);
+      await expect(page.getByTestId(zoom >= 2 ? "editor-panel-mobile" : "editor-panel-desktop")).toBeVisible();
+
+      // No reflow: the same text occupies the same stage layout at every zoom, on both sides of the breakpoint.
+      await expect.poll(() => readScratchTextLayout(page).catch(() => null)).toEqual(layoutAtFullSize);
+      await expect.poll(() => readScratchAlpha(page, 320, 120).catch(() => 0)).toBeGreaterThan(0);
+
+      // The ink and the text share one transform, and the bitmap tracks the screen's density.
+      await expect
+        .poll(() =>
+          scratchCanvas(page).evaluate((canvas: HTMLCanvasElement) => {
+            const scale = canvas.getBoundingClientRect().width / canvas.offsetWidth;
+            return Math.abs(canvas.width / canvas.offsetWidth - Math.max(window.devicePixelRatio, 1) * scale) < 0.05;
+          })
+        )
+        .toBe(true);
+      const placement = await activeEditorPanel(page)
+        .getByTestId("scratch-canvas")
+        .evaluate((canvas: HTMLCanvasElement) => {
+          const stage = canvas.parentElement as HTMLElement;
+          const surface = stage.querySelector("textarea") as HTMLTextAreaElement;
+          const canvasRect = canvas.getBoundingClientRect();
+          const stageRect = stage.getBoundingClientRect();
+          const surfaceRect = surface.getBoundingClientRect();
+          const scale = canvasRect.width / canvas.offsetWidth;
+          return {
+            scale,
+            canvasOffset: [canvasRect.left - stageRect.left, canvasRect.top - stageRect.top],
+            surfaceOffset: [(surfaceRect.left - canvasRect.left) / scale, (surfaceRect.top - canvasRect.top) / scale]
+          };
+        });
+      expect(placement.canvasOffset[0]).toBeCloseTo(0, 3);
+      expect(placement.canvasOffset[1]).toBeCloseTo(0, 3);
+      expect(placement.surfaceOffset[0]).toBeCloseTo(0, 3);
+      expect(placement.surfaceOffset[1]).toBeCloseTo(0, 3);
+      expect(placement.scale).toBeLessThanOrEqual(1);
+
+      // Drawing still lands where the pointer is, and drawing mode survives the switch between panels.
+      await expect(activeEditorPanel(page).getByTestId("scratch-toolbar")).toBeVisible();
+      await drawScratchStroke(page, [[500, 40 + strokes * 20], [560, 40 + strokes * 20]]);
+      strokes += 1;
+      await expect.poll(() => readScratchpad(page).then((document) => document?.strokes.length ?? 0)).toBe(strokes);
+      const saved = (await readScratchpad(page)).strokes.at(-1)!;
+      expect(saved.points[0].x).toBeCloseTo(500, -1);
+      expect(saved.points[0].y).toBeCloseTo(40 + (strokes - 1) * 20, -1);
+    }
+
+    // The hidden panel shares the note text. Editing on one side of the breakpoint must not leave the other collapsed.
+    await zoomBrowser(2);
+    await expect(page.getByTestId("editor-panel-mobile")).toBeVisible();
+    await activeEditorTextarea(page).fill(wrappingText + "\nMore text added while zoomed in.".repeat(60));
+    await zoomBrowser(1);
+    await expect(page.getByTestId("editor-panel-desktop")).toBeVisible();
+    await expect
+      .poll(() =>
+        activeEditorTextarea(page).evaluate((element) => element.scrollHeight <= element.clientHeight && element.clientHeight > 1500)
+      )
+      .toBe(true);
+
+    await cdp.send("Emulation.clearDeviceMetricsOverride");
+  });
+
+  test("keeps the scroll position when turning scratch on and off", async ({ page }) => {
+    await page.setViewportSize({ width: 1500, height: 900 });
+    const suffix = createTestSuffix();
+    await login(page);
+    await createNotebookWithDialog(page, `Scratch ${suffix}`);
+    await notebookRow(page, `Scratch ${suffix}`).click();
+    const longBody = Array.from({ length: 200 }, (_, index) => `Line ${index + 1}`).join("\n");
+    await createNoteWithContent(page, `Scrolled ${suffix}`, longBody);
+    await waitForUpdatedStatus(page);
+
+    const panel = page.getByTestId("editor-panel-desktop");
+    const textarea = panel.getByPlaceholder("Write in Markdown");
+    await textarea.evaluate((element) => {
+      element.scrollTop = 1200;
+    });
+    await expect.poll(() => textarea.evaluate((element) => element.scrollTop)).toBe(1200);
+
+    await panel.getByRole("button", { name: /^scratch$/i }).click();
+    await expect.poll(() => scratchViewportScrollTop(page)).toBe(1200);
+
+    await panel.getByTestId("scratch-viewport").evaluate((element) => {
+      element.scrollTop = 900;
+    });
+    await expect.poll(() => scratchViewportScrollTop(page)).toBe(900);
+    await panel.getByRole("button", { name: /^done$/i }).click();
+    await expect(panel.getByTestId("scratch-viewport")).not.toHaveClass(/is-enabled/);
+    await expect.poll(() => textarea.evaluate((element) => element.scrollTop)).toBe(900);
+  });
+
+  test("erases, undoes, redoes, and clears", async ({ page }) => {
+    await page.setViewportSize({ width: 1500, height: 900 });
+    const suffix = createTestSuffix();
+    await login(page);
+    await createNotebookWithDialog(page, `Scratch ${suffix}`);
+    await notebookRow(page, `Scratch ${suffix}`).click();
+    await createNoteWithContent(page, `Tools ${suffix}`, "Tool test.");
+    await waitForUpdatedStatus(page);
+
+    const panel = page.getByTestId("editor-panel-desktop");
+    const viewport = panel.getByTestId("scratch-viewport");
+    await expect(viewport).not.toHaveClass(/is-enabled/);
+    await panel.getByRole("button", { name: /^scratch$/i }).click();
+    await expect(viewport).toHaveClass(/is-enabled/);
+    const clearButton = panel.getByRole("button", { name: /^clear$/i });
+    const undoButton = panel.getByRole("button", { name: /^undo stroke$/i });
+    const redoButton = panel.getByRole("button", { name: /^redo stroke$/i });
+    await expect(clearButton).toBeDisabled();
+    await expect(undoButton).toBeDisabled();
+    await expect(redoButton).toBeDisabled();
+
+    // Erasing an empty overlay records nothing.
+    await panel.getByRole("button", { name: /^eraser$/i }).click();
+    await expect(panel.getByRole("button", { name: /^eraser$/i })).toHaveAttribute("aria-pressed", "true");
+    await drawScratchStroke(page, [[100, 100], [200, 100]]);
+    await expect(undoButton).toBeDisabled();
+
+    await panel.getByRole("button", { name: /^draw$/i }).click();
+    await drawScratchStroke(page, [[200, 200], [400, 200]]);
+    await expect.poll(() => readScratchAlpha(page, 300, 200)).toBeGreaterThan(0);
+
+    await panel.getByRole("button", { name: /^eraser$/i }).click();
+    await drawScratchStroke(page, [[290, 170], [290, 230]]);
+    await expect.poll(() => readScratchAlpha(page, 290, 200)).toBe(0);
+    expect(await readScratchAlpha(page, 240, 200)).toBeGreaterThan(0);
+    await expect.poll(() => readScratchpad(page).then((document) => document?.strokes.map((stroke) => stroke.tool))).toEqual(["draw", "erase"]);
+
+    await undoButton.click();
+    await expect.poll(() => readScratchAlpha(page, 290, 200)).toBeGreaterThan(0);
+    await expect(redoButton).toBeEnabled();
+    await redoButton.click();
+    await expect.poll(() => readScratchAlpha(page, 290, 200)).toBe(0);
+
+    // Keyboard shortcuts work once the pointer has moved focus off the text field.
+    await page.keyboard.press("Control+z");
+    await expect.poll(() => readScratchAlpha(page, 290, 200)).toBeGreaterThan(0);
+    await page.keyboard.press("Control+Shift+z");
+    await expect.poll(() => readScratchAlpha(page, 290, 200)).toBe(0);
+
+    // Clear removes the overlay entirely, and is itself undoable rather than a one-click loss.
+    await clearButton.click();
+    await expect.poll(() => readScratchpad(page)).toBeNull();
+    expect(await readScratchAlpha(page, 240, 200)).toBe(0);
+    await undoButton.click();
+    await expect.poll(() => readScratchAlpha(page, 240, 200)).toBeGreaterThan(0);
+    await expect.poll(() => readScratchpad(page).then((document) => document?.strokes.length ?? 0)).toBe(2);
+
+    await clearButton.click();
+    await expect.poll(() => readScratchpad(page)).toBeNull();
+    await page.keyboard.press("Escape");
+    await expect(panel.getByTestId("scratch-toolbar")).toHaveCount(0);
+
+    // A note with no ink goes back to the plain editor.
+    await expect(viewport).not.toHaveClass(/is-enabled/);
+    await expect(panel.getByTestId("scratch-canvas")).toHaveCount(0);
+  });
+
+  test("keeps drawing when a draft is saved, and never drops strokes made during a save", async ({ page }) => {
+    await page.setViewportSize({ width: 1500, height: 900 });
+    const suffix = createTestSuffix();
+    await login(page);
+    await createNotebookWithDialog(page, `Scratch ${suffix}`);
+    await notebookRow(page, `Scratch ${suffix}`).click();
+
+    await page.getByRole("button", { name: /^new note$/i }).first().click();
+    const panel = page.getByTestId("editor-panel-desktop");
+    await expect(panel.getByPlaceholder("Write in Markdown")).toBeVisible();
+    await expect.poll(() => page.url()).toContain("/notes/");
+    await panel.getByRole("button", { name: /^scratch$/i }).click();
+
+    // Holding the save open proves a stroke drawn meanwhile is saved afterwards, not stranded.
+    const noteId = extractNoteIdFromUrl(page.url());
+    let releaseSave!: () => void;
+    const saveGate = new Promise<void>((resolve) => {
+      releaseSave = resolve;
+    });
+    let saveStarted!: () => void;
+    const pendingSave = new Promise<void>((resolve) => {
+      saveStarted = resolve;
+    });
+    let heldOnce = false;
+    await page.route(`**/api/v1/notes/${noteId}`, async (route) => {
+      if (route.request().method() !== "PUT" || heldOnce) {
+        await route.continue();
+        return;
+      }
+
+      heldOnce = true;
+      const response = await route.fetch();
+      saveStarted();
+      await saveGate;
+      await route.fulfill({ response });
+    });
+
+    await drawScratchStroke(page, [[100, 100], [240, 140]]);
+    await pendingSave;
+    await drawScratchStroke(page, [[300, 100], [440, 140]]);
+    await expect(panel.getByTestId("scratch-toolbar")).toBeVisible();
+    await page.waitForTimeout(900);
+    releaseSave();
+    await expect.poll(() => readScratchpad(page).then((document) => document?.strokes.length ?? 0)).toBe(2);
+    await expect(panel.getByTestId("scratch-toolbar")).toBeVisible();
+    await page.unroute(`**/api/v1/notes/${noteId}`);
+
+    // Opening another note right after a stroke must not lose it, and scratch mode must not follow along.
+    await drawScratchStroke(page, [[500, 100], [640, 140]]);
+    await page.getByRole("button", { name: /^new note$/i }).first().click();
+    await expect.poll(() => /\/notes\/([^/]+)/.exec(page.url())?.[1] ?? noteId).not.toBe(noteId);
+    await expect(panel.getByTestId("scratch-toolbar")).toHaveCount(0);
+    await expect
+      .poll(() =>
+        page.evaluate(async (id) => {
+          const response = await fetch(`/api/v1/notes/${id}`);
+          return ((await response.json()) as { scratchpad?: { strokes: unknown[] } }).scratchpad?.strokes.length ?? 0;
+        }, noteId)
+      )
+      .toBe(3);
+  });
+
+  test("keeps unsaved strokes when an attachment finishes uploading, and survives Deleted Notes", async ({ page }) => {
+    await page.setViewportSize({ width: 1500, height: 900 });
+    const suffix = createTestSuffix();
+    await login(page);
+    await createNotebookWithDialog(page, `Scratch ${suffix}`);
+    await notebookRow(page, `Scratch ${suffix}`).click();
+    const title = `Attachments ${suffix}`;
+    await createNoteWithContent(page, title, "With an attachment.");
+    await waitForUpdatedStatus(page);
+    const panel = page.getByTestId("editor-panel-desktop");
+    await panel.getByRole("button", { name: /^scratch$/i }).click();
+
+    const filePath = await createTempFile(`scratch-${suffix}.txt`, "attachment");
+    await drawScratchStroke(page, [[100, 100], [240, 140]]);
+    await panel.getByTestId("media-input-file").setInputFiles(filePath);
+    await expect(panel.locator(".bb-attachment-card")).toHaveCount(1);
+    expect(await readScratchAlpha(page, 170, 120)).toBeGreaterThan(0);
+    await expect.poll(() => readScratchpad(page).then((document) => document?.strokes.length ?? 0)).toBe(1);
+
+    await panel.getByRole("button", { name: /^done$/i }).click();
+    const noteId = extractNoteIdFromUrl(page.url());
+    const deleted = await page.evaluate(async (id) => (await fetch(`/api/v1/notes/${id}`, { method: "DELETE" })).status, noteId);
+    expect(deleted).toBe(204);
+    const trashed = await page.evaluate(async (id) => (await (await fetch(`/api/v1/notes/${id}`)).json()) as { scratchpad?: unknown }, noteId);
+    expect(trashed.scratchpad).not.toBeNull();
+  });
+
+  test("draws ink in the active theme's color and repaints when the theme changes", async ({ page }) => {
+    await page.setViewportSize({ width: 1500, height: 900 });
+    const suffix = createTestSuffix();
+    await login(page);
+    await createNotebookWithDialog(page, `Scratch ${suffix}`);
+    await notebookRow(page, `Scratch ${suffix}`).click();
+    await createNoteWithContent(page, `Themes ${suffix}`, "Theme test.");
+    await waitForUpdatedStatus(page);
+    const panel = page.getByTestId("editor-panel-desktop");
+    await panel.getByRole("button", { name: /^scratch$/i }).click();
+    await drawScratchStroke(page, [[100, 100], [300, 100]]);
+    await expect.poll(() => readScratchAlpha(page, 200, 100)).toBeGreaterThan(0);
+
+    async function expectInkToMatchThemeAccent() {
+      await expect
+        .poll(async () => {
+          const expected = await panel.getByTestId("scratch-canvas").evaluate((canvas: HTMLCanvasElement) => {
+            const probe = document.createElement("canvas").getContext("2d") as CanvasRenderingContext2D;
+            probe.fillStyle = getComputedStyle(document.documentElement).getPropertyValue("--accent-strong").trim();
+            probe.fillRect(0, 0, 1, 1);
+            void canvas;
+            return Array.from(probe.getImageData(0, 0, 1, 1).data.slice(0, 3));
+          });
+          const actual = (await readScratchPixel(page, 200, 100)).slice(0, 3);
+          return actual.every((channel, index) => Math.abs(channel - expected[index]) <= 2);
+        })
+        .toBe(true);
+    }
+
+    await expectInkToMatchThemeAccent();
+    const seaInk = (await readScratchPixel(page, 200, 100)).slice(0, 3);
+    await page.evaluate(() => {
+      document.documentElement.dataset.theme = "midnight";
+    });
+    await expectInkToMatchThemeAccent();
+    expect((await readScratchPixel(page, 200, 100)).slice(0, 3)).not.toEqual(seaInk);
+  });
+
+  test("works on a phone, panning across a note drawn on a much wider screen", async ({ page }) => {
+    await page.setViewportSize({ width: 1500, height: 900 });
+    const suffix = createTestSuffix();
+    await login(page);
+    await createNotebookWithDialog(page, `Scratch ${suffix}`);
+    await notebookRow(page, `Scratch ${suffix}`).click();
+    await createNoteWithContent(page, `Phone ${suffix}`, "Drawn on a desktop.");
+    await waitForUpdatedStatus(page);
+    await page.getByTestId("editor-panel-desktop").getByRole("button", { name: /^scratch$/i }).click();
+    await drawScratchStroke(page, [[120, 80], [320, 120]]);
+    await expect.poll(() => readScratchpad(page).then((document) => document?.strokes.length ?? 0)).toBe(1);
+    const { layoutWidth } = await readScratchpad(page);
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    const panel = page.getByTestId("editor-panel-mobile");
+    await expect(panel).toBeVisible();
+    await expect(panel.getByTestId("scratch-toolbar")).toBeVisible();
+    await expect.poll(() => readScratchAlpha(page, 220, 100)).toBeGreaterThan(0);
+    expect(await scratchStageWidth(page)).toBe(layoutWidth);
+
+    // Text stays readable: the stage stops shrinking at half size, and the viewport pans the rest.
+    const canvas = panel.getByTestId("scratch-canvas");
+    const scale = await canvas.evaluate((element) => element.getBoundingClientRect().width / element.offsetWidth);
+    expect(scale).toBeCloseTo(0.5, 2);
+    const overflow = await panel.getByTestId("scratch-viewport").evaluate((element) => element.scrollWidth - element.clientWidth);
+    expect(overflow).toBeGreaterThan(0);
+    const documentOverflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+    expect(documentOverflow).toBeLessThanOrEqual(0);
+
+    await drawScratchStroke(page, [[140, 200], [300, 240]]);
+    await expect.poll(() => readScratchpad(page).then((document) => document?.strokes.length ?? 0)).toBe(2);
+  });
 });
 
 test("auto-saves voice notes on stop, inserts them into the editor, keeps delete available, and shows live recorder progress", async ({
@@ -2857,4 +3354,129 @@ async function resolveTextColor(page: import("@playwright/test").Page, color: st
     probe.remove();
     return resolved;
   }, color);
+}
+
+interface ScratchDocumentResponse {
+  version: number;
+  layoutWidth: number;
+  strokes: Array<{ tool: string; width: number; points: Array<{ x: number; y: number }> }>;
+}
+
+async function readNote(page: import("@playwright/test").Page) {
+  return page.evaluate(async (noteId) => {
+    const response = await fetch(`/api/v1/notes/${noteId}`);
+    return (await response.json()) as { bodyMarkdown: string; scratchpad: ScratchDocumentResponse | null };
+  }, extractNoteIdFromUrl(page.url()));
+}
+
+async function readScratchpad(page: import("@playwright/test").Page) {
+  return (await readNote(page)).scratchpad as ScratchDocumentResponse;
+}
+
+function trackNoteUpdates(page: import("@playwright/test").Page) {
+  let count = 0;
+  page.on("request", (request) => {
+    if (request.method() === "PUT" && /\/api\/v1\/notes\/[^/]+$/.test(request.url())) {
+      count += 1;
+    }
+  });
+  return () => count;
+}
+
+function scratchCanvas(page: import("@playwright/test").Page) {
+  return activeEditorPanel(page).getByTestId("scratch-canvas");
+}
+
+async function scratchStageWidth(page: import("@playwright/test").Page) {
+  return activeEditorPanel(page).getByTestId("scratch-stage").evaluate((stage) => (stage as HTMLElement).offsetWidth);
+}
+
+async function scratchStageHeight(page: import("@playwright/test").Page) {
+  return activeEditorPanel(page).getByTestId("scratch-stage").evaluate((stage) => (stage as HTMLElement).offsetHeight);
+}
+
+async function scratchViewportScrollTop(page: import("@playwright/test").Page) {
+  return activeEditorPanel(page).getByTestId("scratch-viewport").evaluate((viewport) => viewport.scrollTop);
+}
+
+/** Converts stage coordinates, the unit strokes are stored in, to the pointer position on screen right now. */
+async function scratchClientPoint(page: import("@playwright/test").Page, x: number, y: number) {
+  return scratchCanvas(page).evaluate(
+    (canvas, point) => {
+      const rect = canvas.getBoundingClientRect();
+      const scale = rect.width / (canvas as HTMLElement).offsetWidth;
+      return { x: rect.left + point.x * scale, y: rect.top + point.y * scale };
+    },
+    { x, y }
+  );
+}
+
+async function drawScratchStroke(page: import("@playwright/test").Page, stagePoints: Array<[number, number]>) {
+  const [first, ...rest] = stagePoints;
+  const start = await scratchClientPoint(page, first[0], first[1]);
+  await page.mouse.move(start.x, start.y);
+  await page.mouse.down();
+  for (const [x, y] of rest) {
+    const next = await scratchClientPoint(page, x, y);
+    await page.mouse.move(next.x, next.y, { steps: 8 });
+  }
+  await page.mouse.up();
+}
+
+/** Reads the bitmap directly, which proves what is on screen rather than what is in the document. */
+async function readScratchPixel(page: import("@playwright/test").Page, x: number, y: number) {
+  return scratchCanvas(page).evaluate(
+    (canvas: HTMLCanvasElement, point) => {
+      const density = canvas.width / canvas.offsetWidth;
+      const context = canvas.getContext("2d") as CanvasRenderingContext2D;
+      return Array.from(context.getImageData(Math.round(point.x * density), Math.round(point.y * density), 1, 1).data);
+    },
+    { x, y }
+  );
+}
+
+async function readScratchAlpha(page: import("@playwright/test").Page, x: number, y: number) {
+  return (await readScratchPixel(page, x, y))[3];
+}
+
+/** Where the first character of a text field sits on screen. */
+async function readTextOrigin(textarea: Locator) {
+  return textarea.evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    const style = getComputedStyle(element);
+    return {
+      x: rect.left + element.clientLeft + parseFloat(style.paddingLeft),
+      y: rect.top + element.clientTop + parseFloat(style.paddingTop)
+    };
+  });
+}
+
+/** Layout-space metrics, unaffected by the stage's transform. Identical values mean the text did not re-wrap. */
+async function readScratchTextLayout(page: import("@playwright/test").Page) {
+  return activeEditorTextarea(page).evaluate((element: HTMLTextAreaElement) => {
+    // A textarea stretched to fill the stage reports the stretched height, so collapse it to read the text's own.
+    function measureNaturalHeight(textarea: HTMLTextAreaElement) {
+      const { flex, height, minHeight } = textarea.style;
+      textarea.style.flex = "none";
+      textarea.style.height = "0px";
+      textarea.style.minHeight = "0px";
+      const naturalHeight = textarea.scrollHeight;
+      textarea.style.flex = flex;
+      textarea.style.height = height;
+      textarea.style.minHeight = minHeight;
+      return naturalHeight;
+    }
+
+    const style = getComputedStyle(element);
+    const paddingX = parseFloat(style.paddingLeft) + parseFloat(style.paddingRight);
+    return {
+      textWidth: element.clientWidth - paddingX,
+      // Drawing mode adds room below the text, which is not part of the text's own layout.
+      textHeight: measureNaturalHeight(element) - parseFloat(style.paddingBottom),
+      fontSize: style.fontSize,
+      lineHeight: style.lineHeight,
+      paddingTop: style.paddingTop,
+      paddingLeft: style.paddingLeft
+    };
+  });
 }

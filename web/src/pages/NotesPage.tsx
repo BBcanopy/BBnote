@@ -13,6 +13,7 @@ import {
   Microphone,
   MusicNotesSimple,
   PencilSimple,
+  Scribble,
   Plus,
   Quotes,
   Table,
@@ -63,6 +64,8 @@ import {
   type MarkdownTableDimensions
 } from "../utils/markdownFormat";
 import { DELETED_NOTES_FOLDER_NAME, isDeletedNotesFolder } from "../utils/deletedNotes";
+import { ScratchStage, ScratchToolbar, useScratchEditor, type ScratchEditor } from "../components/ScratchSurface";
+import { serializeScratchpad, type ScratchDocument } from "../utils/scratch";
 import { buildNotesPath } from "../utils/noteRoute";
 import { buildNoteOrderIds, moveNotes, type NoteMoveInstruction } from "../utils/noteOrder";
 
@@ -73,6 +76,7 @@ interface EditorState {
   folderId: string | null;
   title: string;
   bodyMarkdown: string;
+  scratchpad: ScratchDocument | null;
   attachments: AttachmentRef[];
   createdAt: string | null;
   updatedAt: string | null;
@@ -187,7 +191,7 @@ export function NotesPage() {
   );
   const pendingNoteDeleteIsPermanent = Boolean(pendingDeleteFolder && isDeletedNotesFolder(pendingDeleteFolder));
   const currentContentKey = useMemo(
-    () => (editorNote ? buildContentKey(editorNote.folderId, editorNote.title, editorNote.bodyMarkdown) : null),
+    () => (editorNote ? buildContentKey(editorNote.folderId, editorNote.title, editorNote.bodyMarkdown, editorNote.scratchpad) : null),
     [editorNote]
   );
   const canPersistEditor = Boolean(editorNote?.folderId);
@@ -195,6 +199,12 @@ export function NotesPage() {
   const canCreateDraft = selectedFolderId !== null;
   const canReorderNotes = Boolean(selectedFolderId && search.trim().length === 0);
   const canUseMediaActions = Boolean(editorNote?.folderId ?? selectedFolderId);
+  const scratchEditor = useScratchEditor({
+    sessionKey: editorSessionRef.current,
+    scratchpad: editorNote?.scratchpad ?? null,
+    disabled: loadingEditor || refreshingEditor || !editorNote,
+    onChange: (scratchpad) => setEditorNote((current) => (current ? { ...current, scratchpad } : current))
+  });
 
   selectedFolderIdRef.current = selectedFolderId;
   deferredSearchRef.current = deferredSearch;
@@ -412,7 +422,7 @@ export function NotesPage() {
           updateSelectedFolderId(note.folderId);
         }
         setEditorNote(mapNoteDetail(note));
-        setLastSyncedContentKey(buildContentKey(note.folderId, note.title, note.bodyMarkdown));
+        setLastSyncedContentKey(buildContentKey(note.folderId, note.title, note.bodyMarkdown, note.scratchpad));
       })
       .catch((noteError) => {
         if (loadId !== noteLoadRef.current) {
@@ -442,7 +452,8 @@ export function NotesPage() {
       noteId: editorNote.noteId,
       folderId: editorNote.folderId as string,
       title: editorNote.title.trim(),
-      bodyMarkdown: editorNote.bodyMarkdown
+      bodyMarkdown: editorNote.bodyMarkdown,
+      scratchpad: editorNote.scratchpad
     };
     clearAutosaveTimer();
     autosaveTimerRef.current = window.setTimeout(async () => {
@@ -451,7 +462,8 @@ export function NotesPage() {
     }, AUTOSAVE_DELAY_MS);
 
     return () => clearAutosaveTimer();
-  }, [auth.user, canPersistEditor, currentContentKey, editorNote, lastSyncedContentKey]);
+    // `saving` re-runs this once a save finishes, so strokes made while it was in flight still get saved.
+  }, [auth.user, canPersistEditor, currentContentKey, editorNote, lastSyncedContentKey, saving]);
 
   useEffect(() => {
     if (!paneResize) {
@@ -572,7 +584,7 @@ export function NotesPage() {
   }
 
   async function persistEditorPayload(
-    payload: { noteId: string | null; folderId: string; title: string; bodyMarkdown: string },
+    payload: { noteId: string | null; folderId: string; title: string; bodyMarkdown: string; scratchpad: ScratchDocument | null },
     sessionId: number
   ) {
     const refreshFoldersAfterSave = !payload.noteId;
@@ -585,16 +597,18 @@ export function NotesPage() {
         ? await updateNote(payload.noteId, {
             folderId: payload.folderId,
             title: payload.title,
-            bodyMarkdown: payload.bodyMarkdown
+            bodyMarkdown: payload.bodyMarkdown,
+            scratchpad: payload.scratchpad
           })
         : await createNote({
             folderId: payload.folderId,
             title: payload.title,
-            bodyMarkdown: payload.bodyMarkdown
+            bodyMarkdown: payload.bodyMarkdown,
+            scratchpad: payload.scratchpad
           });
 
       if (sessionId === editorSessionRef.current) {
-        setLastSyncedContentKey(buildContentKey(payload.folderId, payload.title, payload.bodyMarkdown));
+        setLastSyncedContentKey(buildContentKey(payload.folderId, payload.title, payload.bodyMarkdown, payload.scratchpad));
         if (!payload.noteId) {
           skipNextNoteLoadRef.current = persisted.id;
         }
@@ -676,7 +690,8 @@ export function NotesPage() {
         noteId: editorNote?.noteId ?? null,
         folderId,
         title: editorNote?.title.trim() || MEDIA_PLACEHOLDER_TITLE,
-        bodyMarkdown: editorNote?.bodyMarkdown ?? ""
+        bodyMarkdown: editorNote?.bodyMarkdown ?? "",
+        scratchpad: editorNote?.scratchpad ?? null
       },
       sessionId
     );
@@ -865,13 +880,15 @@ export function NotesPage() {
             await updateNote(previousEditor.noteId, {
               folderId: previousEditor.folderId as string,
               title: previousEditor.title.trim(),
-              bodyMarkdown: previousEditor.bodyMarkdown
+              bodyMarkdown: previousEditor.bodyMarkdown,
+              scratchpad: previousEditor.scratchpad
             });
           } else {
             await createNote({
               folderId: previousEditor.folderId as string,
               title: previousEditor.title.trim(),
-              bodyMarkdown: previousEditor.bodyMarkdown
+              bodyMarkdown: previousEditor.bodyMarkdown,
+              scratchpad: previousEditor.scratchpad
             });
           }
 
@@ -889,7 +906,7 @@ export function NotesPage() {
         });
 
         if (nextSessionId === editorSessionRef.current) {
-          setLastSyncedContentKey(buildContentKey(created.folderId, created.title, created.bodyMarkdown));
+          setLastSyncedContentKey(buildContentKey(created.folderId, created.title, created.bodyMarkdown, created.scratchpad));
           skipNextNoteLoadRef.current = created.id;
           startTransition(() => {
             setSelectedNoteId(created.id);
@@ -955,7 +972,7 @@ export function NotesPage() {
       if (movingSelectedNote) {
         setSelectedNoteId(noteId);
         setEditorNote(mapNoteDetail(movedNote));
-        setLastSyncedContentKey(buildContentKey(movedNote.folderId, movedNote.title, movedNote.bodyMarkdown));
+        setLastSyncedContentKey(buildContentKey(movedNote.folderId, movedNote.title, movedNote.bodyMarkdown, movedNote.scratchpad));
       } else {
         setSelectedNoteId(null);
       }
@@ -1092,10 +1109,11 @@ export function NotesPage() {
         const baseBodyMarkdown = current?.noteId === noteId ? current.bodyMarkdown : refreshed.bodyMarkdown;
         return {
           ...mapNoteDetail(refreshed),
-          bodyMarkdown: applyUploadedAttachmentMarkup(baseBodyMarkdown, uploaded, insertBehavior)
+          bodyMarkdown: applyUploadedAttachmentMarkup(baseBodyMarkdown, uploaded, insertBehavior),
+          scratchpad: current?.noteId === noteId ? current.scratchpad : refreshed.scratchpad
         };
       });
-      setLastSyncedContentKey(buildContentKey(refreshed.folderId, refreshed.title, refreshed.bodyMarkdown));
+      setLastSyncedContentKey(buildContentKey(refreshed.folderId, refreshed.title, refreshed.bodyMarkdown, refreshed.scratchpad));
       await refreshNotes();
       return true;
     } catch (uploadError) {
@@ -1116,8 +1134,11 @@ export function NotesPage() {
     try {
       await deleteAttachment(attachmentId);
       const refreshed = await getNote(editorNote.noteId);
-      setEditorNote(mapNoteDetail(refreshed));
-      setLastSyncedContentKey(buildContentKey(refreshed.folderId, refreshed.title, refreshed.bodyMarkdown));
+      setEditorNote((current) => ({
+        ...mapNoteDetail(refreshed),
+        scratchpad: current?.noteId === refreshed.id ? current.scratchpad : refreshed.scratchpad
+      }));
+      setLastSyncedContentKey(buildContentKey(refreshed.folderId, refreshed.title, refreshed.bodyMarkdown, refreshed.scratchpad));
     } catch (attachmentError) {
       setError(String(attachmentError));
     }
@@ -1231,6 +1252,7 @@ export function NotesPage() {
               panelRef={mobileEditorPanelRef}
               panelTestId="editor-panel-mobile"
               editorNote={editorNote}
+              scratchEditor={scratchEditor}
               editorPane={editorPane}
               isFullscreen={false}
               canUseMediaActions={canUseMediaActions}
@@ -1366,6 +1388,7 @@ export function NotesPage() {
             panelRef={desktopEditorPanelRef}
             panelTestId="editor-panel-desktop"
             editorNote={editorNote}
+            scratchEditor={scratchEditor}
             editorPane={editorPane}
             showFullscreenToggle
             isFullscreen={editorFullscreen}
@@ -1485,6 +1508,7 @@ function EditorPanel(props: {
   panelRef?: Ref<HTMLElement>;
   panelTestId?: string;
   editorNote: EditorState | null;
+  scratchEditor: ScratchEditor;
   editorPane: EditorPane;
   mobileFocusMode?: boolean;
   mobileHeaderActions?: ReactNode;
@@ -2049,6 +2073,15 @@ function EditorPanel(props: {
         disabledTitle={props.mediaActionDisabledReason}
         onClick={() => openFilePicker(fileInputRef)}
       />
+      <MediaToolbarButton
+        label="Scratch"
+        icon={<Scribble size={17} />}
+        disabled={props.scratchEditor.disabled}
+        disabledTitle="Open a note to draw on it."
+        active={props.scratchEditor.active}
+        pressed={props.scratchEditor.active}
+        onClick={() => props.scratchEditor.setActive(!props.scratchEditor.active)}
+      />
     </div>
   );
   const formattingToolbar = props.editorNote ? (
@@ -2428,28 +2461,35 @@ function EditorPanel(props: {
             <div className="bb-editor-toolbar-row">
               {mediaToolbar}
               {formattingToolbar ? <span className="bb-editor-toolbar-divider" aria-hidden="true" /> : null}
-              {formattingToolbar}
+              {/* Formatting does nothing while drawing, and swapping in place keeps the note from moving under the pen. */}
+              {props.scratchEditor.active ? <ScratchToolbar editor={props.scratchEditor} /> : formattingToolbar}
             </div>
 
             {recorderPanel}
 
             <div className="bb-editor-stack bb-editor-stack--fill">
-              {props.editorPane === "markdown" ? (
-                <label className="bb-field bb-field--stretch">
-                  <textarea
-                    ref={bodyTextareaRef}
-                    value={props.editorNote.bodyMarkdown}
-                    onChange={(event) => props.onBodyChange(event.target.value)}
-                    placeholder="Write in Markdown"
-                    disabled={!props.editorNote || props.refreshing}
-                    className="bb-textarea bb-editor-surface bb-note-content text-sm leading-7"
-                  />
-                </label>
-              ) : (
-                <div className={`bb-pane-card bb-editor-preview bb-editor-preview--grow${props.refreshing ? " is-disabled" : ""}`}>
-                  <MarkdownPreview bodyMarkdown={props.editorNote.bodyMarkdown} attachments={props.editorNote.attachments} />
-                </div>
-              )}
+              <ScratchStage
+                editor={props.scratchEditor}
+                textareaRef={bodyTextareaRef}
+                contentKey={`${props.editorPane}:${props.editorNote.bodyMarkdown}`}
+              >
+                {props.editorPane === "markdown" ? (
+                  <label className="bb-field bb-field--stretch">
+                    <textarea
+                      ref={bodyTextareaRef}
+                      value={props.editorNote.bodyMarkdown}
+                      onChange={(event) => props.onBodyChange(event.target.value)}
+                      placeholder="Write in Markdown"
+                      disabled={!props.editorNote || props.refreshing}
+                      className="bb-textarea bb-editor-surface bb-note-content text-sm leading-7"
+                    />
+                  </label>
+                ) : (
+                  <div className={`bb-pane-card bb-editor-preview bb-editor-preview--grow${props.refreshing ? " is-disabled" : ""}`}>
+                    <MarkdownPreview bodyMarkdown={props.editorNote.bodyMarkdown} attachments={props.editorNote.attachments} />
+                  </div>
+                )}
+              </ScratchStage>
 
               {hasAttachments ? (
                 <AttachmentList
@@ -2590,6 +2630,7 @@ function MediaToolbarButton(props: {
   disabledTitle?: string;
   icon: ReactNode;
   label: string;
+  pressed?: boolean;
   preserveFocus?: boolean;
   onClick(): void;
 }) {
@@ -2604,6 +2645,7 @@ function MediaToolbarButton(props: {
       onClick={props.onClick}
       disabled={props.disabled}
       aria-label={props.label}
+      aria-pressed={props.pressed}
       title={props.disabled ? props.disabledTitle ?? props.label : props.label}
       className={`bb-icon-button bb-icon-button--toolbar bb-icon-button--accent ${props.active ? "bb-icon-button--is-active" : ""}`}
     >
@@ -2618,6 +2660,7 @@ function createDraft(folderId: string | null): EditorState {
     folderId,
     title: "",
     bodyMarkdown: "",
+    scratchpad: null,
     attachments: [],
     createdAt: null,
     updatedAt: null,
@@ -2631,6 +2674,7 @@ function mapNoteDetail(note: NoteDetail): EditorState {
     folderId: note.folderId,
     title: note.title,
     bodyMarkdown: note.bodyMarkdown,
+    scratchpad: note.scratchpad,
     attachments: note.attachments,
     createdAt: note.createdAt,
     updatedAt: note.updatedAt,
@@ -2638,12 +2682,13 @@ function mapNoteDetail(note: NoteDetail): EditorState {
   };
 }
 
-function buildContentKey(folderId: string | null, title: string, bodyMarkdown: string) {
-  return JSON.stringify({
+function buildContentKey(folderId: string | null, title: string, bodyMarkdown: string, scratchpad: ScratchDocument | null) {
+  const textKey = JSON.stringify({
     folderId,
     title: title.trim(),
     bodyMarkdown
   });
+  return `${textKey}\n${serializeScratchpad(scratchpad)}`;
 }
 
 function appendMarkdownSnippet(bodyMarkdown: string, snippet: string) {

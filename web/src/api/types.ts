@@ -1,3 +1,5 @@
+import type { ScratchDocument } from "../utils/scratch";
+
 export type UserTheme = "sea" | "ember" | "midnight";
 
 export const folderIconIds = ["folder", "inbox", "archive", "bookmark", "briefcase", "book", "calendar", "star"] as const;
@@ -46,6 +48,7 @@ export interface NoteDetail {
   folderId: string;
   title: string;
   bodyMarkdown: string;
+  scratchpad: ScratchDocument | null;
   sortOrder: number;
   createdAt: string;
   updatedAt: string;
