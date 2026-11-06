@@ -2511,10 +2511,10 @@ test.describe("note references", () => {
     const initialStatus = await waitForUpdatedStatus(page);
     await textarea.fill("See  for details");
     await selectTextRange(textarea, 4, 4);
-    await panel.getByRole("button", { name: "Link to note" }).click();
+    await panel.getByRole("button", { name: "Insert link" }).click();
 
-    const picker = panel.getByTestId("note-reference-picker");
-    await expect(picker.getByRole("searchbox", { name: "Search notes" })).toBeFocused();
+    const picker = panel.getByTestId("link-picker");
+    await expect(picker.getByRole("searchbox", { name: "Search notes or paste a link" })).toBeFocused();
     await expect(picker.getByRole("button", { name: new RegExp(notes.sourceTitle) })).toHaveCount(0);
     await picker.getByRole("button", { name: new RegExp(notes.targetTitle) }).click();
 
@@ -2524,7 +2524,7 @@ test.describe("note references", () => {
     await waitForUpdatedStatus(page, initialStatus);
 
     await showPreview(page);
-    await expect(panel.getByRole("button", { name: "Link to note" })).toBeDisabled();
+    await expect(panel.getByRole("button", { name: "Insert link" })).toBeDisabled();
     const reference = previewSurface(page).getByRole("link", { name: notes.targetTitle });
     await expect(reference).toHaveAttribute("href", `/notes/${notes.targetId}`);
     await expect(reference).toHaveClass(/bb-link-button/);
@@ -2555,10 +2555,58 @@ test.describe("note references", () => {
 
     await textarea.fill("See the plan first");
     await selectTextRange(textarea, 4, 12);
-    await panel.getByRole("button", { name: "Link to note" }).click();
-    await panel.getByTestId("note-reference-picker").getByRole("button", { name: new RegExp(notes.targetTitle) }).click();
+    await panel.getByRole("button", { name: "Insert link" }).click();
+    await panel.getByTestId("link-picker").getByRole("button", { name: new RegExp(notes.targetTitle) }).click();
 
     await expect(textarea).toHaveValue(`See [the plan](/notes/${notes.targetId}) first`);
+  });
+
+  test("inserts web links from the same button as note references", async ({ page }) => {
+    await createTargetAndSource(page);
+    const panel = activeEditorPanel(page);
+    const textarea = activeEditorTextarea(page);
+    const picker = panel.getByTestId("link-picker");
+    const searchBox = picker.getByRole("searchbox", { name: "Search notes or paste a link" });
+    const url = "https://example.com/guide_(v2)?a=1";
+
+    // Selected text becomes the label, and Enter takes the offered address.
+    await textarea.fill("Read the docs now");
+    await selectTextRange(textarea, 9, 13);
+    await panel.getByRole("button", { name: "Insert link" }).click();
+    await searchBox.fill(url);
+    await expect(picker.getByRole("button", { name: `Link to ${url}` })).toBeVisible();
+    await searchBox.press("Enter");
+
+    const withDocs = `Read the [docs](<${url}>) now`;
+    await expect(picker).toHaveCount(0);
+    await expect(textarea).toHaveValue(withDocs);
+    await expect(textarea).toBeFocused();
+
+    // A bare domain gets https, and the label stays selected so it can be typed over.
+    await selectTextRange(textarea, withDocs.length, withDocs.length);
+    await panel.getByRole("button", { name: "Insert link" }).click();
+    await searchBox.fill("example.org");
+    await picker.getByRole("button", { name: "Link to https://example.org/" }).click();
+
+    const withBoth = `${withDocs}[example.org](https://example.org/)`;
+    await expect(textarea).toHaveValue(withBoth);
+    await expect
+      .poll(() => textarea.evaluate((element: HTMLTextAreaElement) => element.value.slice(element.selectionStart, element.selectionEnd)))
+      .toBe("example.org");
+
+    // Web links read as links in Preview and leave the app rather than jumping to a note.
+    const sourceUrl = page.url();
+    await showPreview(page);
+    for (const [name, href] of [
+      ["docs", url],
+      ["example.org", "https://example.org/"]
+    ]) {
+      const link = previewSurface(page).getByRole("link", { name });
+      await expect(link).toHaveAttribute("href", href);
+      await expect(link).toHaveAttribute("target", "_blank");
+      await expect(link).toHaveCSS("text-decoration-line", "underline");
+    }
+    expect(page.url()).toBe(sourceUrl);
   });
 
   test("searches notes in the note reference picker and closes it on escape", async ({ page }) => {
@@ -2571,9 +2619,9 @@ test.describe("note references", () => {
     await textarea.fill(body);
     await waitForUpdatedStatus(page, initialStatus);
 
-    await panel.getByRole("button", { name: "Link to note" }).click();
-    const picker = panel.getByTestId("note-reference-picker");
-    const searchBox = picker.getByRole("searchbox", { name: "Search notes" });
+    await panel.getByRole("button", { name: "Insert link" }).click();
+    const picker = panel.getByTestId("link-picker");
+    const searchBox = picker.getByRole("searchbox", { name: "Search notes or paste a link" });
     const targetResult = picker.getByRole("button", { name: new RegExp(notes.targetTitle) });
     const uniqueWord = notes.targetTitle.split(" ").at(-1)!;
 
@@ -2676,8 +2724,8 @@ test.describe("note references", () => {
     await expect(panel).toBeVisible();
     await textarea.fill("");
 
-    await panel.getByRole("button", { name: "Link to note" }).click();
-    const picker = panel.getByTestId("note-reference-picker");
+    await panel.getByRole("button", { name: "Insert link" }).click();
+    const picker = panel.getByTestId("link-picker");
     await expect(picker).toBeVisible();
     const box = await picker.boundingBox();
     expect(box).not.toBeNull();

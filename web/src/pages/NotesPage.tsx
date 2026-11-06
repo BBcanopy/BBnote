@@ -50,8 +50,8 @@ import { buttonGhost, buttonPrimary, buttonSecondary } from "../components/butto
 import { ConfirmationDialog } from "../components/ConfirmationDialog";
 import { FolderTree } from "../components/FolderTree";
 import { MarkdownPreview } from "../components/MarkdownPreview";
+import { LinkPicker } from "../components/LinkPicker";
 import { NoteListPane } from "../components/NoteListPane";
-import { NoteReferencePicker } from "../components/NoteReferencePicker";
 import { TextPromptDialog } from "../components/TextPromptDialog";
 import { buildFolderMutations, moveFolders, type FolderMoveInstruction } from "../utils/folderTree";
 import {
@@ -1604,7 +1604,7 @@ function EditorPanel(props: {
   const tablePickerRef = useRef<HTMLDivElement | null>(null);
   const tableColumnsInputRef = useRef<HTMLInputElement | null>(null);
   const tableSelectionRef = useRef<TextSelectionRange | null>(null);
-  const noteReferenceSelectionRef = useRef<TextSelectionRange | null>(null);
+  const linkSelectionRef = useRef<TextSelectionRange | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const recordedChunksRef = useRef<Blob[]>([]);
@@ -2202,21 +2202,27 @@ function EditorPanel(props: {
         preserveFocus
         onClick={() => handleApplyMarkdownFormat("bulleted-list")}
       />
-      <NoteReferencePicker
+      <LinkPicker
         key={props.editorNote.noteId ?? "draft"}
         currentNoteId={props.editorNote.noteId}
         disabled={formatActionsDisabled}
         disabledTitle={formatToolbarDisabledTitle}
         onOpen={() => {
           const textarea = bodyTextareaRef.current;
-          noteReferenceSelectionRef.current = textarea ? { start: textarea.selectionStart, end: textarea.selectionEnd } : null;
+          linkSelectionRef.current = textarea ? { start: textarea.selectionStart, end: textarea.selectionEnd } : null;
         }}
-        onPick={(note) =>
+        onPickNote={(note) =>
           handleApplyMarkdownFormat("note-reference", {
             format: {
               noteReference: { id: note.id, title: note.title }
             },
-            selection: noteReferenceSelectionRef.current
+            selection: linkSelectionRef.current
+          })
+        }
+        onPickLink={(link) =>
+          handleApplyMarkdownFormat("link", {
+            format: { link },
+            selection: linkSelectionRef.current
           })
         }
       />

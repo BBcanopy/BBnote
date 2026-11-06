@@ -9,7 +9,8 @@ export type MarkdownFormatKind =
   | "quote"
   | "bulleted-list"
   | "table"
-  | "note-reference";
+  | "note-reference"
+  | "link";
 
 export const DEFAULT_MARKDOWN_TABLE_COLUMNS = 2;
 export const DEFAULT_MARKDOWN_TABLE_ROWS = 1;
@@ -26,9 +27,33 @@ export interface MarkdownNoteReference {
   title: string;
 }
 
+export interface MarkdownLink {
+  url: string;
+  label: string;
+}
+
 export interface MarkdownFormatOptions {
   table?: Partial<MarkdownTableDimensions>;
   noteReference?: MarkdownNoteReference;
+  link?: MarkdownLink;
+}
+
+const EXPLICIT_LINK_PATTERN = /^(?:https?:\/\/|mailto:)\S+$/i;
+const BARE_DOMAIN_PATTERN = /^(?:[a-z0-9-]+\.)+[a-z]{2,}(?:[/?#:]\S*)?$/i;
+
+/** Returns a full URL when the text is a web or email address, and null for anything else, including other schemes. */
+export function normalizeLinkUrl(text: string) {
+  const trimmed = text.trim();
+  const candidate = EXPLICIT_LINK_PATTERN.test(trimmed) ? trimmed : BARE_DOMAIN_PATTERN.test(trimmed) ? `https://${trimmed}` : null;
+  if (!candidate) {
+    return null;
+  }
+
+  try {
+    return new URL(candidate).href;
+  } catch {
+    return null;
+  }
 }
 
 interface MarkdownSelectionResult {
@@ -63,13 +88,17 @@ export function formatMarkdownSelection(
     return applyNoteReferenceFormat(value, safeStart, safeEnd, options?.noteReference);
   }
 
+  if (kind === "link") {
+    return applyLinkFormat(value, safeStart, safeEnd, options?.link);
+  }
+
   const wrappers = {
     bold: { prefix: "**", suffix: "**", placeholder: "bold text" },
     italic: { prefix: "*", suffix: "*", placeholder: "italic text" },
     underline: { prefix: "<u>", suffix: "</u>", placeholder: "underlined text" },
     strikethrough: { prefix: "~~", suffix: "~~", placeholder: "crossed text" },
     code: { prefix: "`", suffix: "`", placeholder: "inline code" }
-  } satisfies Record<Exclude<MarkdownFormatKind, "quote" | "bulleted-list" | "table" | "note-reference">, { prefix: string; suffix: string; placeholder: string }>;
+  } satisfies Record<Exclude<MarkdownFormatKind, "quote" | "bulleted-list" | "table" | "note-reference" | "link">, { prefix: string; suffix: string; placeholder: string }>;
 
   return applyWrapFormat(value, safeStart, safeEnd, wrappers[kind]);
 }
@@ -180,6 +209,36 @@ function applyNoteReferenceFormat(
     nextSelectionStart,
     nextSelectionEnd: nextSelectionStart
   };
+}
+
+function applyLinkFormat(value: string, selectionStart: number, selectionEnd: number, link?: MarkdownLink): MarkdownSelectionResult {
+  if (!link) {
+    return {
+      nextValue: value,
+      nextSelectionStart: selectionStart,
+      nextSelectionEnd: selectionEnd
+    };
+  }
+
+  const selectedText = value.slice(selectionStart, selectionEnd);
+  const usesSelection = selectedText.trim().length > 0;
+  const label = escapeLinkLabel(usesSelection ? selectedText : link.label);
+  const markup = `[${label}](${formatLinkDestination(link.url)})`;
+  const nextValue = `${value.slice(0, selectionStart)}${markup}${value.slice(selectionEnd)}`;
+
+  if (usesSelection) {
+    const nextSelectionStart = selectionStart + markup.length;
+    return { nextValue, nextSelectionStart, nextSelectionEnd: nextSelectionStart };
+  }
+
+  // Leave the address selected as the label, like the other placeholders, so it can be typed over straight away.
+  const labelStart = selectionStart + 1;
+  return { nextValue, nextSelectionStart: labelStart, nextSelectionEnd: labelStart + label.length };
+}
+
+function formatLinkDestination(url: string) {
+  const safeUrl = url.replace(/[<>]/g, encodeURIComponent);
+  return /[()]/.test(safeUrl) ? `<${safeUrl}>` : safeUrl;
 }
 
 function escapeLinkLabel(label: string) {

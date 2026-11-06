@@ -2509,7 +2509,7 @@ button:disabled {
 }
 
 .bb-table-picker,
-.bb-note-picker {
+.bb-link-picker {
   position: absolute;
   top: calc(100% + 0.55rem);
   right: 0;
@@ -2526,7 +2526,7 @@ button:disabled {
     var(--shadow-soft);
 }
 
-.bb-note-picker__results {
+.bb-link-picker__results {
   display: grid;
   gap: 0.2rem;
   max-height: min(16rem, 40vh);
@@ -2536,7 +2536,7 @@ button:disabled {
   list-style: none;
 }
 
-.bb-note-picker__result {
+.bb-link-picker__result {
   display: grid;
   gap: 0.1rem;
   width: 100%;
@@ -2548,31 +2548,31 @@ button:disabled {
   text-align: left;
 }
 
-.bb-note-picker__result:hover,
-.bb-note-picker__result:focus-visible {
+.bb-link-picker__result:hover,
+.bb-link-picker__result:focus-visible {
   background: color-mix(in srgb, var(--accent-soft) 76%, var(--surface-strong));
   outline: none;
 }
 
-.bb-note-picker__result-title,
-.bb-note-picker__result-excerpt {
+.bb-link-picker__result-title,
+.bb-link-picker__result-excerpt {
   overflow: hidden;
   min-width: 0;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.bb-note-picker__result-title {
+.bb-link-picker__result-title {
   font-size: 0.86rem;
   font-weight: 600;
 }
 
-.bb-note-picker__result-excerpt {
+.bb-link-picker__result-excerpt {
   color: var(--ink-soft);
   font-size: 0.78rem;
 }
 
-.bb-note-picker__message {
+.bb-link-picker__message {
   margin: 0;
   color: var(--ink-soft);
   font-size: 0.8rem;
@@ -3171,6 +3171,11 @@ button:disabled {
   margin-top: 0.28rem;
 }
 
+.bb-markdown a {
+  color: var(--accent-strong);
+  text-decoration: underline;
+}
+
 .bb-markdown code {
   display: inline-block;
   padding: 0.1rem 0.35rem;
@@ -3388,11 +3393,11 @@ button:disabled {
     position: relative;
   }
 
-  .bb-note-picker-shell {
+  .bb-link-picker-shell {
     position: static;
   }
 
-  .bb-note-picker {
+  .bb-link-picker {
     right: auto;
     left: 0;
   }

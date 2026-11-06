@@ -1,18 +1,20 @@
 import { LinkSimple } from "@phosphor-icons/react";
-import { useDeferredValue, useEffect, useId, useRef, useState } from "react";
+import { useDeferredValue, useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
 import { listNotes } from "../api/client";
 import type { NoteSummary } from "../api/types";
+import { normalizeLinkUrl, type MarkdownLink } from "../utils/markdownFormat";
 
 const RESULT_LIMIT = 20;
 
 type LoadStatus = "loading" | "ready" | "error";
 
-export function NoteReferencePicker(props: {
+export function LinkPicker(props: {
   currentNoteId: string | null;
   disabled: boolean;
   disabledTitle: string;
   onOpen(): void;
-  onPick(note: NoteSummary): void;
+  onPickNote(note: NoteSummary): void;
+  onPickLink(link: MarkdownLink): void;
 }) {
   const dialogId = useId();
   const shellRef = useRef<HTMLDivElement | null>(null);
@@ -23,6 +25,8 @@ export function NoteReferencePicker(props: {
   const [status, setStatus] = useState<LoadStatus>("loading");
   const deferredSearch = useDeferredValue(search);
   const query = deferredSearch.trim();
+  const typedText = search.trim();
+  const linkUrl = normalizeLinkUrl(typedText);
   const results = notes.filter((note) => note.id !== props.currentNoteId);
 
   useEffect(() => {
@@ -62,7 +66,7 @@ export function NoteReferencePicker(props: {
       }
     }
 
-    function handleKeyDown(event: KeyboardEvent) {
+    function handleKeyDown(event: globalThis.KeyboardEvent) {
       if (event.key === "Escape") {
         event.preventDefault();
         setOpen(false);
@@ -98,21 +102,44 @@ export function NoteReferencePicker(props: {
     setOpen(true);
   }
 
-  function handlePick(note: NoteSummary) {
+  function handlePickNote(note: NoteSummary) {
     setOpen(false);
-    props.onPick(note);
+    props.onPickNote(note);
+  }
+
+  function handlePickLink(url: string) {
+    setOpen(false);
+    props.onPickLink({ url, label: typedText });
+  }
+
+  function handleSearchKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+    // Enter also confirms text in an input method, which must not pick anything.
+    if (event.key !== "Enter" || event.nativeEvent.isComposing) {
+      return;
+    }
+
+    event.preventDefault();
+    if (linkUrl) {
+      handlePickLink(linkUrl);
+      return;
+    }
+
+    // Results lag behind the box while a search runs, so only take the top one once they have caught up.
+    if (typedText && query === typedText && status === "ready" && results[0]) {
+      handlePickNote(results[0]);
+    }
   }
 
   return (
-    <div className="bb-toolbar-popover-shell bb-note-picker-shell" ref={shellRef}>
+    <div className="bb-toolbar-popover-shell bb-link-picker-shell" ref={shellRef}>
       <button
         ref={buttonRef}
         type="button"
-        aria-label="Link to note"
+        aria-label="Insert link"
         aria-controls={open ? dialogId : undefined}
         aria-expanded={open}
         aria-haspopup="dialog"
-        title={props.disabled ? props.disabledTitle : "Link to note"}
+        title={props.disabled ? props.disabledTitle : "Insert link"}
         disabled={props.disabled}
         onPointerDown={(event) => {
           if (!props.disabled) {
@@ -125,38 +152,40 @@ export function NoteReferencePicker(props: {
         <LinkSimple size={17} />
       </button>
       {open ? (
-        <div
-          id={dialogId}
-          role="dialog"
-          aria-label="Link to note"
-          data-testid="note-reference-picker"
-          className="bb-note-picker"
-        >
+        <div id={dialogId} role="dialog" aria-label="Insert link" data-testid="link-picker" className="bb-link-picker">
           <label className="bb-field">
-            <span className="bb-field__label">Search notes</span>
+            <span className="bb-field__label">Search notes or paste a link</span>
             <input
               autoFocus
               type="search"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              placeholder="Title or text"
+              onKeyDown={handleSearchKeyDown}
+              placeholder="Note title, text, or web address"
               className="bb-input"
             />
           </label>
 
-          {results.length > 0 ? (
-            <ul className="bb-note-picker__results">
+          {linkUrl || results.length > 0 ? (
+            <ul className="bb-link-picker__results">
+              {linkUrl ? (
+                <li>
+                  <button type="button" onClick={() => handlePickLink(linkUrl)} className="bb-link-picker__result">
+                    <span className="bb-link-picker__result-title">Link to {linkUrl}</span>
+                  </button>
+                </li>
+              ) : null}
               {results.map((note) => (
                 <li key={note.id}>
-                  <button type="button" onClick={() => handlePick(note)} className="bb-note-picker__result">
-                    <span className="bb-note-picker__result-title">{note.title.trim() || "Untitled note"}</span>
-                    {note.excerpt ? <span className="bb-note-picker__result-excerpt">{note.excerpt}</span> : null}
+                  <button type="button" onClick={() => handlePickNote(note)} className="bb-link-picker__result">
+                    <span className="bb-link-picker__result-title">{note.title.trim() || "Untitled note"}</span>
+                    {note.excerpt ? <span className="bb-link-picker__result-excerpt">{note.excerpt}</span> : null}
                   </button>
                 </li>
               ))}
             </ul>
           ) : (
-            <p role="status" className="bb-note-picker__message">
+            <p role="status" className="bb-link-picker__message">
               {getEmptyMessage(status, query)}
             </p>
           )}
