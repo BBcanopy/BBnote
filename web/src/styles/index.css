@@ -3383,6 +3383,20 @@ button:disabled {
     opacity: 0.42;
   }
 
+  /* The toolbar wraps here, so anchoring to the button could push the picker off the left edge. */
+  .bb-editor-format-toolbar {
+    position: relative;
+  }
+
+  .bb-note-picker-shell {
+    position: static;
+  }
+
+  .bb-note-picker {
+    right: auto;
+    left: 0;
+  }
+
   .bb-page-shell--workspace {
     height: 100dvh;
     padding: max(0.22rem, env(safe-area-inset-top)) 0.22rem max(0.22rem, env(safe-area-inset-bottom));

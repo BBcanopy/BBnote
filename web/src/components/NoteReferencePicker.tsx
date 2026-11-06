@@ -104,7 +104,7 @@ export function NoteReferencePicker(props: {
   }
 
   return (
-    <div className="bb-toolbar-popover-shell" ref={shellRef}>
+    <div className="bb-toolbar-popover-shell bb-note-picker-shell" ref={shellRef}>
       <button
         ref={buttonRef}
         type="button"
