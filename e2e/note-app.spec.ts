@@ -2465,6 +2465,283 @@ test("syncs notebook and note selection into the URL and restores deep links on 
   await expect(page.getByRole("menu").getByRole("link", { name: /^notes$/i })).toHaveAttribute("aria-current", "page");
 });
 
+test.describe("note references", () => {
+  function titleInput(page: import("@playwright/test").Page) {
+    return page.getByRole("textbox", { name: "Title" }).first();
+  }
+
+  function previewSurface(page: import("@playwright/test").Page) {
+    return activeEditorPanel(page).locator(".bb-editor-preview");
+  }
+
+  async function showPreview(page: import("@playwright/test").Page) {
+    await activeEditorPanel(page).getByRole("button", { name: /^preview$/i }).click();
+    await expect(previewSurface(page)).toBeVisible();
+  }
+
+  /** Creates a target note in one notebook and a source note in another, leaving the source note open. */
+  async function createTargetAndSource(page: import("@playwright/test").Page, sourceBody: (targetId: string) => string = () => "") {
+    const suffix = createTestSuffix();
+    const names = {
+      targetNotebook: `Reference target ${suffix}`,
+      sourceNotebook: `Reference source ${suffix}`,
+      targetTitle: `Target note ${suffix}`,
+      targetBody: `Target body ${suffix}`,
+      sourceTitle: `Source note ${suffix}`
+    };
+
+    await login(page);
+    await createNotebookWithDialog(page, names.targetNotebook);
+    await createNoteWithContent(page, names.targetTitle, names.targetBody);
+    const targetPath = new URL(page.url()).pathname;
+    const targetId = extractNoteIdFromUrl(page.url());
+
+    await createNotebookWithDialog(page, names.sourceNotebook);
+    await createNoteWithContent(page, names.sourceTitle, sourceBody(targetId) || "Source body");
+    const sourcePath = new URL(page.url()).pathname;
+
+    return { ...names, targetPath, targetId, sourcePath };
+  }
+
+  test("inserts a note reference with the picker, jumps across notebooks, and comes back", async ({ page }) => {
+    const notes = await createTargetAndSource(page);
+    const panel = activeEditorPanel(page);
+    const textarea = activeEditorTextarea(page);
+
+    const initialStatus = await waitForUpdatedStatus(page);
+    await textarea.fill("See  for details");
+    await selectTextRange(textarea, 4, 4);
+    await panel.getByRole("button", { name: "Insert link" }).click();
+
+    const picker = panel.getByTestId("link-picker");
+    await expect(picker.getByRole("searchbox", { name: "Search notes or paste a link" })).toBeFocused();
+    await expect(picker.getByRole("button", { name: new RegExp(notes.sourceTitle) })).toHaveCount(0);
+    await picker.getByRole("button", { name: new RegExp(notes.targetTitle) }).click();
+
+    await expect(picker).toHaveCount(0);
+    await expect(textarea).toHaveValue(`See [${notes.targetTitle}](/notes/${notes.targetId}) for details`);
+    await expect(textarea).toBeFocused();
+    await waitForUpdatedStatus(page, initialStatus);
+
+    await showPreview(page);
+    await expect(panel.getByRole("button", { name: "Insert link" })).toBeDisabled();
+    const reference = previewSurface(page).getByRole("link", { name: notes.targetTitle });
+    await expect(reference).toHaveAttribute("href", `/notes/${notes.targetId}`);
+    await expect(reference).toHaveClass(/bb-link-button/);
+    await reference.click();
+
+    await expect(page).toHaveURL(notes.targetPath);
+    await expect(titleInput(page)).toHaveValue(notes.targetTitle);
+    await expect(previewSurface(page)).toContainText(notes.targetBody);
+    await expect(notebookRowContainer(page, notes.targetNotebook)).toHaveClass(/is-active/);
+    await expect(page.getByRole("button", { name: new RegExp(notes.targetTitle, "i") }).first()).toHaveClass(/is-active/);
+
+    await page.goBack();
+    await expect(titleInput(page)).toHaveValue(notes.sourceTitle);
+    await expect(previewSurface(page)).toContainText("See");
+    await expect(notebookRowContainer(page, notes.sourceNotebook)).toHaveClass(/is-active/);
+    // One Back is enough, and it stays there rather than bouncing forward once the note has loaded.
+    await expect(page).toHaveURL(notes.sourcePath);
+
+    await page.goForward();
+    await expect(page).toHaveURL(notes.targetPath);
+    await expect(titleInput(page)).toHaveValue(notes.targetTitle);
+  });
+
+  test("uses selected text as the note reference label", async ({ page }) => {
+    const notes = await createTargetAndSource(page);
+    const panel = activeEditorPanel(page);
+    const textarea = activeEditorTextarea(page);
+
+    await textarea.fill("See the plan first");
+    await selectTextRange(textarea, 4, 12);
+    await panel.getByRole("button", { name: "Insert link" }).click();
+    await panel.getByTestId("link-picker").getByRole("button", { name: new RegExp(notes.targetTitle) }).click();
+
+    await expect(textarea).toHaveValue(`See [the plan](/notes/${notes.targetId}) first`);
+  });
+
+  test("inserts web links from the same button as note references", async ({ page }) => {
+    await createTargetAndSource(page);
+    const panel = activeEditorPanel(page);
+    const textarea = activeEditorTextarea(page);
+    const picker = panel.getByTestId("link-picker");
+    const searchBox = picker.getByRole("searchbox", { name: "Search notes or paste a link" });
+    const url = "https://example.com/guide_(v2)?a=1";
+
+    // Selected text becomes the label, and Enter takes the offered address.
+    await textarea.fill("Read the docs now");
+    await selectTextRange(textarea, 9, 13);
+    await panel.getByRole("button", { name: "Insert link" }).click();
+    await searchBox.fill(url);
+    await expect(picker.getByRole("button", { name: `Link to ${url}` })).toBeVisible();
+    await searchBox.press("Enter");
+
+    const withDocs = `Read the [docs](<${url}>) now`;
+    await expect(picker).toHaveCount(0);
+    await expect(textarea).toHaveValue(withDocs);
+    await expect(textarea).toBeFocused();
+
+    // A bare domain gets https, and the label stays selected so it can be typed over.
+    await selectTextRange(textarea, withDocs.length, withDocs.length);
+    await panel.getByRole("button", { name: "Insert link" }).click();
+    await searchBox.fill("example.org");
+    await picker.getByRole("button", { name: "Link to https://example.org/" }).click();
+
+    const withBoth = `${withDocs}[example.org](https://example.org/)`;
+    await expect(textarea).toHaveValue(withBoth);
+    await expect
+      .poll(() => textarea.evaluate((element: HTMLTextAreaElement) => element.value.slice(element.selectionStart, element.selectionEnd)))
+      .toBe("example.org");
+
+    // Web links read as links in Preview and leave the app rather than jumping to a note.
+    const sourceUrl = page.url();
+    await showPreview(page);
+    for (const [name, href] of [
+      ["docs", url],
+      ["example.org", "https://example.org/"]
+    ]) {
+      const link = previewSurface(page).getByRole("link", { name });
+      await expect(link).toHaveAttribute("href", href);
+      await expect(link).toHaveAttribute("target", "_blank");
+      await expect(link).toHaveCSS("text-decoration-line", "underline");
+    }
+    expect(page.url()).toBe(sourceUrl);
+  });
+
+  test("searches notes in the note reference picker and closes it on escape", async ({ page }) => {
+    const notes = await createTargetAndSource(page);
+    const panel = activeEditorPanel(page);
+    const textarea = activeEditorTextarea(page);
+    const body = "Unchanged body";
+
+    const initialStatus = await waitForUpdatedStatus(page);
+    await textarea.fill(body);
+    await waitForUpdatedStatus(page, initialStatus);
+
+    await panel.getByRole("button", { name: "Insert link" }).click();
+    const picker = panel.getByTestId("link-picker");
+    const searchBox = picker.getByRole("searchbox", { name: "Search notes or paste a link" });
+    const targetResult = picker.getByRole("button", { name: new RegExp(notes.targetTitle) });
+    const uniqueWord = notes.targetTitle.split(" ").at(-1)!;
+
+    // Results have to appear while the word is still being typed, not only once it is complete.
+    await searchBox.pressSequentially(uniqueWord.slice(0, 6));
+    await expect(targetResult).toBeVisible();
+
+    await searchBox.fill(uniqueWord);
+    await expect(targetResult).toBeVisible();
+
+    await searchBox.fill(`missing${createTestSuffix()}`);
+    await expect(picker.getByRole("status")).toContainText("No notes match");
+
+    await page.keyboard.press("Escape");
+    await expect(picker).toHaveCount(0);
+    await expect(textarea).toHaveValue(body);
+  });
+
+  test("keeps a note reference working after the target is renamed, and leaves modified clicks to the browser", async ({ page }) => {
+    const notes = await createTargetAndSource(page, (targetId) => `[Original label](/notes/${targetId})`);
+    const renamedTitle = `${notes.targetTitle} renamed`;
+
+    await showPreview(page);
+    await previewSurface(page).getByRole("link", { name: "Original label" }).click();
+    await expect(page).toHaveURL(notes.targetPath);
+    await expect(titleInput(page)).toHaveValue(notes.targetTitle);
+
+    const statusBeforeRename = await waitForUpdatedStatus(page);
+    await titleInput(page).fill(renamedTitle);
+    await waitForUpdatedStatus(page, statusBeforeRename);
+
+    await page.goBack();
+    await expect(titleInput(page)).toHaveValue(notes.sourceTitle);
+    const reference = previewSurface(page).getByRole("link", { name: "Original label" });
+
+    const popupPromise = page.context().waitForEvent("page");
+    await reference.click({ modifiers: ["Control"] });
+    const popup = await popupPromise;
+    await expect(popup).toHaveURL(new RegExp(`/notes/${notes.targetId}$`));
+    await expect(popup.getByRole("textbox", { name: "Title" }).first()).toHaveValue(renamedTitle);
+    await popup.close();
+    await expect(page).toHaveURL(notes.sourcePath);
+
+    await reference.click();
+    await expect(page).toHaveURL(notes.targetPath);
+    await expect(titleInput(page)).toHaveValue(renamedTitle);
+  });
+
+  test("shows an error and stays on the note when a note reference is broken", async ({ page }) => {
+    const missingNoteId = randomUUID();
+    const notes = await createTargetAndSource(page, () => `Before [Gone](/notes/${missingNoteId}) after`);
+
+    await showPreview(page);
+    await previewSurface(page).getByRole("link", { name: "Gone" }).click();
+
+    await expect(activeEditorPanel(page).locator(".bb-error-banner")).toHaveText("Couldn't open the linked note. It may have been deleted.");
+    await expect(page).toHaveURL(notes.sourcePath);
+    await expect(titleInput(page)).toHaveValue(notes.sourceTitle);
+    await expect(previewSurface(page)).toContainText("Before");
+  });
+
+  test("saves edits made just before following a note reference", async ({ page }) => {
+    const notes = await createTargetAndSource(page);
+    const textarea = activeEditorTextarea(page);
+    const editedBody = `Edited just before leaving [Target](/notes/${notes.targetId})`;
+
+    await waitForUpdatedStatus(page);
+    await textarea.fill(editedBody);
+    await showPreview(page);
+    await previewSurface(page).getByRole("link", { name: "Target" }).click();
+    await expect(page).toHaveURL(notes.targetPath);
+    await expect(titleInput(page)).toHaveValue(notes.targetTitle);
+
+    await page.goto(notes.sourcePath);
+    await expect(activeEditorTextarea(page)).toHaveValue(editedBody);
+  });
+
+  test("does nothing when a note reference points at the open note", async ({ page }) => {
+    const notes = await createTargetAndSource(page);
+    const textarea = activeEditorTextarea(page);
+    const sourceId = extractNoteIdFromUrl(notes.sourcePath);
+
+    const initialStatus = await waitForUpdatedStatus(page);
+    await textarea.fill(`[Myself](/notes/${sourceId})`);
+    await waitForUpdatedStatus(page, initialStatus);
+    await showPreview(page);
+    await previewSurface(page).getByRole("link", { name: "Myself" }).click();
+
+    await expect(page).toHaveURL(notes.sourcePath);
+    await expect(activeEditorPanel(page).locator(".bb-error-banner")).toHaveCount(0);
+    await expect(previewSurface(page).getByRole("link", { name: "Myself" })).toBeVisible();
+  });
+
+  test("works on a phone-sized screen with the picker inside the viewport", async ({ page }) => {
+    const notes = await createTargetAndSource(page);
+    await page.setViewportSize({ width: 390, height: 844 });
+
+    const panel = page.getByTestId("editor-panel-mobile");
+    const textarea = activeEditorTextarea(page);
+    await expect(panel).toBeVisible();
+    await textarea.fill("");
+
+    await panel.getByRole("button", { name: "Insert link" }).click();
+    const picker = panel.getByTestId("link-picker");
+    await expect(picker).toBeVisible();
+    const box = await picker.boundingBox();
+    expect(box).not.toBeNull();
+    expect(box!.x).toBeGreaterThanOrEqual(0);
+    expect(box!.x + box!.width).toBeLessThanOrEqual(390);
+
+    await picker.getByRole("button", { name: new RegExp(notes.targetTitle) }).click();
+    await expect(textarea).toHaveValue(`[${notes.targetTitle}](/notes/${notes.targetId})`);
+
+    await showPreview(page);
+    await previewSurface(page).getByRole("link", { name: notes.targetTitle }).click();
+    await expect(page).toHaveURL(notes.targetPath);
+    await expect(titleInput(page)).toHaveValue(notes.targetTitle);
+  });
+});
+
 test("keeps the previous notes visible while switching folders", async ({ page }) => {
   const suffix = Date.now().toString();
   const firstNotebookName = `Smooth inbox ${suffix}`;

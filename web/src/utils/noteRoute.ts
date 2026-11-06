@@ -22,3 +22,23 @@ export function buildNotesPath(options: NotesPathOptions) {
 export function isNotesPathname(pathname: string) {
   return pathname === "/" || pathname.startsWith("/folders/") || pathname.startsWith("/notes/");
 }
+
+const NOTE_PATHNAME_PATTERN = /^(?:\/folders\/[^/]+)?\/notes\/([^/]+)\/?$/;
+
+export function parseNoteIdFromHref(href?: string) {
+  if (!href) {
+    return null;
+  }
+
+  try {
+    const url = new URL(href, window.location.origin);
+    if (url.origin !== window.location.origin) {
+      return null;
+    }
+
+    const match = NOTE_PATHNAME_PATTERN.exec(url.pathname);
+    return match ? decodeURIComponent(match[1]) : null;
+  } catch {
+    return null;
+  }
+}

@@ -2508,7 +2508,8 @@ button:disabled {
   display: inline-flex;
 }
 
-.bb-table-picker {
+.bb-table-picker,
+.bb-link-picker {
   position: absolute;
   top: calc(100% + 0.55rem);
   right: 0;
@@ -2523,6 +2524,59 @@ button:disabled {
   box-shadow:
     inset 0 1px 0 var(--surface-highlight),
     var(--shadow-soft);
+}
+
+.bb-link-picker__results {
+  display: grid;
+  gap: 0.2rem;
+  max-height: min(16rem, 40vh);
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.bb-link-picker__result {
+  display: grid;
+  gap: 0.1rem;
+  width: 100%;
+  padding: 0.5rem 0.6rem;
+  border: none;
+  border-radius: 0.7rem;
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+}
+
+.bb-link-picker__result:hover,
+.bb-link-picker__result:focus-visible {
+  background: color-mix(in srgb, var(--accent-soft) 76%, var(--surface-strong));
+  outline: none;
+}
+
+.bb-link-picker__result-title,
+.bb-link-picker__result-excerpt {
+  overflow: hidden;
+  min-width: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bb-link-picker__result-title {
+  font-size: 0.86rem;
+  font-weight: 600;
+}
+
+.bb-link-picker__result-excerpt {
+  color: var(--ink-soft);
+  font-size: 0.78rem;
+}
+
+.bb-link-picker__message {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 0.8rem;
+  line-height: 1.5;
 }
 
 .bb-table-picker__copy {
@@ -3117,6 +3171,11 @@ button:disabled {
   margin-top: 0.28rem;
 }
 
+.bb-markdown a {
+  color: var(--accent-strong);
+  text-decoration: underline;
+}
+
 .bb-markdown code {
   display: inline-block;
   padding: 0.1rem 0.35rem;
@@ -3327,6 +3386,20 @@ button:disabled {
     inset: 0.22rem;
     border-radius: 1rem;
     opacity: 0.42;
+  }
+
+  /* The toolbar wraps here, so anchoring to the button could push the picker off the left edge. */
+  .bb-editor-format-toolbar {
+    position: relative;
+  }
+
+  .bb-link-picker-shell {
+    position: static;
+  }
+
+  .bb-link-picker {
+    right: auto;
+    left: 0;
   }
 
   .bb-page-shell--workspace {
