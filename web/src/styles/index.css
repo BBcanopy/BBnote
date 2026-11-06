@@ -12,6 +12,8 @@
   --surface-highlight-strong: rgba(255, 255, 255, 0.62);
   --ink: #102022;
   --ink-soft: #5e6e70;
+  --code-block-bg: color-mix(in srgb, var(--ink) 88%, transparent);
+  --code-block-ink: #f4fffe;
   --line: rgba(16, 32, 34, 0.1);
   --line-strong: rgba(16, 32, 34, 0.16);
   --accent: #2f7774;
@@ -81,6 +83,8 @@
   --surface-highlight-strong: rgba(255, 255, 255, 0.08);
   --ink: #edf6f7;
   --ink-soft: #95acaf;
+  --code-block-bg: #11181b;
+  --code-block-ink: #dcebed;
   --line: rgba(221, 239, 242, 0.1);
   --line-strong: rgba(221, 239, 242, 0.18);
   --accent: #58c6c0;
@@ -3188,8 +3192,8 @@ button:disabled {
   overflow-x: auto;
   padding: 0.9rem 1rem;
   border-radius: 1rem;
-  background: color-mix(in srgb, var(--ink) 88%, transparent);
-  color: #f4fffe;
+  background: var(--code-block-bg);
+  color: var(--code-block-ink);
 }
 
 .bb-markdown pre code {
