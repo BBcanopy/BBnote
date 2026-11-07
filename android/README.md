@@ -18,11 +18,11 @@ The connection screen accepts a root HTTPS origin, such as `https://notes.exampl
 
 ## Build and install
 
-Install Node 26+, a full JDK 21, and Android SDK platform 36/build-tools 36.0.0. Set `JAVA_HOME` and `ANDROID_HOME` to their installation directories. Android Studio Otter 2025.2.1 or newer can manage these prerequisites.
+Install Node 26+, a full JDK 25, and Android SDK platform 36/build-tools 36.0.0. Set `JAVA_HOME` and `ANDROID_HOME` to their installation directories. Android Studio Otter 2025.2.1 or newer can manage these prerequisites.
 
-The project pins the Gradle daemon to JDK 21 in `android/android/gradle/gradle-daemon-jvm.properties`. Gradle and compatible IDEs select an installed JDK 21 even when the IDE or command-line launcher uses a newer Java version.
+The project uses [Gradle 9.1.0, which supports running on Java 25](https://docs.gradle.org/9.1.0/release-notes.html#support-for-java-25), and pins the daemon to JDK 25 in `android/android/gradle/gradle-daemon-jvm.properties`. CI uses the same JDK. Android Java source and bytecode compatibility remain at Java 21, matching the Capacitor 8 template.
 
-If importing the project reports **"Can't use Java 25 and Gradle 8.14.3"**, open **Settings > Build, Execution, Deployment > Build Tools > Gradle** and set **Gradle JVM Criteria > Version** to **21**. In older IDEs, select an installed full JDK 21 in **Gradle JVM** instead. Then reload the Gradle project. Changing the Java source compatibility or the IDE's own runtime does not select the JVM that runs Gradle. Gradle 8.14.3 cannot run on Java 25; keep its runtime on JDK 21.
+When importing, select the project's **Gradle wrapper** and reload the Gradle project so the IDE uses Gradle 9.1.0. In **Settings > Build, Execution, Deployment > Build Tools > Gradle**, set **Gradle JVM Criteria > Version** to **25**. In older IDEs, select an installed full JDK 25 in **Gradle JVM** instead. The IDE's own runtime and Java source compatibility do not select the JVM that runs Gradle.
 
 From the repository root:
 
