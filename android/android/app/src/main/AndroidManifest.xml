@@ -30,8 +30,8 @@
             </intent-filter>
 
         </activity>
-        <activity android:name=".NativeAuthActivity" android:exported="false" android:launchMode="singleTop" />
-        <activity android:name="net.openid.appauth.RedirectUriReceiverActivity" android:exported="true" tools:node="replace">
+        <activity android:name="net.openid.appauth.RedirectUriReceiverActivity" tools:node="remove" />
+        <activity android:name=".NativeAuthActivity" android:exported="true" android:launchMode="singleTop">
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />

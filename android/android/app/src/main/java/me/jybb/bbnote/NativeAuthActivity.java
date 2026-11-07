@@ -1,12 +1,11 @@
 package me.jybb.bbnote;
 
 import android.app.Activity;
-import android.app.PendingIntent;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
+import androidx.browser.customtabs.CustomTabsIntent;
 import net.openid.appauth.AuthState;
-import net.openid.appauth.AuthorizationException;
 import net.openid.appauth.AuthorizationRequest;
 import net.openid.appauth.AuthorizationResponse;
 import net.openid.appauth.AuthorizationServiceConfiguration;
@@ -16,26 +15,33 @@ import org.json.JSONObject;
 import java.util.ArrayList;
 import java.net.HttpURLConnection;
 
-/** Owns OAuth results independently of the WebView, including when Android recreates the process. */
+/** Owns OAuth results independently of the WebView and Android's transient activity state. */
 public class NativeAuthActivity extends Activity {
-    static final String COMPLETE = "me.jybb.bbnote.AUTH_COMPLETE";
-    static final String CANCEL = "me.jybb.bbnote.AUTH_CANCEL";
     private NativeSession session;
     private int generation;
+    private String flowState;
+    private boolean browserLaunched;
+    private boolean exchanging;
 
-    @Override public void onCreate(Bundle state) {
-        super.onCreate(state);
+    @Override public void onCreate(Bundle saved) {
+        super.onCreate(saved);
         session = NativeSession.get(this);
         generation = getIntent().getIntExtra("generation", session.generation());
-        if (COMPLETE.equals(getIntent().getAction())) { complete(getIntent()); return; }
-        if (CANCEL.equals(getIntent().getAction())) { finishResult("Sign-in cancelled."); return; }
-        if (state != null) return; // AppAuth's activity is still awaiting the browser redirect.
+        if (getIntent().getData() != null) { complete(getIntent().getData()); return; }
+        if (saved != null) {
+            browserLaunched = saved.getBoolean("browserLaunched");
+            flowState = saved.getString("flowState");
+            return;
+        }
+        if (getCallingActivity() == null || !getPackageName().equals(getCallingActivity().getPackageName())) {
+            finish(); return;
+        }
         try {
             JSONObject config = session.config();
             if (config == null) throw new IllegalStateException("Connect to a server first.");
             String issuer = config.getString("issuer").replaceAll("/+$", "");
-            Uri discovery = Uri.parse(issuer + "/.well-known/openid-configuration");
-            AuthorizationServiceConfiguration.fetchFromUrl(discovery, (configuration, error) -> {
+            AuthorizationServiceConfiguration.fetchFromUrl(Uri.parse(issuer + "/.well-known/openid-configuration"), (configuration, error) -> {
+                if (isFinishing() || isDestroyed()) return;
                 if (error != null || configuration == null) { finishResult("Could not load sign-in settings. Check your connection and retry."); return; }
                 try {
                     if (configuration.discoveryDoc == null || !issuer.equals(configuration.discoveryDoc.getIssuer().toString().replaceAll("/+$", ""))) {
@@ -48,7 +54,11 @@ public class NativeAuthActivity extends Activity {
                     for (int i = 0; i < values.length(); i++) scopes.add(values.getString(i));
                     AuthorizationRequest request = new AuthorizationRequest.Builder(configuration, config.getString("clientId"),
                         ResponseTypeValues.CODE, Uri.parse("bbnote://auth/callback")).setScopes(scopes).build();
-                    session.service.performAuthorizationRequest(request, pending(COMPLETE, 1), pending(CANCEL, 2));
+                    // Commit PKCE verifier, state, and nonce before leaving the app. Activity state can be lost.
+                    session.beginAuthorization(request, generation);
+                    flowState = request.state;
+                    browserLaunched = true;
+                    new CustomTabsIntent.Builder().build().launchUrl(this, request.toUri());
                 } catch (Exception failure) { finishResult(failure.getMessage()); }
             }, uri -> {
                 HttpURLConnection connection = (HttpURLConnection) UrlPolicy.endpoint(uri.toString(), BuildConfig.DEBUG).toURL().openConnection();
@@ -57,37 +67,56 @@ public class NativeAuthActivity extends Activity {
             });
         } catch (Exception failure) { finishResult(failure.getMessage()); }
     }
-    private PendingIntent pending(String action, int code) {
-        Intent intent = new Intent(this, NativeAuthActivity.class).setAction(action).putExtra("generation", generation)
-            .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
-        return PendingIntent.getActivity(this, code, intent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_MUTABLE);
-    }
     @Override public void onNewIntent(Intent intent) {
         super.onNewIntent(intent); setIntent(intent);
-        if (COMPLETE.equals(intent.getAction())) complete(intent); else finishResult("Sign-in cancelled.");
+        if (intent.getData() != null) complete(intent.getData());
     }
-    private void complete(Intent intent) {
-        AuthorizationResponse response = AuthorizationResponse.fromIntent(intent);
-        AuthorizationException error = AuthorizationException.fromIntent(intent);
-        if (response == null || error != null) { finishResult("Sign-in could not be completed. Please retry."); return; }
-        AuthState auth = new AuthState(response, null);
-        session.service.performTokenRequest(response.createTokenExchangeRequest(), (tokens, failure) -> {
-            if (tokens == null || failure != null) {
-                if (BuildConfig.DEBUG) android.util.Log.w("BBNoteAuth", "Token exchange failed", failure);
-                finishResult("Could not finish sign-in. Please retry."); return;
+    @Override protected void onResume() {
+        super.onResume();
+        if (browserLaunched && !exchanging && getIntent().getData() == null) finishResult("Sign-in cancelled.");
+    }
+    @Override protected void onSaveInstanceState(Bundle state) {
+        state.putBoolean("browserLaunched", browserLaunched);
+        state.putString("flowState", flowState);
+        super.onSaveInstanceState(state);
+    }
+    private void complete(Uri uri) {
+        if (exchanging) return;
+        try {
+            if (!"bbnote".equals(uri.getScheme()) || !"auth".equals(uri.getHost()) || !"/callback".equals(uri.getPath()) || uri.getFragment() != null) {
+                throw new IllegalStateException("Invalid sign-in callback.");
             }
-            try { auth.update(tokens, null); session.authorize(auth, generation); finishResult(null); }
-            catch (Exception saveFailure) { finishResult(saveFailure.getMessage()); }
-        });
+            flowState = uri.getQueryParameter("state");
+            AuthorizationRequest request = session.pendingAuthorization();
+            if (request.state == null || !request.state.equals(flowState)) throw new IllegalStateException("Sign-in response did not match. Please retry.");
+            if (uri.getQueryParameter("error") != null || uri.getQueryParameter("code") == null) {
+                throw new IllegalStateException("Sign-in could not be completed. Please retry.");
+            }
+            exchanging = true;
+            AuthorizationResponse response = new AuthorizationResponse.Builder(request).fromUri(uri).build();
+            AuthState auth = new AuthState(response, null);
+            session.service.performTokenRequest(response.createTokenExchangeRequest(), (tokens, failure) -> {
+                if (tokens == null || failure != null) {
+                    if (BuildConfig.DEBUG) android.util.Log.w("BBNoteAuth", "Token exchange failed", failure);
+                    finishResult("Could not finish sign-in. Please retry."); return;
+                }
+                try { auth.update(tokens, null); session.authorize(auth, generation, flowState); finishResult(null); }
+                catch (Exception saveFailure) { finishResult(saveFailure.getMessage()); }
+            });
+        } catch (Exception failure) { finishResult(failure.getMessage()); }
     }
     private void finishResult(String error) {
         runOnUiThread(() -> {
-            Intent result = new Intent();
-            if (error != null) result.putExtra("error", error);
-            setResult(error == null ? RESULT_OK : RESULT_CANCELED, result);
-            // Bring an existing or recreated WebView forward; bootstrap can read the stored AuthState.
-            if (getCallingActivity() == null) startActivity(new Intent(this, MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP));
-            finish();
+            try { session.cancelAuthorization(flowState, generation); }
+            catch (Exception failure) { errorResult("Could not save sign-in state. Please retry."); return; }
+            errorResult(error);
         });
+    }
+    private void errorResult(String error) {
+        Intent result = new Intent();
+        if (error != null) result.putExtra("error", error);
+        setResult(error == null ? RESULT_OK : RESULT_CANCELED, result);
+        if (getCallingActivity() == null) startActivity(new Intent(this, MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP));
+        finish();
     }
 }

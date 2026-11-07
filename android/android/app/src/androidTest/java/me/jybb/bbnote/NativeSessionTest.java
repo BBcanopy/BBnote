@@ -36,11 +36,16 @@ public class NativeSessionTest {
             session.configure("https://notes.example", config);
             AuthorizationServiceConfiguration endpoints = new AuthorizationServiceConfiguration(Uri.parse(issuer + "/authorize"), Uri.parse(issuer + "/token"));
             AuthorizationRequest authorization = new AuthorizationRequest.Builder(endpoints, "android", ResponseTypeValues.CODE, Uri.parse("bbnote://auth/callback")).build();
+            session.beginAuthorization(authorization, session.generation());
+            assertEquals(authorization.codeVerifier, session.pendingAuthorization().codeVerifier);
+            session.cancelAuthorization("unrelated-state", session.generation());
+            assertEquals(authorization.state, session.pendingAuthorization().state);
             AuthState state = new AuthState(new AuthorizationResponse.Builder(authorization).setAuthorizationCode("code").build(), null);
             TokenRequest tokenRequest = new TokenRequest.Builder(endpoints, "android").setGrantType(GrantTypeValues.REFRESH_TOKEN).setRefreshToken("refresh-old").build();
             state.update(new TokenResponse.Builder(tokenRequest).setTokenType("Bearer").setAccessToken("expired")
                 .setAccessTokenExpirationTime(System.currentTimeMillis() - 60000).setRefreshToken("refresh-old").build(), null);
-            session.authorize(state, session.generation());
+            assertThrows(IllegalStateException.class, () -> session.authorize(state, session.generation(), "wrong-state"));
+            session.authorize(state, session.generation(), authorization.state);
             provider.enqueue(new MockResponse().setHeader("Content-Type", "application/json")
                 .setBody("{\"access_token\":\"fresh\",\"token_type\":\"Bearer\",\"expires_in\":3600,\"refresh_token\":\"rotated\"}")
                 .setBodyDelay(250, TimeUnit.MILLISECONDS));
