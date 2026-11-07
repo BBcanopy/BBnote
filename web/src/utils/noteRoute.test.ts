@@ -45,6 +45,11 @@ describe("parseNoteIdFromHref", () => {
     expect(parseNoteIdFromHref("/notes/note%209")).toBe("note 9");
   });
 
+  it("recognizes links to the selected native server without accepting unrelated origins", () => {
+    expect(parseNoteIdFromHref("https://notes.example/notes/note-9", "https://notes.example")).toBe("note-9");
+    expect(parseNoteIdFromHref("https://other.example/notes/note-9", "https://notes.example")).toBeNull();
+  });
+
   it("rejects other origins, including protocol-relative urls", () => {
     expect(parseNoteIdFromHref("https://example.com/notes/note-9")).toBeNull();
     expect(parseNoteIdFromHref("//example.com/notes/note-9")).toBeNull();

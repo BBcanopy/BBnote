@@ -10,6 +10,9 @@ import ReactDOM from "react-dom/client";
 import { RouterProvider } from "react-router-dom";
 import { AuthProvider } from "./auth/AuthProvider";
 import { router } from "./router/router";
+import { isNative } from "./platform/native";
+
+if (isNative()) document.documentElement.dataset.native = "true";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>

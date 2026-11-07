@@ -11,6 +11,7 @@ export function UserMenu(props: {
   email: string | null;
   theme: UserTheme;
   onLogout(): void;
+  onChangeServer?(): void;
   onThemeChange(theme: UserTheme): Promise<void>;
 }) {
   const location = useLocation();
@@ -134,6 +135,7 @@ export function UserMenu(props: {
             <MenuLink to="/migration" label="Migration" icon={<ArrowsClockwise size={18} />} />
           </div>
           <div className="bb-menu-divider" />
+          {props.onChangeServer ? <button type="button" className="bb-menu-link" onClick={props.onChangeServer}>Change server</button> : null}
           <button
             type="button"
             onClick={props.onLogout}

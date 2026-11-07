@@ -3,6 +3,8 @@ import { isValidElement, useEffect, useState, type ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { fetchAttachmentBlob } from "../api/client";
+import { saveAttachment } from "../platform/files";
+import { currentServer } from "../platform/native";
 import type { AttachmentRef } from "../api/types";
 import { parseNoteIdFromHref } from "../utils/noteRoute";
 
@@ -19,7 +21,7 @@ export function MarkdownPreview(props: { bodyMarkdown: string; attachments?: Att
         components={{
           img: ({ src, alt }) => <SecureAttachmentImage src={src} alt={alt ?? ""} />,
           a: ({ href, children }) => {
-            const noteId = parseNoteIdFromHref(href);
+            const noteId = parseNoteIdFromHref(href, currentServer());
             if (noteId && props.onOpenNote) {
               return (
                 <NoteReferenceLink href={href} noteId={noteId} onOpenNote={props.onOpenNote}>
@@ -40,7 +42,7 @@ export function MarkdownPreview(props: { bodyMarkdown: string; attachments?: Att
             if (attachment?.mimeType.startsWith("video/")) {
               return <SecureAttachmentVideo src={href}>{children}</SecureAttachmentVideo>;
             }
-            return <SecureAttachmentLink href={href}>{children}</SecureAttachmentLink>;
+            return <SecureAttachmentLink href={href} name={attachment?.name}>{children}</SecureAttachmentLink>;
           }
         }}
       >
@@ -118,7 +120,8 @@ function SecureAttachmentVideo(props: { src?: string; children: ReactNode }) {
   );
 }
 
-function SecureAttachmentLink(props: { href?: string; children: ReactNode }) {
+function SecureAttachmentLink(props: { href?: string; name?: string; children: ReactNode }) {
+  const [error, setError] = useState<string | null>(null);
   if (!isSecureAttachmentUrl(props.href)) {
     return (
       <a href={props.href} target="_blank" rel="noreferrer">
@@ -128,18 +131,20 @@ function SecureAttachmentLink(props: { href?: string; children: ReactNode }) {
   }
 
   return (
-    <button
-      type="button"
-      onClick={async () => {
-        const blob = await fetchAttachmentBlob(props.href!);
-        const objectUrl = URL.createObjectURL(blob);
-        window.open(objectUrl, "_blank", "noopener,noreferrer");
-        setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
-      }}
-      className="bb-link-button"
-    >
-      {props.children}
-    </button>
+    <span>
+      <button
+        type="button"
+        onClick={async () => {
+          setError(null);
+          try { await saveAttachment(props.href!, props.name ?? String(props.children ?? "attachment"), true); }
+          catch (failure) { setError(failure instanceof Error ? failure.message : String(failure)); }
+        }}
+        className="bb-link-button"
+      >
+        {props.children}
+      </button>
+      {error ? <span role="alert" className="bb-inline-error">{error}</span> : null}
+    </span>
   );
 }
 
@@ -198,7 +203,7 @@ function normalizeAttachmentUrl(value?: string) {
 
   try {
     const parsed = new URL(value, window.location.origin);
-    if (parsed.origin === window.location.origin && parsed.pathname.startsWith("/api/v1/attachments/")) {
+    if ((parsed.origin === window.location.origin || parsed.origin === currentServer()) && parsed.pathname.startsWith("/api/v1/attachments/")) {
       return parsed.pathname;
     }
   } catch {

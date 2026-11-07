@@ -56,7 +56,7 @@ export function ConfirmationDialog(props: {
           </div>
 
           <div className="bb-dialog__actions">
-            <button type="button" onClick={props.onClose} className="bb-button bb-button--ghost">
+            <button type="button" data-native-dismiss onClick={props.onClose} className="bb-button bb-button--ghost">
               {props.cancelLabel ?? "Cancel"}
             </button>
             <button

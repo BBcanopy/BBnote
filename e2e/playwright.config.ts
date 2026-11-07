@@ -4,6 +4,7 @@ const externalBaseUrl = process.env.PLAYWRIGHT_BASE_URL;
 
 export default defineConfig({
   testDir: "./",
+  testIgnore: "android-app.spec.ts",
   timeout: 60_000,
   use: {
     baseURL: externalBaseUrl ?? "http://127.0.0.1:5173",

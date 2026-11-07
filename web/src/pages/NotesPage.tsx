@@ -32,7 +32,6 @@ import {
   deleteAttachment,
   deleteFolder,
   deleteNote,
-  fetchAttachmentBlob,
   getNote,
   listFolders,
   listNotes,
@@ -44,6 +43,7 @@ import {
 } from "../api/client";
 import type { AttachmentRef, FolderNode, NoteDetail, NoteSummary } from "../api/types";
 import { useAuth } from "../auth/AuthProvider";
+import { saveAttachment } from "../platform/files";
 import { AttachmentList } from "../components/AttachmentList";
 import { useAppShellOutletContext } from "../components/AppShellContext";
 import { buttonGhost, buttonPrimary, buttonSecondary } from "../components/buttonStyles";
@@ -1204,13 +1204,8 @@ export function NotesPage() {
     if (!auth.user) {
       return;
     }
-    const blob = await fetchAttachmentBlob(attachment.url);
-    const objectUrl = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = objectUrl;
-    anchor.download = attachment.name;
-    anchor.click();
-    setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+    try { await saveAttachment(attachment.url, attachment.name); }
+    catch (failure) { setError(String(failure)); }
   }
 
   function appendToBody(snippet: string) {
@@ -2680,7 +2675,7 @@ function MobileDrawer(props: {
       >
         <div className="bb-mobile-drawer__header">
           <p className="bb-eyebrow">{props.title}</p>
-          <button type="button" onClick={props.onClose} className={buttonGhost}>
+          <button type="button" data-native-dismiss onClick={props.onClose} className={buttonGhost}>
             <CaretLeft size={18} />
             Close
           </button>

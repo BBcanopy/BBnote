@@ -10,6 +10,7 @@ import type {
   UserTheme
 } from "./types";
 import type { ScratchDocument } from "../utils/scratch";
+import { apiFetch, assertActiveResponse } from "../platform/native";
 
 interface RequestOptions {
   method?: string;
@@ -23,11 +24,10 @@ async function request<T>(url: string, options: RequestOptions = {}): Promise<T>
     headers.set("Content-Type", "application/json");
   }
 
-  const response = await fetch(url, {
+  const response = await apiFetch(url, {
     method: options.method ?? "GET",
     body: options.body ?? null,
-    headers,
-    credentials: "same-origin"
+    headers
   });
 
   if (!response.ok) {
@@ -39,7 +39,9 @@ async function request<T>(url: string, options: RequestOptions = {}): Promise<T>
     return undefined as T;
   }
 
-  return (await response.json()) as T;
+  const data = await response.json() as T;
+  assertActiveResponse(response);
+  return data;
 }
 
 export function getAuthSession() {
@@ -155,13 +157,13 @@ export function deleteAttachment(attachmentId: string) {
 }
 
 export function fetchAttachmentBlob(attachmentUrl: string) {
-  return fetch(attachmentUrl, {
-    credentials: "same-origin"
-  }).then(async (response) => {
+  return apiFetch(attachmentUrl).then(async (response) => {
     if (!response.ok) {
       throw new Error(extractErrorMessage(await response.text(), response.status));
     }
-    return response.blob();
+    const blob = await response.blob();
+    assertActiveResponse(response);
+    return blob;
   });
 }
 
@@ -190,13 +192,13 @@ export function getExportJob(jobId: string) {
 }
 
 export async function downloadExport(jobId: string) {
-  const response = await fetch(`/api/v1/exports/${jobId}/download`, {
-    credentials: "same-origin"
-  });
+  const response = await apiFetch(`/api/v1/exports/${jobId}/download`);
   if (!response.ok) {
     throw new Error(extractErrorMessage(await response.text(), response.status));
   }
-  return response.blob();
+  const blob = await response.blob();
+  assertActiveResponse(response);
+  return blob;
 }
 
 function extractErrorMessage(errorText: string, status: number) {

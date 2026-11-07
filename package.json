@@ -16,6 +16,11 @@
     "android"
   ],
   "scripts": {
+    "android:sync": "npm run build:android --workspace web && npm run sync --workspace android",
+    "android:build": "npm run android:sync && npm run build --workspace android",
+    "android:launch": "npm run android:sync && npm run launch --workspace android",
+    "test:android-ui": "playwright test --config e2e/android.config.ts",
+    "test:android-device": "node e2e/android-device.mjs",
     "dev": "concurrently \"npm:dev --workspace server\" \"npm:dev --workspace web\"",
     "build": "npm run build --workspace web && npm run build --workspace server",
     "test": "npm run test --workspace server && npm run test --workspace web",

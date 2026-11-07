@@ -89,7 +89,7 @@ export function TextPromptDialog(props: {
           />
 
           <div className="bb-dialog__actions">
-            <button type="button" onClick={props.onClose} className="bb-button bb-button--ghost">
+            <button type="button" data-native-dismiss onClick={props.onClose} className="bb-button bb-button--ghost">
               Cancel
             </button>
             <button type="submit" disabled={!canConfirm} className="bb-button bb-button--primary">

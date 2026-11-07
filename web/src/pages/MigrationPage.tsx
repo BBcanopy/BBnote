@@ -1,6 +1,7 @@
 import { ArrowsClockwise, DownloadSimple, UploadSimple } from "@phosphor-icons/react";
 import { useState, type ReactNode } from "react";
-import { createExportJob, createImportJob, downloadExport } from "../api/client";
+import { createExportJob, createImportJob } from "../api/client";
+import { saveExport } from "../platform/files";
 import type { ExportJob, ImportJob } from "../api/types";
 import { useAuth } from "../auth/AuthProvider";
 import { buttonPrimary, buttonSecondary } from "../components/buttonStyles";
@@ -62,13 +63,8 @@ export function MigrationPage() {
       return;
     }
 
-    const blob = await downloadExport(exportJob.id);
-    const objectUrl = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = objectUrl;
-    anchor.download = `${exportJob.id}.zip`;
-    anchor.click();
-    setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+    try { await saveExport(exportJob.id); }
+    catch (failure) { setExportError(String(failure)); }
   }
 
   return (

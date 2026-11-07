@@ -11,6 +11,7 @@ export function PageNav(props: {
   titleControl?: PageNavTitleControl | null;
   titleLayout?: PageNavTitleLayout | null;
   onLogout(): void;
+  onChangeServer?(): void;
   onThemeChange(theme: UserTheme): Promise<void>;
 }) {
   const titleControl = props.titleControl;
@@ -89,6 +90,7 @@ export function PageNav(props: {
           email={props.user?.email ?? null}
           theme={props.user?.theme ?? "sea"}
           onLogout={props.onLogout}
+          onChangeServer={props.onChangeServer}
           onThemeChange={props.onThemeChange}
         />
       </div>

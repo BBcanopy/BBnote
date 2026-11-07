@@ -1,5 +1,12 @@
 @import "tailwindcss";
 
+.bb-connection-shell { display: grid; place-items: center; min-height: 100dvh; }
+.bb-connection-card { width: min(100%, 28rem); padding: 2rem; border: 1px solid var(--line); border-radius: 1.5rem; background: var(--surface-strong); }
+.bb-connection-card h1 { margin-block: 1.5rem 0.75rem; font-size: 1.8rem; line-height: 1.2; }
+.bb-connection-card > p { margin-block: 0 1.5rem; color: var(--ink-soft); overflow-wrap: anywhere; }
+.bb-connection-card form { display: grid; gap: 1rem; }
+.bb-connected-server { overflow-wrap: anywhere; margin-block: 1rem; color: var(--ink-soft); }
+
 :root {
   --bg: #eff4f3;
   --bg-strong: #e3eceb;

@@ -25,14 +25,14 @@ export function isNotesPathname(pathname: string) {
 
 const NOTE_PATHNAME_PATTERN = /^(?:\/folders\/[^/]+)?\/notes\/([^/]+)\/?$/;
 
-export function parseNoteIdFromHref(href?: string) {
+export function parseNoteIdFromHref(href?: string, serverOrigin?: string | null) {
   if (!href) {
     return null;
   }
 
   try {
     const url = new URL(href, window.location.origin);
-    if (url.origin !== window.location.origin) {
+    if (url.origin !== window.location.origin && url.origin !== serverOrigin) {
       return null;
     }
 
