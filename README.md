@@ -2,6 +2,10 @@
 
 `bbnote` is yet another notebook app.
 
+## Android app
+
+BBNote includes a Capacitor Android app with a bundled interface, configurable server URL, and browser-based OIDC sign-in. See [Android setup and builds](android/README.md) for server configuration, APK installation, and verification.
+
 ## Run the project
 
 1. You should have an OIDC client ready. 
