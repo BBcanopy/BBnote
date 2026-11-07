@@ -10,6 +10,9 @@ coverage
 **/coverage
 server/dist
 web/dist
+web/dist-android
+android/android
+android/.toolchain
 *.log
 .codex-dev.log
 .DS_Store

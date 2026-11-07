@@ -4,8 +4,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "npm run sync",
-    "sync": "cap sync android"
+    "build": "node scripts/gradle.mjs assembleDebug testDebugUnitTest lintDebug",
+    "sync": "cap sync android",
+    "launch": "cap run android",
+    "open": "cap open android"
   },
   "dependencies": {
     "@capacitor/android": "8.6.0",

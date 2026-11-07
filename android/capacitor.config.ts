@@ -3,12 +3,9 @@ import type { CapacitorConfig } from "@capacitor/cli";
 const config: CapacitorConfig = {
   appId: "me.jybb.bbnote",
   appName: "BBNote",
-  webDir: "../web/dist",
-  bundledWebRuntime: false,
+  webDir: "../web/dist-android",
   plugins: {
-    App: {
-      launchUrl: "bbnote://auth/callback"
-    }
+    SystemBars: { insetsHandling: "native" }
   }
 };
 
