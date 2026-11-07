@@ -1,4 +1,4 @@
-export const sessionCookieSecurity = [{ sessionCookie: [] }] as const;
+export const sessionCookieSecurity = [{ sessionCookie: [] }, { bearerAuth: [] }] as const;
 
 export const errorMessageSchema = {
   type: "object",

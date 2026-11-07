@@ -113,6 +113,11 @@ export async function buildApp(options: BuildAppOptions = {}) {
       ],
       components: {
         securitySchemes: {
+          bearerAuth: {
+            type: "http",
+            scheme: "bearer",
+            description: "OIDC access token obtained by a public native client using authorization code with PKCE."
+          },
           sessionCookie: {
             type: "apiKey",
             in: "cookie",

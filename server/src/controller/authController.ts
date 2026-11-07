@@ -48,6 +48,29 @@ const authSessionSchema = {
 } as const;
 
 export function registerAuthController(app: FastifyInstance, services: AppServices) {
+  app.get("/api/v1/auth/native-config", {
+    schema: {
+      tags: ["Public"],
+      summary: "Get public OIDC settings for the Android client",
+      response: {
+        200: {
+          type: "object",
+          required: ["issuer", "clientId", "scopes"],
+          additionalProperties: false,
+          properties: {
+            issuer: { type: "string" },
+            clientId: { type: "string" },
+            scopes: { type: "array", items: { type: "string" } }
+          }
+        }
+      }
+    }
+  }, async () => ({
+    issuer: services.config.oidcIssuerUrl,
+    clientId: services.config.oidcClientIdAndroid,
+    scopes: services.config.oidcScopes.split(/\s+/).filter(Boolean)
+  }));
+
   app.get("/api/v1/auth/login", {
     schema: {
       tags: ["Public"],
