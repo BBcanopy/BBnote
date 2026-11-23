@@ -1,0 +1,63 @@
+name: Dependabot auto-merge
+
+on:
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
+
+permissions: {}
+
+jobs:
+  merge:
+    if: >-
+      github.event.workflow_run.path == '.github/workflows/ci.yml' &&
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_repository.full_name == github.repository &&
+      startsWith(github.event.workflow_run.head_branch, 'dependabot/')
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: write
+      pull-requests: read
+    outputs:
+      merged: ${{ steps.merge.outputs.merged }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+      HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+      CI_RUN_ID: ${{ github.event.workflow_run.id }}
+      CI_RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }} # workflow_run uses the default branch's SHA.
+          persist-credentials: false
+
+      - name: Verify the pull request and its CI run
+        id: verify
+        run: ruby .github/scripts/dependabot-auto-merge.rb
+
+      - name: Merge the tested commit
+        id: merge
+        if: steps.verify.outputs.pr_number != ''
+        shell: bash
+        env:
+          PR_NUMBER: ${{ steps.verify.outputs.pr_number }}
+        run: |
+          gh api --method PUT "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/merge" \
+            -f sha="$HEAD_SHA" -f merge_method=merge | jq -e '.merged == true'
+          echo 'merged=true' >> "$GITHUB_OUTPUT"
+
+  publish:
+    needs: merge
+    if: needs.merge.outputs.merged == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      # A merge made with GITHUB_TOKEN does not trigger the push workflow.
+      - run: gh workflow run ci.yml --ref main
